@@ -1,0 +1,54 @@
+
+Poniendo en data/working/configs/ovo.yaml
+slam:
+  config_path: data/working/configs/slam
+  slam_module: orbslam2 #vanilla #gaussian_slam #orbslam2
+
+
+(ovo) padidavid@jcivera-MS-7E06:~/repos/OVO$ python run_eval.py --dataset_name Replica --experiment_name ovo_mapping --run --segment --eval --scenes office0
+/home/padidavid/anaconda3/envs/ovo/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/padidavid/anaconda3/envs/ovo/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Loaded 2000 frames
+Loading SAM2.1
+Semantic config
+{'clip': {'embed_type': 'learned',
+          'k_top_views': 10,
+          'mask_res': 384,
+          'model_card': 'SigLIP-384',
+          'use_half': True,
+          'weights_predictor_path': 'data/input/weights_predictor/base'},
+ 'debug_info': False,
+ 'depth_filter': True,
+ 'kf_queue_delay': 10,
+ 'log': True,
+ 'match_distance_th': 0.05,
+ 'sam': {'masks_base_path': 'data/working/masks/replica_384_sam2.1',
+         'multi_crop': True,
+         'points_per_side': 16,
+         'precomputed': False,
+         'sam_ckpt_path': 'data/input/sam_ckpts/',
+         'sam_encoder': 'hiera_l',
+         'sam_version': '2.1'},
+ 'segment_every': 10,
+ 'track_th': 100,
+ 'use_gt_clips': False,
+ 'use_gt_masks': False}
+Loading ORB-SLAM2 vocabulary from data/working/configs/slam/orbslam3/vocabulary/ORBvoc.txt
+ORB-SLAM2 vocabulary found.
+Loading ORB-SLAM2 vocabulary from data/working/configs/slam/orbslam3/vocabulary/ORBvoc.txt
+
+ORB-SLAM3 Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+ORB-SLAM2 Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+This program comes with ABSOLUTELY NO WARRANTY;
+This is free software, and you are welcome to redistribute it
+under certain conditions. See LICENSE.txt.
+
+Input sensor was set to: RGB-D
+Loop Closing status: ON
+Atlas new maps status: ON
+
+Loading ORB Vocabulary. This could take a while...
+Violación de segmento (`core' generado)
+(ovo) padidavid@jcivera-MS-7E06:~/repos/OVO$

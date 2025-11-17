@@ -1,0 +1,34 @@
+(ovo) padidavid@jcivera-MS-7E06:~/repos/OVO$ python scripts/extract_slam_baseline.py --dataset Replica --scene office2
+/home/padidavid/anaconda3/envs/ovo/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/padidavid/anaconda3/envs/ovo/lib/python3.10/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+
+
+################################################################
+Extracting SLAM baseline: Replica/office2
+   Backend: orbslam2
+   Loop closures: True
+################################################################
+
+Loading dataset...
+Loaded 2000 frames
+Initializing SLAM backend: orbslam2
+Loading ORB-SLAM2 vocabulary from data/working/configs/slam/orbslam3/vocabulary/ORBvoc.txt
+ORB-SLAM2 vocabulary found.
+Loading ORB-SLAM2 vocabulary from data/working/configs/slam/orbslam3/vocabulary/ORBvoc.txt
+
+ORB-SLAM3 Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+ORB-SLAM2 Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+This program comes with ABSOLUTELY NO WARRANTY;
+This is free software, and you are welcome to redistribute it
+under certain conditions. See LICENSE.txt.
+
+Input sensor was set to: RGB-D
+Loop Closing status: ON
+Atlas new maps status: ON
+
+Loading ORB Vocabulary. This could take a while...
+Violación de segmento (`core' generado)
+(ovo) padidavid@jcivera-MS-7E06:~/repos/OVO$
+
