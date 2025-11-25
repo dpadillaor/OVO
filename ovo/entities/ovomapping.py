@@ -23,6 +23,9 @@ def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Ten
     elif backbone ==  "orbslam2":
         from ..slam.orbslam2 import WrapperORBSLAM2
         return WrapperORBSLAM2(config, cam_intrinsics, world_ref=torch.from_numpy(dataset[0][3]))
+    elif backbone == "groundtruth":
+        from ..slam.groundtruth_slam import GroundTruthSLAM
+        return GroundTruthSLAM(config, cam_intrinsics)
     else:
         return VanillaMapper(config, cam_intrinsics)
 

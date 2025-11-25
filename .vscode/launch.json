@@ -12,11 +12,11 @@
             "console": "integratedTerminal",
             "args": [
                 "--dataset_name", "Replica",
-                "--experiment_name", "ovo_mapping",
+                "--experiment_name", "noisy_trajectory_test",
                 "--run",
-                "--segment",
-                "--eval",
-                "--scenes", "office2"
+                //"--segment",
+                //"--eval",
+                "--scenes", "office0"
             ]
         },
         {

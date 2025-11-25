@@ -19,9 +19,30 @@ La documentación detallada de cada funcionalidad se registrará en ficheros sep
 
 ### 01 - Implementación de Replay Logging
 *   **Objetivo:** Implementar la fase de "Grabar" de nuestra metodología.
-*   **Estado:** Pendiente.
+*   **Estado:** CANCELADO. (El sistema SLAM no está disponible, se adopta nueva estrategia).
 *   **Log Detallado:** [./feature_logs/01_replay_logging.md](./feature_logs/01_replay_logging.md)
+
+### 02 - Ground Truth Replay
+*   **Objetivo:** Implementar un SLAM simulado (`GroundTruthSLAM`) que usa datos de ground truth para permitir el desarrollo sin un SLAM funcional.
+*   **Estado:** COMPLETED.
+*   **Log Detallado:** [./feature_logs/02_ground_truth_replay.md](./feature_logs/02_ground_truth_replay.md)
+
+### 03 - DINO Integration
+*   **Objetivo:** Preparar un módulo `DINOGenerator` capaz de cargar un modelo DINO y extraer descriptores de características para máscaras de segmentación dadas.
+*   **Estado:** PENDING.
+*   **Log Detallado:** [./feature_logs/03_dino_integration.md](./feature_logs/03_dino_integration.md)
+
+### 04 - Trajectory Noise Simulation
+*   **Objective:** Add functionality to `GroundTruthSLAM` to introduce configurable noise into the ground truth trajectory poses.
+*   **Status:** COMPLETED. (Successfully resolved after fixing the relative motion calculation bug).
+*   **Detailed Log:** [./feature_logs/04_trajectory_noise.md](./feature_logs/04_trajectory_noise.md)
+
+### 05 - Trajectory Visualization
+*   **Objetivo:** Crear un script para visualizar y comparar la trayectoria estimada con la de ground truth.
+*   **Estado:** COMPLETED.
+*   **Log Detallado:** [./feature_logs/05_trajectory_visualization.md](./feature_logs/05_trajectory_visualization.md)
+
 
 ## 4. Próximo Paso
 
-*   Comenzar el desarrollo de la funcionalidad **01 - Implementación de Replay Logging**. La implementación se realizará en `scripts/extract_slam_baseline.py` según las reglas del proyecto.
+*   Comenzar el desarrollo de la funcionalidad **05 - Trajectory Visualization**. La implementación se realizará en el nuevo script `visualize_trajectory.py`.

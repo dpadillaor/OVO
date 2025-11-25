@@ -30,6 +30,8 @@ class Instance3D:
         self.id = id
         self.clip_feature = None
         self.clip_feature_kf = None
+        self.dino_feature = None
+        self.dino_feature_kf = None
         self.kfs_ids = []
         self.points_ids = []
         self.top_kf = []
