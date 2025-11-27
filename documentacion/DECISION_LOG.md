@@ -1,0 +1,27 @@
+# Registro de Decisiones del Proyecto - Fusión de Instancias con DINO
+
+Este documento sirve como un registro de alto nivel y un índice para las decisiones y funcionalidades del proyecto.
+
+## 1. Objetivo Principal
+
+Mejorar el algoritmo de fusión de instancias 3D durante los cierres de bucle, utilizando descriptores DINO.
+
+## 2. Metodología de Desarrollo
+
+Se ha decidido adoptar un **Enfoque Híbrido de "Replay"**:
+1.  **Grabar:** Ejecutar el pipeline una vez para grabar un log completo y realista de la salida del SLAM.
+2.  **Reproducir:** Usar un simulador que reproduzca el log de forma determinista.
+3.  **Desarrollar:** Implementar y probar nuevas funcionalidades en este entorno controlado y realista.
+
+La documentación detallada de cada funcionalidad se registrará en ficheros separados, enlazados desde este documento.
+
+## 3. Registro de Funcionalidades
+
+### 01 - Implementación de Replay Logging
+*   **Objetivo:** Implementar la fase de "Grabar" de nuestra metodología.
+*   **Estado:** Pendiente.
+*   **Log Detallado:** [./feature_logs/01_replay_logging.md](./feature_logs/01_replay_logging.md)
+
+## 4. Próximo Paso
+
+*   Comenzar el desarrollo de la funcionalidad **01 - Implementación de Replay Logging**. La implementación se realizará en `scripts/extract_slam_baseline.py` según las reglas del proyecto.
