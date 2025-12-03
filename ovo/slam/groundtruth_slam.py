@@ -152,8 +152,7 @@ class GroundTruthSLAM(VanillaMapper):
             self.kfs[frame_id] = {"id": frame_id, "pcd_idxs": (pcd_start_idx, pcd_end_idx), "pose": c2w}
 
             # 3. Check for loop closures
-            # TODO: Enable loop closure detection when ready
-            # self._check_for_loop_closure(frame_id, c2w)
+            self._check_for_loop_closure(frame_id, c2w) # UNCOMMENTED
 
     def _is_new_keyframe(self, current_c2w: torch.Tensor) -> bool:
         """
@@ -178,9 +177,11 @@ class GroundTruthSLAM(VanillaMapper):
 
     def _check_for_loop_closure(self, current_kf_id: int, current_c2w: torch.Tensor) -> None:
         """
-        Checks if the current KeyFrame is close to any previous KeyFrame to simulate a loop closure.
+        Checks if the current KeyFrame is close to a previous KeyFrame. If so, it
+        simulates a loop closure by calculating the corrective transformation and
+        applying it internally to the map and poses.
         """
-        # Reset the loop closure signal
+        # Reset the loop closure signal, it will be set if a loop is found
         self.last_big_change_id = -1
 
         # Don't check for loop closures until there are enough keyframes
@@ -188,7 +189,9 @@ class GroundTruthSLAM(VanillaMapper):
             return
 
         # Iterate through all keyframes except the last few
-        for kf_id, kf_data in list(self.kfs.items())[:-5]:
+        kf_ids = list(self.kfs.keys())
+        for old_kf_id in kf_ids[:-5]:
+            kf_data = self.kfs[old_kf_id]
             dist = torch.norm(current_c2w[:3, 3] - kf_data["pose"][:3, 3])
             
             if dist < self.lc_dist_thresh:
@@ -198,6 +201,41 @@ class GroundTruthSLAM(VanillaMapper):
                 angle_deg = angle_rad * (180 / torch.pi)
 
                 if angle_deg < self.lc_rot_thresh:
-                    print(f"Loop closure detected between KF {current_kf_id} and KF {kf_id}")
-                    self.last_big_change_id = kf_id
-                    break # Found a loop, no need to check further
+                    print(f"Loop closure detected between KF {current_kf_id} and KF {old_kf_id}")
+                    
+                    # --- Calculate Transformation T ---
+                    pose_est_current = current_c2w
+                    pose_est_old = kf_data["pose"]
+                    pose_gt_current = self.trajectory[current_kf_id].to(self.device)
+                    pose_gt_old = self.trajectory[old_kf_id].to(self.device)
+                    T_real_motion = torch.inverse(pose_gt_old) @ pose_gt_current
+                    pose_corrected_current = pose_est_old @ T_real_motion
+                    T = pose_corrected_current @ torch.inverse(pose_est_current)
+                    
+                    # --- Apply Internal Correction ---
+                    # Find all keyframes and points that occurred after the old keyframe
+                    old_kf_index = kf_ids.index(old_kf_id)
+                    kfs_to_correct = kf_ids[old_kf_index + 1:]
+
+                    for kf_to_correct_id in kfs_to_correct:
+                        # Correct Keyframe Poses
+                        self.kfs[kf_to_correct_id]["pose"] = T @ self.kfs[kf_to_correct_id]["pose"]
+                        self.estimated_c2ws[kf_to_correct_id] = T @ self.estimated_c2ws[kf_to_correct_id]
+
+                        # Correct Associated Point Cloud Slice
+                        pcd_indices = self.kfs[kf_to_correct_id]["pcd_idxs"]
+                        pcd_slice = self.pcd[pcd_indices[0]:pcd_indices[1]]
+                        
+                        # Add homogeneous coordinate for transformation
+                        pcd_slice_hom = torch.cat([pcd_slice, torch.ones((pcd_slice.shape[0], 1), device=self.device)], dim=1)
+                        
+                        # Apply transformation
+                        pcd_slice_transformed = (T @ pcd_slice_hom.T).T
+                        
+                        # Update the main point cloud
+                        self.pcd[pcd_indices[0]:pcd_indices[1]] = pcd_slice_transformed[:, :3]
+
+                    print(f"Applied geometric correction to {len(kfs_to_correct)} keyframes and their points.")
+                    self.last_big_change_id = old_kf_id
+                    self.map_updated = True
+                    break # Found a loop, correction applied, no need to check further

@@ -42,7 +42,17 @@ La documentación detallada de cada funcionalidad se registrará en ficheros sep
 *   **Estado:** COMPLETED.
 *   **Log Detallado:** [./feature_logs/05_trajectory_visualization.md](./feature_logs/05_trajectory_visualization.md)
 
+### 06 - Point Cloud Visualization
+*   **Objetivo:** Extender `visualize_trajectory.py` para mostrar simultáneamente la nube de puntos de ground truth y la generada en un experimento, permitiendo una comparación geométrica directa.
+*   **Estado:** COMPLETED.
+*   **Log Detallado:** [./feature_logs/06_point_cloud_visualization.md](./feature_logs/06_point_cloud_visualization.md)
+
+### 07 - Loop Closure Geometric Correction
+*   **Objetivo:** Implementar el "Método de Cálculo Directo" para simular una corrección geométrica realista durante los cierres de bucle, permitiendo que la fusión de instancias se pruebe en condiciones de deriva significativa.
+*   **Estado:** PENDING.
+*   **Log Detallado:** [./feature_logs/07_loop_closure_geometric_correction.md](./feature_logs/07_loop_closure_geometric_correction.md)
+
 
 ## 4. Próximo Paso
 
-*   Comenzar el desarrollo de la funcionalidad **05 - Trajectory Visualization**. La implementación se realizará en el nuevo script `visualize_trajectory.py`.
+*   Comenzar el desarrollo de la funcionalidad **07 - Loop Closure Geometric Correction**.

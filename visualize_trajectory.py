@@ -11,6 +11,11 @@ import torch
 import open3d as o3d
 import matplotlib.pyplot as plt
 
+from ovo.utils.io_utils import load_config, load_scene_data
+from run_eval import load_representation
+import yaml
+from ovo.utils.vis_utils import get_cmap, get_pcd_colors
+
 def create_trajectory_lineset(positions: np.ndarray, color: list[float]) -> o3d.geometry.LineSet:
     """
     Creates an Open3D LineSet object from a sequence of 3D points.
@@ -105,6 +110,19 @@ def main(args):
 
     print(f"Visualizing trajectories for experiment run: {run_path}")
 
+    config = load_config(run_path/"config.yaml")
+
+    dataset_name_capitalized = args.dataset_name.capitalize()
+    if dataset_name_capitalized == "Scannet":
+        dataset_name_capitalized = "ScanNet"
+    
+    data_path = Path("data/input/Datasets/") # Assuming this base path for datasets
+
+    # This path might need adjustment based on actual file location
+    dataset_info_file_path = Path("data/working/configs/") / dataset_name_capitalized / "eval_info.yaml"
+    with open(dataset_info_file_path, 'r') as f:
+        dataset_info = yaml.full_load(f)
+
     # Load trajectories
     gt_trajectory_dict = load_gt_trajectory(args.dataset_name, args.scene_name)
     estimated_trajectory_dict = load_estimated_trajectory(run_path)
@@ -120,8 +138,60 @@ def main(args):
     # Add coordinate frame for context
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5, origin=[0, 0, 0])
 
-    print("Displaying 3D trajectories. Close the window to exit.")
-    o3d.visualization.draw_geometries([gt_lineset, estimated_lineset, coord_frame])
+    elements_to_visualize = [gt_lineset, estimated_lineset, coord_frame]
+
+    # --- ADD THIS BLOCK FOR POINT CLOUD LOADING AND VISUALIZATION ---
+    if args.show_pcds:
+        print("Loading point clouds for visualization...")
+        
+        # Load Ground Truth Point Cloud
+        # pcd_labels_gt is also returned but not used for geometric visualization
+        _, pcd_gt = load_scene_data(config["dataset_name"], config["data"]["scene_name"], data_path, dataset_info)
+
+        # Load Predicted Point Cloud (from the experiment run)
+        # semantic_module is also returned but not used for geometric visualization
+        _, params = load_representation(run_path, eval=True)
+        pcd_pred = params["xyz"] # This is the predicted point cloud
+
+        # Create Open3D PointCloud objects and assign colors
+        cmap = get_cmap()
+        
+        # Ground Truth Point Cloud (assigned a unique color)
+        gt_colors_idx = np.zeros(pcd_gt.shape[0], dtype=np.int32) # Dummy ID 0
+        # gt_pcd_colors = get_pcd_colors(gt_colors_idx, cmap) * 0.7 # Darken slightly for distinction
+        gt_pcd_colors = np.tile(np.array([[0.0, 0.0, 1.0]]), (pcd_gt.shape[0], 1)) # Blue for GT
+        gt_pcd_o3d = o3d.geometry.PointCloud()
+        gt_pcd_o3d.points = o3d.utility.Vector3dVector(pcd_gt)
+        gt_pcd_o3d.colors = o3d.utility.Vector3dVector(gt_pcd_colors)
+
+        # Predicted Point Cloud (assigned another unique color)
+        pred_colors_idx = np.ones(pcd_pred.shape[0], dtype=np.int32) # Dummy ID 1
+        pred_pcd_colors = get_pcd_colors(pred_colors_idx, cmap) * 0.7 # Darken slightly
+        pred_pcd_o3d = o3d.geometry.PointCloud()
+        pred_pcd_o3d.points = o3d.utility.Vector3dVector(pcd_pred)
+        pred_pcd_o3d.colors = o3d.utility.Vector3dVector(pred_pcd_colors)
+        
+        # Apply voxel downsampling if specified
+        if args.voxel_size is not None:
+            print(f"Applying voxel downsampling with size: {args.voxel_size}")
+            gt_pcd_o3d = gt_pcd_o3d.voxel_down_sample(voxel_size=args.voxel_size)
+            pred_pcd_o3d = pred_pcd_o3d.voxel_down_sample(voxel_size=args.voxel_size)
+
+        elements_to_visualize.extend([gt_pcd_o3d, pred_pcd_o3d]) # Add to the list
+
+    print("Displaying 3D trajectories and/or point clouds. Close the window to exit.")
+
+    # --- Console Legend ---
+    print("\n--- Visualization Legend ---")
+    print("Green Line: Ground Truth Trajectory")
+    print("Red Line: Estimated Trajectory")
+    if args.show_pcds:
+        print("Light Green Points: Ground Truth Point Cloud")
+        print("Light Red Points: Predicted Point Cloud")
+    print("--------------------------\n")
+    # --- End Console Legend ---
+
+    o3d.visualization.draw_geometries(elements_to_visualize)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -132,5 +202,9 @@ if __name__ == "__main__":
                         help='Name of the dataset (e.g., Replica).')
     parser.add_argument('--scene_name', type=str, required=True,
                         help='Name of the scene (e.g., office0).')
+    parser.add_argument('--show_pcds', action='store_true',
+                        help='If set, visualize ground truth and predicted point clouds.')
+    parser.add_argument('--voxel_size', type=float, default=None,
+                        help='Voxel size for downsampling point clouds (e.g., 0.05). If None, no downsampling.')
     args = parser.parse_args()
     main(args)
