@@ -42,6 +42,9 @@ class GroundTruthSLAM(VanillaMapper):
         self.lc_dist_thresh = self.config.get("lc_dist_thresh", 0.2)
         self.lc_rot_thresh = self.config.get("lc_rot_thresh", 10.0) # in degrees
 
+        self.map_every = self.config.get("mapping", {}).get("map_every", 10)
+        self.correction_done = False
+
         self.last_big_change_id = -1
         self.kfs = {}
         self.last_processed_frame_id = -1
@@ -152,7 +155,13 @@ class GroundTruthSLAM(VanillaMapper):
             self.kfs[frame_id] = {"id": frame_id, "pcd_idxs": (pcd_start_idx, pcd_end_idx), "pose": c2w}
 
             # 3. Check for loop closures
-            self._check_for_loop_closure(frame_id, c2w) # UNCOMMENTED
+            # self._check_for_loop_closure(frame_id, c2w) # DISABLED for Global Correction
+
+        # Trigger Global Correction near the end of the sequence
+        # We check if we are within the last 'map_every' window to ensure we catch the final map() call.
+        if not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
+             self.correct_map_globally()
+             self.correction_done = True
 
     def _is_new_keyframe(self, current_c2w: torch.Tensor) -> bool:
         """
@@ -239,3 +248,53 @@ class GroundTruthSLAM(VanillaMapper):
                     self.last_big_change_id = old_kf_id
                     self.map_updated = True
                     break # Found a loop, correction applied, no need to check further
+
+    def correct_map_globally(self) -> None:
+        """
+        Corrects the entire map (poses and points) by forcing all KeyFrames to their
+        Ground Truth poses. This is intended to be run at the absolute end of the
+        sequence to trigger a massive fusion/cleanup event.
+        """
+        print("Starting Global Geometric Correction...")
+        kf_ids = list(self.kfs.keys())
+        
+        for kf_id in kf_ids:
+            # 1. Get current estimated pose and GT pose
+            est_pose = self.kfs[kf_id]["pose"]
+            gt_pose = self.trajectory[kf_id].to(self.device)
+            
+            # 2. Calculate correction transformation T: est_pose * T = gt_pose  =>  T = inv(est_pose) * gt_pose
+            # Wait, we want to transform points: P_world_corrected = T * P_world_est
+            # And we want the new pose to be GT.
+            # So, T * est_pose = gt_pose  =>  T = gt_pose * inv(est_pose)
+            T = gt_pose @ torch.inverse(est_pose)
+            
+            # 3. Update Pose
+            self.kfs[kf_id]["pose"] = gt_pose
+            self.estimated_c2ws[kf_id] = gt_pose
+            
+            # 4. Update Points
+            pcd_indices = self.kfs[kf_id]["pcd_idxs"]
+            # Check if there are points for this keyframe
+            if pcd_indices[1] > pcd_indices[0]:
+                pcd_slice = self.pcd[pcd_indices[0]:pcd_indices[1]]
+                
+                # Add homogeneous coordinate
+                pcd_slice_hom = torch.cat([pcd_slice, torch.ones((pcd_slice.shape[0], 1), device=self.device)], dim=1)
+                
+                # Apply transformation
+                pcd_slice_transformed = (T @ pcd_slice_hom.T).T
+                
+                # Update the main point cloud
+                self.pcd[pcd_indices[0]:pcd_indices[1]] = pcd_slice_transformed[:, :3]
+
+        # 5. CORRECT ALL ESTIMATED POSES (Fixes "sawtooth" effect)
+        # Iterate through all frames that have been tracked and stored
+        for frame_id in self.estimated_c2ws.keys():
+            if frame_id < len(self.trajectory):
+                self.estimated_c2ws[frame_id] = self.trajectory[frame_id].to(self.device)
+
+        # 6. Signal OVO that the whole map has changed
+        print(f"Global Geometric Correction completed for {len(kf_ids)} keyframes and {len(self.estimated_c2ws)} total frames.")
+        self.last_big_change_id = 0 # 0 implies the map changed from the start
+        self.map_updated = True

@@ -49,10 +49,20 @@ La documentación detallada de cada funcionalidad se registrará en ficheros sep
 
 ### 07 - Loop Closure Geometric Correction
 *   **Objetivo:** Implementar el "Método de Cálculo Directo" para simular una corrección geométrica realista durante los cierres de bucle, permitiendo que la fusión de instancias se pruebe en condiciones de deriva significativa.
-*   **Estado:** PENDING.
+*   **Estado:** CANCELLED. (Reemplazado por corrección global al final de la secuencia por feedback del tutor).
 *   **Log Detallado:** [./feature_logs/07_loop_closure_geometric_correction.md](./feature_logs/07_loop_closure_geometric_correction.md)
+
+### 08 - Global Geometric Correction
+*   **Objetivo:** Implementar una corrección geométrica global al final de la secuencia, reemplazando todas las poses estimadas por GT y alineando la nube de puntos, para forzar una fusión masiva de instancias.
+*   **Estado:** COMPLETED.
+*   **Log Detallado:** [./feature_logs/08_global_geometric_correction.md](./feature_logs/08_global_geometric_correction.md)
+
+### 09 - Experimentation Framework
+*   **Objetivo:** Definir y establecer un Framework de Experimentación OVO robusto y escalable para gestionar múltiples experimentos, organizando configuraciones, ejecuciones, resultados y visualizaciones de manera sistemática.
+*   **Estado:** PENDING.
+*   **Log Detallado:** [./feature_logs/09_experimentation_framework.md](./feature_logs/09_experimentation_framework.md)
 
 
 ## 4. Próximo Paso
 
-*   Comenzar el desarrollo de la funcionalidad **07 - Loop Closure Geometric Correction**.
+*   Continuar con la definición de la funcionalidad **09 - Experimentation Framework**.

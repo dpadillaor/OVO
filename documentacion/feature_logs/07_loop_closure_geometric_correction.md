@@ -6,7 +6,13 @@ Implement a realistic simulation of geometric correction during loop closure eve
 
 This will be achieved by using the **Direct Calculation Method**, which leverages the availability of ground truth data to calculate the required alignment transformation without needing a complex optimization algorithm. The geometric correction will be handled *internally* within the `GroundTruthSLAM` module to be consistent with the project's existing architecture (e.g., `WrapperORBSLAM2`).
 
-## Theoretical Explanation
+## Status: CANCELLED
+
+**Reason:** Following a discussion with the project tutor, the strategy has shifted. Instead of simulating incremental loop closures during the sequence, the project will now focus on a "Big Bang" fusion approach. The system will allow drift to accumulate naturally throughout the entire sequence to generate maximum duplicate instances. At the very end of the run, a **Global Geometric Correction** will be applied (forcing all poses to Ground Truth), triggering a massive instance fusion event.
+
+This new approach is tracked in **Feature 08 - Global Geometric Correction**.
+
+## Theoretical Explanation (Archived)
 
 The core of this task is to find a 4x4 transformation matrix, which we'll call `T`. The purpose of `T` is to correct the positions of points in the map that have been misplaced due to simulated trajectory drift.
 
@@ -45,17 +51,3 @@ At this point, we have two poses for `Keyframe_Current`:
 The transformation required to move points from the incorrect drifted space to the corrected space is our final transformation `T`.
 
 *   `T = pose_corrected_current @ inverse(pose_estimated_current)`
-
-## Corrected Implementation Plan
-
-To align with the project's established architecture, all geometric correction logic will be encapsulated within the SLAM backbone. The orchestrator (`OVOSemMap`) will remain unaware of the details, only seeing a generic `map_updated` signal.
-
-1.  **`ovo/slam/groundtruth_slam.py` (Main Focus):**
-    *   The `_check_for_loop_closure` method will be uncommented and activated.
-    *   When a loop closure is detected, it will calculate the correction transformation `T` using the exact method described in the theory section above.
-    *   Instead of returning `T`, it will use `T` to **transform its own internal point cloud (`self.pcd`)**.
-    *   It will need a strategy to identify which points to transform. The most robust approach is to iterate through all keyframes created *after* the `kf_old_id` (the old keyframe in the loop closure) and apply `T` to the points associated with each of these keyframes.
-    *   After transforming `self.pcd` and the poses of the affected keyframes (`self.kfs` and `self.estimated_c2ws`), it will set `self.map_updated = True`.
-
-2.  **No Changes to Other Files:**
-    *   **`ovomapping.py`, `ovo.py`, and `instance_utils.py` will not be modified.** They will continue to work as originally designed. When `map_updated` is true, they will request the map from the SLAM backbone and will implicitly receive the newly corrected geometry, allowing the existing instance fusion logic to work correctly.

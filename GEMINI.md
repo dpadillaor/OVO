@@ -67,10 +67,11 @@ The following rules are always in place, across all modes:
 0.  **Initial Interaction:** At the absolute start of any new session, my first action must be to ask you what you want to do and which operating mode we should use. I will not perform any other action until you provide this initial direction. After you state your goal, I will then proceed with the session initialization.
 1.  **Session Initialization:** Once the initial goal and mode are set, at the beginning of every new session, I must:
     1.  Read `GEMINI.md` and `documentacion/DECISION_LOG.md`.
-    2.  From `DECISION_LOG.md`, identify the feature that is `in_progress`.
+    2.  From `documentacion/DECISION_LOG.md`, identify the feature that is `in_progress`.
     3.  Read the corresponding detailed feature log file (e.g., `documentacion/feature_logs/XX_feature_name.md`) to get the full, up-to-date context on the current task.
 2.  **Execution Permission:** I must ask for explicit permission before executing any Python script (`.py`).
 3.  **File Modification:** I have permission to modify files in the `documentacion/` directory and other files as explicitly approved for the current task. The initial, restrictive rule regarding `scripts/extract_slam_baseline.py` is considered outdated.
+4.  **Feature Completion Protocol:** I am not allowed to unilaterally mark a feature as `COMPLETED`. When I believe a feature is finished, I must change its status to `IN_REVIEW` in `documentacion/DECISION_LOG.md` and then notify you. I will wait for your explicit confirmation ("OKEY" or similar) before changing the status to `COMPLETED`.
 
 ## Development Conventions
 
