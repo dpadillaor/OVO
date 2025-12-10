@@ -4,6 +4,7 @@ python run_eval.py --dataset_name Replica --experiment_name global_correction_te
 python run_eval.py --dataset_name Replica --experiment_name test_estructura --run --scenes office0 office1
 python run_eval.py --dataset_name Replica --experiment_name test_estructura --segment --scenes office0
 python run_eval.py --dataset_name Replica --experiment_name test_estructura --segment --scenes office1
+python run_eval.py --dataset_name Replica --experiment_name test_estructura --eval --scenes office0
 
 
 python visualize_trajectory.py --experiment_name global_correction_test --dataset_name Replica --scene_name office0 --show_pcds --voxel_size 0.05

@@ -59,7 +59,7 @@ La documentación detallada de cada funcionalidad se registrará en ficheros sep
 
 ### 09 - Experimentation Framework
 *   **Objetivo:** Definir y establecer un Framework de Experimentación OVO robusto y escalable para gestionar múltiples experimentos, organizando configuraciones, ejecuciones, resultados y visualizaciones de manera sistemática.
-*   **Estado:** PENDING.
+*   **Estado:** IN_PROGRESS.
 *   **Log Detallado:** [./feature_logs/09_experimentation_framework.md](./feature_logs/09_experimentation_framework.md)
 
 
