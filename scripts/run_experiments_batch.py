@@ -11,6 +11,7 @@ from pathlib import Path
 class Colors:
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
@@ -125,7 +126,12 @@ class ExperimentRunner:
         with open(self.ovo_config_path, 'r') as f:
             ovo_data = yaml.full_load(f)
         
-        _update_recursive(ovo_data, self.experiment.ovo_config.slam)
+        # Envolvemos en 'slam' si es necesario, pero como ovo_config.slam ya es el dict correcto para 'slam' section,
+        # necesitamos ver si ovo_data tiene 'slam' o si ovo_config.slam debe mergearse en root.
+        # ovo.yaml tiene 'slam' en root.
+        if self.experiment.ovo_config.slam:
+             _update_recursive(ovo_data, {"slam": self.experiment.ovo_config.slam})
+
         # TODO: Handle fusion_method insertion into ovo_data if necessary
         
         with open(self.ovo_config_path, 'w') as f:
@@ -134,7 +140,11 @@ class ExperimentRunner:
         # Apply slam_config overrides
         with open(self.slam_config_path, 'r') as f:
             slam_data = yaml.full_load(f)
-        _update_recursive(slam_data, self.experiment.slam_config.noise)
+            
+        # CORRECCION: Envolvemos en 'noise' para asegurar anidamiento correcto
+        if self.experiment.slam_config.noise:
+            slam_overrides = {"noise": self.experiment.slam_config.noise}
+            _update_recursive(slam_data, slam_overrides)
         
         with open(self.slam_config_path, 'w') as f:
             yaml.dump(slam_data, f, default_flow_style=False)
@@ -152,6 +162,10 @@ class ExperimentRunner:
         print(f"    Generated Name: {Colors.BOLD}{self.experiment_name}{Colors.ENDC}")
         self._backup_configs()
         self._apply_config_overrides()
+        
+        # --- DEBUG PAUSE ---
+        print(f"    {Colors.WARNING}[DEBUG] Configs modified. Check files now. Press Enter to continue...{Colors.ENDC}")
+        input() 
 
     def run(self):
         """Executes the run_eval.py command for the experiment."""
@@ -183,7 +197,7 @@ def _update_recursive(d: Dict[Any, Any], u: Dict[Any, Any]) -> Dict[Any, Any]:
     return d
 
 def _load_experiment_manifest(manifest_path: Path) -> Manifest:
-    print(f"\nLoading experiments from: {Colors.BOLD}{manifest_path}{Colors.ENDC}")
+    print(f"Loading experiments from: {Colors.BOLD}{manifest_path}{Colors.ENDC}")
     with open(manifest_path, 'r') as f:
         manifest_dict = yaml.full_load(f)
 
@@ -226,17 +240,17 @@ def main():
         try:
             runner.setup()
             # runner.run()
-            print(f"{Colors.OKGREEN}    Experiment {runner.label} {Colors.BOLD}COMPLETED{Colors.ENDC}")
+            print(f"{Colors.OKGREEN}=== Experiment {runner.label} COMPLETED (simulated) ==={Colors.ENDC}")
         except subprocess.CalledProcessError as e:
-            print(f"{Colors.FAIL}{Colors.BOLD}    !!! Experiment {runner.label} FAILED (subprocess error) !!!{Colors.ENDC}")
+            print(f"{Colors.FAIL}{Colors.BOLD}!!! Experiment {runner.label} FAILED (subprocess error) !!!{Colors.ENDC}")
             print(f"    Stderr: {e.stderr.decode()}")
         except Exception as e:
-            print(f"{Colors.FAIL}{Colors.BOLD}    !!! Experiment {runner.label} FAILED (unexpected error) !!!{Colors.ENDC}")
+            print(f"{Colors.FAIL}{Colors.BOLD}!!! Experiment {runner.label} FAILED (unexpected error) !!!{Colors.ENDC}")
             print(f"    Error: {e}")
         finally:
             runner.cleanup()
         
-    print(f"\nAll experiments finished.\n")
+    print(f"\n{Colors.OKGREEN}All experiments finished.{Colors.ENDC}")
 
 if __name__ == "__main__":
     main()
