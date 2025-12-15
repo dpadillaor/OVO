@@ -7,52 +7,123 @@ default_dataset: "Replica"
 # List of Experiments
 experiments:
   # ---------------------------------------------------------------------------
-  # Example 1: Baseline (Pure Ground Truth, no noise)
+  # Experiment
   # ---------------------------------------------------------------------------
-  - label: "Baseline"          # Will be used in the folder name: ..._[TAG]
-    scenes_id: "office0"       # Will be used in the name: ..._[SCENES_ID]_... and to launch --scenes office0
-    
-    # Modifications for 'data/working/configs/ovo.yaml'
-    ovo_config:
-      fusion_method: "clip" # O "clip"
-      slam:
-        slam_module: "groundtruth"  # Activates GroundTruthSLAM
-      # Other overrides for ovo.yaml can be added here (e.g., semantic params)
-
-    # Modifications for the SLAM config file (e.g., 'slam/groundtruth/replica.yaml')
-    slam_config:
-      noise:
-        translation_noise_std: 0.0
-        rotation_noise_std: 0.0
-
-  # ---------------------------------------------------------------------------
-  # Example 2: Low Drift (GT with low noise: T=0.01m, R=0.5deg)
-  # ---------------------------------------------------------------------------
-  - label: "DriftLow"
+  - label: "NoLoopClousure"
     scenes_id: "office0"
-    
+    stages: ["run", "segment", "eval"]
     ovo_config:
-      fusion_method: "clip" # O "clip"
+      fusion_method: "clip"
       slam:
         slam_module: "groundtruth"
-
+        close_loops: False
     slam_config:
       noise:
-        translation_noise_std: 0.01
-        rotation_noise_std: 0.5
-
-  # ---------------------------------------------------------------------------
-  # Example 3: Drift High (GT with high noise: T=0.1m, R=2.0deg)
-  # ---------------------------------------------------------------------------
-  - label: "DriftHigh"
-    scenes_id: "office0"
-
-    ovo_config:
-      fusion_method: "clip" # O "clip"
-      slam:
-        slam_module: "groundtruth"
-
-    slam_config:
-      noise:
-        translation_noise_std: 0.1
-        rotation_noise_std: 2.0
+        noise_enabled: False
+        translation_noise_std: 0.03
+        rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "NoLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: False
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.05
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "NoLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: False
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.005
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.001
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.005
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.01
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.03
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.05
+  #       rotation_noise_std: 0.01

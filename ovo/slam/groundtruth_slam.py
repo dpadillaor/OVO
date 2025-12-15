@@ -41,6 +41,9 @@ class GroundTruthSLAM(VanillaMapper):
         self.kf_rot_thresh = self.config.get("kf_rot_thresh", 5.0) # in degrees
         self.lc_dist_thresh = self.config.get("lc_dist_thresh", 0.2)
         self.lc_rot_thresh = self.config.get("lc_rot_thresh", 10.0) # in degrees
+        
+        self.close_loops = self.config.get("slam", {}).get("close_loops", True)
+        print(f"GroundTruthSLAM: Loop closure (Global Correction) enabled: {self.close_loops}")
 
         self.map_every = self.config.get("mapping", {}).get("map_every", 10)
         self.correction_done = False
@@ -159,7 +162,7 @@ class GroundTruthSLAM(VanillaMapper):
 
         # Trigger Global Correction near the end of the sequence
         # We check if we are within the last 'map_every' window to ensure we catch the final map() call.
-        if not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
+        if self.close_loops and not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
              self.correct_map_globally()
              self.correction_done = True
 

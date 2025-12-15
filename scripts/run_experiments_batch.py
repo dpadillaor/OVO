@@ -3,6 +3,10 @@ import subprocess
 import shutil
 import os
 import datetime
+import sys
+import itertools
+import time
+import threading
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -30,6 +34,7 @@ class SLAMConfigOverride:
 class Experiment:
     label: str
     scenes_id: str
+    stages: List[str] = field(default_factory=lambda: ["run", "segment", "eval"])
     ovo_config: OVOConfigOverride = field(default_factory=OVOConfigOverride)
     slam_config: SLAMConfigOverride = field(default_factory=SLAMConfigOverride)
     dataset: Optional[str] = None
@@ -46,7 +51,7 @@ class ExperimentRunner:
     """
     def __init__(self, experiment: Experiment, manifest: Manifest):
         # Basic attributes
-        self.label = experiment.label
+        self.label = experiment.label   
         self.experiment = experiment
         self.manifest = manifest 
         self.dataset = self.experiment.dataset if self.experiment.dataset else self.manifest.default_dataset
@@ -141,7 +146,6 @@ class ExperimentRunner:
         with open(self.slam_config_path, 'r') as f:
             slam_data = yaml.full_load(f)
             
-        # CORRECCION: Envolvemos en 'noise' para asegurar anidamiento correcto
         if self.experiment.slam_config.noise:
             slam_overrides = {"noise": self.experiment.slam_config.noise}
             _update_recursive(slam_data, slam_overrides)
@@ -150,7 +154,9 @@ class ExperimentRunner:
             yaml.dump(slam_data, f, default_flow_style=False)
 
     def _restore_configs(self):
-        """Restores original config files from backups and cleans up backup files."""
+        """
+        Restores original config files from backups and cleans up backup files.
+        """
         print(f"    Restoring original configs...")
         shutil.copy(self.ovo_backup_path, self.ovo_config_path)
         os.remove(self.ovo_backup_path)
@@ -158,27 +164,61 @@ class ExperimentRunner:
         os.remove(self.slam_backup_path)
 
     def setup(self):
-        """Prepares the environment for the experiment."""
+        """
+        Prepares the environment for the experiment.
+        """
         print(f"    Generated Name: {Colors.BOLD}{self.experiment_name}{Colors.ENDC}")
         self._backup_configs()
         self._apply_config_overrides()
-        
-        # --- DEBUG PAUSE ---
-        print(f"    {Colors.WARNING}[DEBUG] Configs modified. Check files now. Press Enter to continue...{Colors.ENDC}")
-        input() 
 
     def run(self):
-        """Executes the run_eval.py command for the experiment."""
-        # Determine if we use --scenes or --scenes_list
-        scenes_arg = f"--scenes {self.scenes_id}" # Placeholder for now, needs logic for scenes_list
+        """
+        Executes the run_eval.py command for the experiment.
+        """
+        # TODO: Determine if we use --scenes or --scenes_list
+        scenes_arg = f"--scenes {self.experiment.scenes_id}"
+        
+        # Build stage flags dynamically from experiment.stages
+        stage_flags = " ".join([f"--{stage}" for stage in self.experiment.stages])
         
         command = (
             f"python run_eval.py --dataset_name {self.dataset} "
             f"--experiment_name {self.experiment_name} {scenes_arg} "
-            f"--run --segment --eval"
+            f"{stage_flags}"
         )
-        print(f"    {Colors.BOLD}Executing:{Colors.ENDC} {command}")
-        # subprocess.run(command, shell=True, check=True) # Uncomment when ready
+        print(f"    {Colors.BOLD}Executing run_eval.py for:{Colors.ENDC} {self.dataset} - {self.experiment_name} - Scenes: {self.experiment.scenes_id}")
+        print(f"    Stages: {', '.join(self.experiment.stages)}")
+        # Capture the process result for potential error reporting
+        process_result = self._run_with_spinner(command)
+        
+        # Check if there was an error in the subprocess
+        if process_result.returncode != 0:
+            raise subprocess.CalledProcessError(
+                process_result.returncode,
+                process_result.args,
+                output=process_result.stdout,
+                stderr=process_result.stderr
+            )
+
+    def _run_with_spinner(self, command: str) -> subprocess.CompletedProcess:
+        stop_event = threading.Event()
+        # Pass the message to the spinner function
+        t = threading.Thread(target=_spinner, args=("    Running experiment", stop_event), daemon=True)
+        t.start()
+        try:
+            result = subprocess.run(command,
+                                    shell=True,
+                                    check=False, # We will check return code manually
+                                    capture_output=True, # Capture stdout and stderr
+                                    text=True) # Decode stdout/stderr as text
+            return result
+        finally:
+            stop_event.set()
+            t.join()
+            # Clear the spinner line once the thread has stopped
+            sys.stdout.write("\r" + " " * (len("Running experiment...") + 5) + "\r") # Clear the line
+            sys.stdout.flush()
+
 
     def cleanup(self):
         """Cleans up the environment after the experiment."""
@@ -197,7 +237,7 @@ def _update_recursive(d: Dict[Any, Any], u: Dict[Any, Any]) -> Dict[Any, Any]:
     return d
 
 def _load_experiment_manifest(manifest_path: Path) -> Manifest:
-    print(f"Loading experiments from: {Colors.BOLD}{manifest_path}{Colors.ENDC}")
+    print(f"\nLoading experiments from: {Colors.BOLD}{manifest_path}{Colors.ENDC}")
     with open(manifest_path, 'r') as f:
         manifest_dict = yaml.full_load(f)
 
@@ -218,17 +258,29 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
         experiment_obj = Experiment(
             label=exp_data["label"],
             scenes_id=exp_data["scenes_id"],
+            stages=exp_data.get("stages", ["run", "segment", "eval"]),
             ovo_config=ovo_override,
             slam_config=slam_override,
             dataset=exp_data.get("dataset")
         )
         loaded_experiments.append(experiment_obj)
+
+    print(f"\nLoaded {Colors.BOLD}{len(loaded_experiments)} experiments {Colors.ENDC}from manifest.")
         
     return Manifest(
         default_dataset=manifest_dict.get("default_dataset", "Replica"),
         experiments=loaded_experiments
     )
 
+
+def _spinner(msg, stop_event):
+    for c in itertools.cycle([".  ", ".. ", "..."]):
+        if stop_event.is_set():
+            break
+        sys.stdout.write(f"\r{msg}{c}")
+        sys.stdout.flush()
+        time.sleep(1)
+    sys.stdout.write("\r")
 
 def main():
     manifest_path = "scripts/experiments_manifest.yaml"
@@ -239,18 +291,22 @@ def main():
         runner = ExperimentRunner(experiment, manifest)
         try:
             runner.setup()
-            # runner.run()
-            print(f"{Colors.OKGREEN}=== Experiment {runner.label} COMPLETED (simulated) ==={Colors.ENDC}")
+            runner.run()
+            print(f"{Colors.OKGREEN}    Experiment {runner.label} COMPLETED{Colors.ENDC}")
         except subprocess.CalledProcessError as e:
-            print(f"{Colors.FAIL}{Colors.BOLD}!!! Experiment {runner.label} FAILED (subprocess error) !!!{Colors.ENDC}")
-            print(f"    Stderr: {e.stderr.decode()}")
+            print(f"\n{Colors.FAIL}{Colors.BOLD}    !!! Experiment {runner.label} FAILED (subprocess error) !!!{Colors.ENDC}")
+            if e.stdout:
+                print(f"    Stdout:\n{e.stdout}")
+            if e.stderr:
+                print(f"    Stderr:\n{e.stderr}")
+            print(f"    Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}")
         except Exception as e:
-            print(f"{Colors.FAIL}{Colors.BOLD}!!! Experiment {runner.label} FAILED (unexpected error) !!!{Colors.ENDC}")
+            print(f"\n{Colors.FAIL}{Colors.BOLD}    !!! Experiment {runner.label} FAILED (unexpected error) !!!{Colors.ENDC}")
             print(f"    Error: {e}")
         finally:
             runner.cleanup()
         
-    print(f"\n{Colors.OKGREEN}All experiments finished.{Colors.ENDC}")
+    print(f"\nAll experiments finished.\n")
 
 if __name__ == "__main__":
     main()

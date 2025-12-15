@@ -1,0 +1,16 @@
+{
+  "active": [
+    {"id": "09", "title": "Experimentation Framework", "status": "IN_PROGRESS"},
+    {"id": "03", "title": "DINO Integration", "status": "PENDING"}
+  ],
+  "completed": [
+    {"id": "08", "title": "Global Geometric Correction", "status": "COMPLETED"},
+    {"id": "07", "title": "Loop Closure Geometric Correction", "status": "CANCELLED"},
+    {"id": "06", "title": "Point Cloud Visualization", "status": "COMPLETED"},
+    {"id": "05", "title": "Trajectory Visualization", "status": "COMPLETED"},
+    {"id": "04", "title": "Trajectory Noise Simulation", "status": "COMPLETED"},
+    {"id": "02", "title": "Ground Truth Replay", "status": "COMPLETED"},
+    {"id": "01", "title": "Replay Logging", "status": "CANCELLED"}
+  ],
+  "decisions": []
+}
