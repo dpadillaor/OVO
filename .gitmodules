@@ -1,3 +1,15 @@
 [submodule "thirdParty/segment-anything-2"]
 	path = thirdParty/segment-anything-2
 	url = https://github.com/facebookresearch/sam2.git
+
+[submodule "thirdParty/perception_models"]
+	path = thirdParty/perception_models
+	url = https://github.com/OVO-AI/perception_models.git
+
+[submodule "thirdParty/sam3"]
+	path = thirdParty/sam3
+	url = https://github.com/OVO-AI/sam3.git
+
+[submodule "thirdParty/ORB_SLAM3"]
+	path = thirdParty/ORB_SLAM3
+	url = https://github.com/tberriel/ORB_SLAM3

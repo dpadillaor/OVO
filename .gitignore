@@ -4,3 +4,5 @@ __pycache__
 data/
 
 thirdParty/ORB_SLAM3
+thirdParty/**
+.vscode/settings.json
