@@ -62,6 +62,11 @@ La documentación detallada de cada funcionalidad se registrará en ficheros sep
 *   **Estado:** IN_PROGRESS.
 *   **Log Detallado:** [./feature_logs/09_experimentation_framework.md](./feature_logs/09_experimentation_framework.md)
 
+### 10 - PE Integration
+*   **Objetivo:** Integrar Perception Encoder (PE) como generador de embeddings para instancias 3D.
+*   **Estado:** IN_PROGRESS.
+*   **Log Detallado:** [./feature_logs/10_pe_integration.md](./feature_logs/10_pe_integration.md)
+
 
 ## 4. Próximo Paso
 
