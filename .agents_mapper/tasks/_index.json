@@ -1,7 +1,8 @@
 {
   "active": [
     {"id": "09", "title": "Experimentation Framework", "status": "IN_PROGRESS"},
-    {"id": "03", "title": "DINO Integration", "status": "PENDING"}
+    {"id": "03", "title": "DINO Integration", "status": "PENDING"},
+    {"id": "11", "title": "Fusion Strategy Refactor", "status": "REVIEW"}
   ],
   "completed": [
     {"id": "08", "title": "Global Geometric Correction", "status": "COMPLETED"},

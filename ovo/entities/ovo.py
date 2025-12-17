@@ -8,8 +8,10 @@ import time
 from ..utils import geometry_utils, instance_utils
 from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
+from .pe_generator import PEGenerator
 from .instance3d import Instance3D
 from .logger import Logger
+from .fusion import create_fusion_strategy
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -30,6 +32,7 @@ class OVO:
         self.config = config
         self.logger = logger
         self.debug_info = config.get("debug_info", False)
+        self.fusion_method = config.get("fusion_method", "CLIP")
         self.device = device
         self.n_top_views = config["clip"].get("k_top_views", 0)
         Instance3D.n_top_kf = self.n_top_views
@@ -39,12 +42,14 @@ class OVO:
             config["clip"]["mask_res"] = config["sam"]["mask_res"]
 
         self.clip_generator = CLIPGenerator(config["clip"], device=device)
+        self.pe_generator = PEGenerator(config["pe"], device=device) if "pe" in config else None
         if not eval:
             self.mask_generator = MaskGenerator(config["sam"], scene_name, device=device)
         else:
             self.mask_generator = None
         self.keyframes = {
             "ins_descriptors": dict(),
+            "ins_pe_descriptors": dict(),
             "frame_id": list(),
             "ins_maps": list(),
         }
@@ -59,6 +64,9 @@ class OVO:
         self.th_centroid = config.get("th_centroid", 1.5)
         self.th_cossim = config.get("th_cossim", 0.81)
         self.th_points = config.get("th_points", 0.1)
+
+        # Initialize fusion strategy
+        self.fusion_strategy = create_fusion_strategy(config)
 
         if config.get("verbose", True):
             print('Semantic config')
@@ -82,6 +90,8 @@ class OVO:
         """
         self.device = "cpu"
         self.clip_generator.cpu()
+        if self.pe_generator is not None:
+            self.pe_generator.cpu()
         if self.mask_generator is not None:
             self.mask_generator.cpu()
 
@@ -91,6 +101,8 @@ class OVO:
         """
         self.device = "cuda"
         self.clip_generator.cuda()
+        if self.pe_generator is not None:
+            self.pe_generator.cuda()
         if self.mask_generator is not None:
             self.mask_generator.cuda()
 
@@ -331,7 +343,7 @@ class OVO:
         """ Compute semantic information of first keyframe in the queue.
         """
         matched_ins_ids, binary_maps, image, kf_id = self.keyframes_queue.popleft()
-        
+
         if len(matched_ins_ids)>0:
             if self.n_top_views > 0:
                 obj_to_compute = []
@@ -345,18 +357,22 @@ class OVO:
             clip_embeds = self._extract_clip(image, binary_maps).cpu()
             self._update_matched_objects_clip(clip_embeds, matched_ins_ids, kf_id)
 
+            # Extract PE embeddings if PE generator is available
+            if self.pe_generator is not None:
+                pe_embeds = self._extract_pe(image, binary_maps).cpu()
+                self._update_matched_objects_pe(pe_embeds, matched_ins_ids, kf_id)
+
             if self.config.get("log", False):
                 frame_id = self.keyframes["frame_id"][kf_id]
-                self.logger.log_ovo_stats(
-                    {
+                log_stats = {
                     "frame_id":frame_id,
-                    #"t_seg": round(self._time_cache[0],2),
                     "t_clip": round(self._time_cache[0],2),
                     "t_up": round(self._time_cache[1],3)
-                    }
-                    ,
-                    print_output=True
-                    )
+                }
+                if self.pe_generator is not None:
+                    log_stats["t_pe"] = round(self._time_cache[2],2)
+                    log_stats["t_up_pe"] = round(self._time_cache[3],3)
+                self.logger.log_ovo_stats(log_stats, print_output=True)
                 self._time_cache = []
     
     def update_map(self, map_data, kfs):
@@ -364,13 +380,15 @@ class OVO:
         self.complete_semantic_info()
         points_3d, _, points_ins_ids = map_data
 
-        # 0.1 Remove deleted_kfs : 
+        # 0.1 Remove deleted_kfs :
         deleted_kfs = []
         for i, kf in enumerate(self.keyframes["frame_id"]):
             if kf not in kfs:
                 deleted_kfs.append(kf)
                 if kf in self.keyframes["ins_descriptors"]: # Not all Keyframes will have descriptors associated
                     self.keyframes["ins_descriptors"].pop(kf)
+                if kf in self.keyframes["ins_pe_descriptors"]: # Not all Keyframes will have PE descriptors
+                    self.keyframes["ins_pe_descriptors"].pop(kf)
                 self.keyframes["frame_id"][i] = "Deleted" #deleting from self.keyframes["frame_id"] would require a checkpoint refactor to change it from list to dict
                 # self.keyframes["ins_maps"] # This variable is for Debug, better to not remove it
 
@@ -399,7 +417,7 @@ class OVO:
             for instance2 in objects_list[i+1:]:
                 if instance2.id in fused_objects:
                     continue
-                elif instance_utils.same_instance(instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id], self.th_centroid, self.th_cossim, self.th_points):
+                elif self.fusion_strategy.same_instance(instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id]):
                     instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, map_data)
                     fused_objects[instance2.id] = instance1.id
             objects[instance1.id] = instance1
@@ -407,16 +425,22 @@ class OVO:
         # 3. Updated saved info
         for id2, id1 in fused_objects.items():
             for kf in self.objects[id2].kfs_ids:
-                if kf not in self.keyframes["ins_descriptors"] or id2 not in self.keyframes["ins_descriptors"][kf]:
-                    continue
-                # If both ins were observed in the same frame, the ins_maps should be fused and descriptors recomputed. Neverthless, it is not probable that two instances seen in the same kf will fulfill the distance threshold
-                ins_descriptor2  = self.keyframes["ins_descriptors"][kf].pop(id2)
-                if id1 not in self.keyframes["ins_descriptors"][kf] or True:
-                    self.keyframes["ins_descriptors"][kf][id1] = ins_descriptor2
-                
+                # Handle CLIP descriptors
+                if kf in self.keyframes["ins_descriptors"] and id2 in self.keyframes["ins_descriptors"][kf]:
+                    # If both ins were observed in the same frame, the ins_maps should be fused and descriptors recomputed. Neverthless, it is not probable that two instances seen in the same kf will fulfill the distance threshold
+                    ins_descriptor2 = self.keyframes["ins_descriptors"][kf].pop(id2)
+                    if id1 not in self.keyframes["ins_descriptors"][kf] or True:
+                        self.keyframes["ins_descriptors"][kf][id1] = ins_descriptor2
+                # Handle PE descriptors
+                if kf in self.keyframes["ins_pe_descriptors"] and id2 in self.keyframes["ins_pe_descriptors"][kf]:
+                    ins_pe_descriptor2 = self.keyframes["ins_pe_descriptors"][kf].pop(id2)
+                    if id1 not in self.keyframes["ins_pe_descriptors"][kf] or True:
+                        self.keyframes["ins_pe_descriptors"][kf][id1] = ins_pe_descriptor2
+
         self.objects = objects
         # 4. Update object descriptors
         self.update_objects_clip()
+        self.update_objects_pe()
         return  points_ins_ids 
     
     @profil
@@ -464,7 +488,53 @@ class OVO:
         for object in self.objects.values():
             object.update_clip(self.keyframes["ins_descriptors"], force_update=force_update)
         return
-    
+
+    @profil
+    def _extract_pe(self, image: torch.Tensor, binary_maps: torch.Tensor) -> torch.Tensor:
+        """Profiled call to self.pe_generator.extract_pe. Computes a PE vector for each mask of the segmented image.
+        Args:
+            - image (torch.Tensor): Full source RGB image with dimensions (H,W,3) and range 0-255.
+            - binary_maps (torch.Tensor): A tensor of (N, H, W) containing N binary maps, one for each segmented instance.
+        Return:
+            - pe_embeds: tensor with dim (N, self.pe_generator.embed_dim).
+        """
+        image = torch.from_numpy(image.transpose((2,0,1))).to(self.device)
+        return self.pe_generator.extract_pe(image, binary_maps).cpu()
+
+    @profil
+    def _update_matched_objects_pe(self, pe_embeds: torch.Tensor, matched_ins_ids: List[int], kf_id: int) -> None:
+        """
+        Store pe_embeds keyframe information, and updates matched 3D instances' PE embeddings.
+        Args:
+            - pe_embeds (torch.Tensor): A tensor containing the PE embeddings.
+            - matched_ins_ids (List[int]): A list of instance IDs that are matched with the PE embeddings.
+            - kf_id (int): current keyframe id.
+        Updates:
+            self.keyframes["ins_pe_descriptors"]
+        """
+        ins_embeds = dict()
+        for i, ins_id in enumerate(matched_ins_ids):
+            if ins_id != -1:
+                ins_embeds[ins_id] = pe_embeds[i]
+
+        # Save keyframe information
+        self.keyframes["ins_pe_descriptors"][kf_id] = ins_embeds
+
+        for ins_id in matched_ins_ids:
+            self.objects[ins_id].update_pe(self.keyframes["ins_pe_descriptors"])
+        return
+
+    def update_objects_pe(self, force_update: bool = False) -> None:
+        """ Update all 3D instances PE descriptors
+        Args:
+            - force_update (bool): if True, recomputed Instance3D PE descriptors even Instance_3D.to_update == False
+        """
+        if self.pe_generator is None:
+            return
+        for object in self.objects.values():
+            object.update_pe(self.keyframes["ins_pe_descriptors"], force_update=force_update)
+        return
+
     @torch.no_grad()
     def classify_instances(self, classes: List[str], template: str | List[str] = "This is a photo of a {}", th: float = 0):
         """
@@ -542,6 +612,9 @@ class OVO:
             for kf_id, ins_descriptors in self.keyframes["ins_descriptors"].items():
                 for ins_id, descriptors in ins_descriptors.items():
                     scene_dict[f"kf_{kf_id}_ins3d_{ins_id}_clips"] = descriptors.cpu().numpy()
+            for kf_id, ins_pe_descriptors in self.keyframes["ins_pe_descriptors"].items():
+                for ins_id, descriptors in ins_pe_descriptors.items():
+                    scene_dict[f"kf_{kf_id}_ins3d_{ins_id}_pe"] = descriptors.cpu().numpy()
         return scene_dict
 
     def restore_dict(self, scene_dict: Dict[str, Any], debug_info: bool = False): 
@@ -566,7 +639,11 @@ class OVO:
             self.keyframes["ins_maps"] = [x.squeeze() for x in np.split(scene_dict["ins_map"], len(self.keyframes["frame_id"]))]
             for i in range(len(self.keyframes["frame_id"])):
                 self.keyframes["ins_descriptors"][i] = {}
+                self.keyframes["ins_pe_descriptors"][i] = {}
                 for ins_id in self.objects.keys():
                     descriptor = scene_dict.get(f"kf_{i}_ins3d_{ins_id}_clips", None)
                     if descriptor is not None:
                         self.keyframes["ins_descriptors"][i][ins_id] = torch.tensor(descriptor, device=self.device)
+                    pe_descriptor = scene_dict.get(f"kf_{i}_ins3d_{ins_id}_pe", None)
+                    if pe_descriptor is not None:
+                        self.keyframes["ins_pe_descriptors"][i][ins_id] = torch.tensor(pe_descriptor, device=self.device)

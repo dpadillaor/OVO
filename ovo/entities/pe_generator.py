@@ -21,10 +21,12 @@ class PEGenerator:
         self.config = config
         self.device = device
         self.model_card = config.get("model_card", "PE-Core-L14-336")
-        self.mask_res = config.get("mask_res", 336) 
 
         # Load PE model
         self.model = pe.CLIP.from_config(self.model_card, pretrained=True)
+
+        # Auto-detect mask_res from model or use config override
+        self.mask_res = config.get("mask_res", self.model.image_size)
         self.model.to(self.device)
         self.model.eval()
         

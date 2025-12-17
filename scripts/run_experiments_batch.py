@@ -24,7 +24,7 @@ class Colors:
 @dataclass
 class OVOConfigOverride:
     slam: Dict[str, Any] = field(default_factory=dict)
-    fusion_method: Optional[str] = None
+    semantic: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class SLAMConfigOverride:
@@ -91,7 +91,7 @@ class ExperimentRunner:
         """
         Generates the fusion config part of the experiment name.
         """
-        method = self.experiment.ovo_config.fusion_method
+        method = self.experiment.ovo_config.semantic.get("fusion_method")
         method_safe = method.lower() if method else None
 
         match method_safe:
@@ -99,8 +99,8 @@ class ExperimentRunner:
                 return "CLIP"
             case "dino":
                 return "DINO"
-            case "hybrid":
-                 return "Hybrid"
+            case "PE":
+                 return "PE"
             case _:
                 raise ValueError(f"Fusion method '{method}' not recognized or supported by experiment runner")
 
@@ -137,7 +137,9 @@ class ExperimentRunner:
         if self.experiment.ovo_config.slam:
              _update_recursive(ovo_data, {"slam": self.experiment.ovo_config.slam})
 
-        # TODO: Handle fusion_method insertion into ovo_data if necessary
+        # Apply semantic config (including fusion_method)
+        if self.experiment.ovo_config.semantic:
+            _update_recursive(ovo_data, {"semantic": self.experiment.ovo_config.semantic})
         
         with open(self.ovo_config_path, 'w') as f:
             yaml.dump(ovo_data, f, default_flow_style=False)
@@ -247,7 +249,7 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
         ovo_data = exp_data.get("ovo_config", {})
         ovo_override = OVOConfigOverride(
             slam=ovo_data.get("slam", {}),
-            fusion_method=ovo_data.get("fusion_method")
+            semantic=ovo_data.get("semantic", {})
         )
         
         slam_data = exp_data.get("slam_config", {})

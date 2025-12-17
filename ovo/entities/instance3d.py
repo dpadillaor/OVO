@@ -30,12 +30,15 @@ class Instance3D:
         self.id = id
         self.clip_feature = None
         self.clip_feature_kf = None
+        self.pe_feature = None
+        self.pe_feature_kf = None
         self.dino_feature = None
         self.dino_feature_kf = None
         self.kfs_ids = []
         self.points_ids = []
         self.top_kf = []
         self.to_update = False
+        self.to_update_pe = False
         if kf_id is not None:
             self.update(points_ids, kf_id, mask_area)
 
@@ -80,23 +83,26 @@ class Instance3D:
             if area > self.top_kf[idx][0]:
                 self.top_kf[idx] = (area, kf_id)
                 heapq.heapify(self.top_kf)
-                self.to_update=True
+                self.to_update = True
+                self.to_update_pe = True
         else:
             self._add_top_kf(kf_id, area)
     
     def _add_top_kf(self, kf_id: int, area: int) -> None:
         """If the area is one of the N biggest, add to list of top keyframes
         Args:
-            - keyframe_id (int): id of keyframe where the object has been observed. 
-            - area (int): area of the segmentation map of the object if keyframe_id 
+            - keyframe_id (int): id of keyframe where the object has been observed.
+            - area (int): area of the segmentation map of the object if keyframe_id
         """
         if len(self.top_kf) < self.n_top_kf:
             heapq.heappush(self.top_kf,(area, kf_id))
-            self.to_update=True
+            self.to_update = True
+            self.to_update_pe = True
         else:
             removed = heapq.heappushpop(self.top_kf,(area, kf_id))
             if (self.n_top_kf <= 0) or (removed[1] != kf_id):
                 self.to_update = True
+                self.to_update_pe = True
        
     def idx_in_top_kf(self, kf_id: int) -> int:
         """ If kf_id is in self.top_kf, returns the index. Otherwise return -1.
@@ -153,6 +159,40 @@ class Instance3D:
             self.clip_feature_kf = kf
             self.to_update = False
 
+    def update_pe(self, keyframes_pe: Dict[int, Dict[int, torch.Tensor]], force_update: bool = False) -> None:
+        """If self.to_update_pe is True, compute PE vector minimizing L1 norm of associated PE vectors from keyframes where the object was observed. Minimizing the L1 norm is equivalent to compute the median of the vector's norm.
+        Args:
+            - keyframes_pe (Dict[int, Dict[int, torch.Tensor]]): for each keyframe store a dictionary where the keys are object ids and values are associated PE vectors.
+            - force_update (bool): if True, recomputed Instance3D PE descriptors even self.to_update_pe == False
+        Updates:
+            - self.pe_feature
+            - self.pe_feature_kf
+            - self.to_update_pe
+        """
+        if self.to_update_pe or force_update:
+            pe_embeds = []
+            if self.n_top_kf > 0:
+                for _, kf in heapq.nlargest(self.n_top_kf, self.top_kf):
+                    kf_pe = keyframes_pe.get(kf)
+                    if kf_pe is not None and self.id in kf_pe:
+                        pe_embeds.append(kf_pe[self.id])
+            else:
+                for kf in self.kfs_ids:
+                    kf_pe = keyframes_pe.get(kf)
+                    if kf_pe is not None and self.id in kf_pe:
+                        pe_embeds.append(kf_pe[self.id])
+
+            if len(pe_embeds) == 0:
+                return
+
+            pe_embeds = torch.vstack(pe_embeds)
+            pe_embeds = pe_embeds[:, None]
+            l1_distances = torch.abs(pe_embeds - pe_embeds.permute(1, 0, 2)).sum((1, 2))
+            kf = l1_distances.argmin()
+            self.pe_feature = pe_embeds[kf]
+            self.pe_feature_kf = kf
+            self.to_update_pe = False
+
     def export(self, debug_info: bool = False) -> Dict[str, Any]:
         """Export object properties as a dictionary.
         Args:
@@ -164,6 +204,8 @@ class Instance3D:
         obj_dict = {
             f"ins3d_{self.id}_clip_feature": self.clip_feature,
             f"ins3d_{self.id}_clip_feature_kf": self.clip_feature_kf,
+            f"ins3d_{self.id}_pe_feature": self.pe_feature,
+            f"ins3d_{self.id}_pe_feature_kf": self.pe_feature_kf,
         }
 
         if debug_info:
@@ -184,7 +226,10 @@ class Instance3D:
         """
         self.clip_feature = obj_dict[f"ins3d_{self.id}_clip_feature"]
         self.clip_feature_kf = obj_dict.get(f"ins3d_{self.id}_clip_feature_kf", None)
-        self.to_update=self.clip_feature is None
+        self.to_update = self.clip_feature is None
+        self.pe_feature = obj_dict.get(f"ins3d_{self.id}_pe_feature", None)
+        self.pe_feature_kf = obj_dict.get(f"ins3d_{self.id}_pe_feature_kf", None)
+        self.to_update_pe = self.pe_feature is None
         if debug_info:
             self.kfs_ids = obj_dict[f"ins3d_{self.id}_keyframes_ids"].tolist()
             self.points_ids = obj_dict[f"ins3d_{self.id}_points_ids"].tolist()
