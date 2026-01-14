@@ -4,7 +4,6 @@ import torch
 
 from ovo.entities.instance3d import Instance3D
 from ovo.entities.pe_generator import PEGenerator
-from ovo.entities.sam3_generator import SAM3Generator
 
 class FusionEncoderAdapter(ABC):
     """
@@ -151,7 +150,7 @@ class DINOFusionAdapter(FusionEncoderAdapter):
 class SAM3FusionAdapter(FusionEncoderAdapter):
     """Adapter for SAM3 fusion."""
 
-    def __init__(self, sam3_generator: SAM3Generator, storage_key: str = "ins_sam3_descriptors"):
+    def __init__(self, sam3_generator: "SAM3Generator", storage_key: str = "ins_sam3_descriptors"):
         self.generator = sam3_generator
         self.storage_key = storage_key
 

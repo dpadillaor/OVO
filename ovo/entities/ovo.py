@@ -9,7 +9,6 @@ from ..utils import geometry_utils, instance_utils
 from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
 from .pe_generator import PEGenerator
-from .sam3_generator import SAM3Generator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy
@@ -45,7 +44,18 @@ class OVO:
 
         self.clip_generator = CLIPGenerator(config["clip"], device=device)
         self.pe_generator = PEGenerator(config["pe"], device=device) if "pe" in config else None
-        self.sam3_generator = SAM3Generator(config["sam3"], device=device) if "sam3" in config else None
+
+        # Lazy import SAM3Generator to avoid dependency issues when SAM3 is not used
+        if "sam3" in config:
+            try:
+                from .sam3_generator import SAM3Generator
+                self.sam3_generator = SAM3Generator(config["sam3"], device=device)
+            except ImportError as e:
+                raise ImportError(
+                    f"Failed to import SAM3Generator. SAM3 dependencies may not be installed: {e}"
+                ) from e
+        else:
+            self.sam3_generator = None
         if not eval:
             self.mask_generator = MaskGenerator(config["sam"], scene_name, device=device)
         else:

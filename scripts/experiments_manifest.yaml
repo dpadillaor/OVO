@@ -90,90 +90,90 @@ experiments:
   # ---------------------------------------------------------------------------
   # Experiment
   # ---------------------------------------------------------------------------
-  - label: "Spatial"
-    scenes_id: "office0"
-    stages: ["run", "segment", "eval"]
-    ovo_config:
-      semantic:
-        fusion_method: "PE"
-        pe:
-          model_card: "PE-Spatial-L14-448"
-      slam:
-        slam_module: "groundtruth"
-        close_loops: True
-    slam_config:
-      noise:
-        translation_noise_std: 0.001
-        rotation_noise_std: 0.01
-  # ---------------------------------------------------------------------------
-  # Experiment
-  # ---------------------------------------------------------------------------
-  - label: "Spatial"
-    scenes_id: "office0"
-    stages: ["run", "segment", "eval"]
-    ovo_config:
-      semantic:
-        fusion_method: "PE"
-        pe:
-          model_card: "PE-Spatial-L14-448"
-      slam:
-        slam_module: "groundtruth"
-        close_loops: True
-    slam_config:
-      noise:
-        translation_noise_std: 0.005
-        rotation_noise_std: 0.01
-  # ---------------------------------------------------------------------------
-  # Experiment
-  # ---------------------------------------------------------------------------
-  - label: "Spatial"
-    scenes_id: "office0"
-    stages: ["run", "segment", "eval"]
-    ovo_config:
-      semantic:
-        fusion_method: "PE"
-        pe:
-          model_card: "PE-Spatial-L14-448"
-      slam:
-        slam_module: "groundtruth"
-        close_loops: True
-    slam_config:
-      noise:
-        translation_noise_std: 0.01
-        rotation_noise_std: 0.01
-  # ---------------------------------------------------------------------------
-  # Experiment
-  # ---------------------------------------------------------------------------
-  - label: "Spatial"
-    scenes_id: "office0"
-    stages: ["run", "segment", "eval"]
-    ovo_config:
-      semantic:
-        fusion_method: "PE"
-        pe:
-          model_card: "PE-Spatial-L14-448"
-      slam:
-        slam_module: "groundtruth"
-        close_loops: True
-    slam_config:
-      noise:
-        translation_noise_std: 0.03
-        rotation_noise_std: 0.01
-  # ---------------------------------------------------------------------------
-  # Experiment
-  # ---------------------------------------------------------------------------
-  - label: "Spatial"
-    scenes_id: "office0"
-    stages: ["run", "segment", "eval"]
-    ovo_config:
-      semantic:
-        fusion_method: "PE"
-        pe:
-          model_card: "PE-Spatial-L14-448"
-      slam:
-        slam_module: "groundtruth"
-        close_loops: True
-    slam_config:
-      noise:
-        translation_noise_std: 0.05
-        rotation_noise_std: 0.01
+  # - label: "Spatial"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     semantic:
+  #       fusion_method: "PE"
+  #       pe:
+  #         model_card: "PE-Spatial-L14-448"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.001
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "Spatial"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     semantic:
+  #       fusion_method: "PE"
+  #       pe:
+  #         model_card: "PE-Spatial-L14-448"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.005
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "Spatial"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     semantic:
+  #       fusion_method: "PE"
+  #       pe:
+  #         model_card: "PE-Spatial-L14-448"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.01
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "Spatial"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     semantic:
+  #       fusion_method: "PE"
+  #       pe:
+  #         model_card: "PE-Spatial-L14-448"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.03
+  #       rotation_noise_std: 0.01
+# ---------------------------------------------------------------------------
+# Experiment
+# ---------------------------------------------------------------------------
+- label: "Core-Test"
+  scenes_id: "office0"
+  stages: ["run", "segment", "eval"]
+  ovo_config:
+    semantic:
+      fusion_method: "PE"
+      pe:
+        model_card: "PE-Core-L14-336"
+    slam:
+      slam_module: "groundtruth"
+      close_loops: True
+  slam_config:
+    noise:
+      translation_noise_std: 0.05
+      rotation_noise_std: 0.01
