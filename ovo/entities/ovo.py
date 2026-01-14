@@ -507,6 +507,13 @@ class OVO:
         if self.fusion_encoder is not None:
             self.fusion_encoder.update_objects(self.objects, self.keyframes)
         
+        # Explicitly update PE and SAM3 if generators are available (for backward compatibility/extra safety)
+        if self.pe_generator is not None and self.fusion_encoder is None:
+            self.update_objects_pe()
+            
+        if self.sam3_generator is not None:
+            self.update_objects_sam3()
+        
         return  points_ins_ids 
 
     def _fuse_overlapping_instances(
