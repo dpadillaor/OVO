@@ -9,6 +9,11 @@
       "id": "03",
       "title": "DINO Integration",
       "status": "PENDING"
+    },
+    {
+      "id": "12",
+      "title": "SAM3 Finetuned Perception Model Integration",
+      "status": "PENDING PLANNING"
     }
   ],
   "completed": [
