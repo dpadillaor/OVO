@@ -27,6 +27,7 @@ from tests.fixtures.fixtures_sam3 import (
 from tests.fixtures.fixtures_encoders import (
     mock_pe_generator,
     mock_dino_generator,
+    mock_sam3_generator,
     mock_keyframes_data,
     mock_objects_dict,
 )

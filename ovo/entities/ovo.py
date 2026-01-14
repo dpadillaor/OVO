@@ -13,7 +13,7 @@ from .sam3_generator import SAM3Generator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy
-from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter
+from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter, SAM3FusionAdapter
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -89,6 +89,8 @@ class OVO:
             return PEFusionAdapter(self.pe_generator)
         elif fusion_method == "dino":
             return DINOFusionAdapter(self.pe_generator) # DINO generator not implemented yet
+        elif fusion_method == "sam3":
+            return SAM3FusionAdapter(self.sam3_generator)
 
         # CLIP fusion uses CLIP features directly, no extra encoder needed
         return None
@@ -100,6 +102,7 @@ class OVO:
         # Map fusion method to (generator_instance, readable_name)
         validation_map = {
             "pe": (self.pe_generator, "PE generator"),
+            "sam3": (self.sam3_generator, "SAM3 generator"),
             # "dino": (self.dino_generator, "DINO generator"), # Future
         }
 
@@ -400,14 +403,9 @@ class OVO:
             clip_embeds = self._extract_clip(image, binary_maps).cpu()
             self._update_matched_objects_clip(clip_embeds, matched_ins_ids, kf_id)
 
-            # 2. Fusion Encoder - Conditional (PE, DINO, etc.)
+            # 2. Fusion Encoder - Conditional (PE, DINO, SAM3, etc.)
             if self.fusion_encoder is not None:
                 self._compute_fusion_info(image, binary_maps, matched_ins_ids, kf_id)
-
-            # Extract SAM3 embeddings if SAM3 generator is available
-            if self.sam3_generator is not None:
-                sam3_embeds = self._extract_sam3(image, binary_maps).cpu()
-                self._update_matched_objects_sam3(sam3_embeds, matched_ins_ids, kf_id)
 
             if self.config.get("log", False):
                 frame_id = self.keyframes["frame_id"][kf_id]
@@ -416,17 +414,9 @@ class OVO:
                     "t_clip": round(self._time_cache[0],2),
                     "t_up": round(self._time_cache[1],3)
                 }
-                # Log fusion stats (PE/DINO)
+                # Log fusion stats (PE/DINO/SAM3)
                 if self.fusion_encoder is not None and len(self._time_cache) > 2:
                      log_stats["t_fusion"] = round(self._time_cache[2], 2)
-                
-                # Log SAM3 stats if available
-                if self.sam3_generator is not None:
-                    # SAM3 usually comes after CLIP and Fusion
-                    idx = 2 if self.fusion_encoder is None else 4
-                    if len(self._time_cache) > idx + 1:
-                        log_stats["t_sam3"] = round(self._time_cache[idx],2)
-                        log_stats["t_up_sam3"] = round(self._time_cache[idx+1],3)
 
                 self.logger.log_ovo_stats(log_stats, print_output=True)
                 self._time_cache = []
@@ -451,13 +441,9 @@ class OVO:
                 if kf in self.keyframes["ins_descriptors"]: # Not all Keyframes will have descriptors associated
                     self.keyframes["ins_descriptors"].pop(kf)
                 
-                # Delegate cleanup to fusion encoder (handles PE descriptors if active)
+                # Delegate cleanup to fusion encoder (handles PE/SAM3/DINO descriptors if active)
                 if self.fusion_encoder is not None:
                     self.fusion_encoder.cleanup_keyframe(kf, self.keyframes)
-
-                # Sam3 cleanup
-                if kf in self.keyframes["ins_sam3_descriptors"]:
-                    self.keyframes["ins_sam3_descriptors"].pop(kf)
 
                 self.keyframes["frame_id"][i] = "Deleted" #deleting from self.keyframes["frame_id"] would require a checkpoint refactor to change it from list to dict
                 # self.keyframes["ins_maps"] # This variable is for Debug, better to not remove it
@@ -506,14 +492,11 @@ class OVO:
         self.update_objects_clip()
         if self.fusion_encoder is not None:
             self.fusion_encoder.update_objects(self.objects, self.keyframes)
-        
-        # Explicitly update PE and SAM3 if generators are available (for backward compatibility/extra safety)
+
+        # Explicitly update PE if generator is available but not using fusion_encoder (for backward compatibility)
         if self.pe_generator is not None and self.fusion_encoder is None:
             self.update_objects_pe()
-            
-        if self.sam3_generator is not None:
-            self.update_objects_sam3()
-        
+
         return  points_ins_ids 
 
     def _fuse_overlapping_instances(
@@ -565,27 +548,15 @@ class OVO:
             for kf in self.objects[id2].kfs_ids:
                 # Handle CLIP descriptors
                 if kf in self.keyframes["ins_descriptors"] and id2 in self.keyframes["ins_descriptors"][kf]:
-                    # If both ins were observed in the same frame, the ins_maps should be fused and descriptors recomputed. 
+                    # If both ins were observed in the same frame, the ins_maps should be fused and descriptors recomputed.
                     # Nevertheless, it is not probable that two instances seen in the same kf will fulfill the distance threshold
                     ins_descriptor2 = self.keyframes["ins_descriptors"][kf].pop(id2)
                     if id1 not in self.keyframes["ins_descriptors"][kf] or True:
                         self.keyframes["ins_descriptors"][kf][id1] = ins_descriptor2
-                
-                # Handle Fusion Encoder descriptors (PE, DINO, etc.)
-                if self.fusion_encoder is not None:
-                    self.fusion_encoder.transfer_on_merge([id2], id1, self.keyframes) 
 
-                # Fallback Handle PE descriptors (if not using fusion encoder or for redundancy)
-                if kf in self.keyframes.get("ins_pe_descriptors", {}) and id2 in self.keyframes["ins_pe_descriptors"][kf]:
-                    ins_pe_descriptor2 = self.keyframes["ins_pe_descriptors"][kf].pop(id2)
-                    if id1 not in self.keyframes["ins_pe_descriptors"][kf] or True:
-                        self.keyframes["ins_pe_descriptors"][kf][id1] = ins_pe_descriptor2
-                
-                # Handle SAM3 descriptors
-                if kf in self.keyframes.get("ins_sam3_descriptors", {}) and id2 in self.keyframes["ins_sam3_descriptors"][kf]:
-                    ins_sam3_descriptor2 = self.keyframes["ins_sam3_descriptors"][kf].pop(id2)
-                    if id1 not in self.keyframes["ins_sam3_descriptors"][kf] or True:
-                        self.keyframes["ins_sam3_descriptors"][kf][id1] = ins_sam3_descriptor2
+                # Handle Fusion Encoder descriptors (PE, DINO, SAM3, etc.)
+                if self.fusion_encoder is not None:
+                    self.fusion_encoder.transfer_on_merge([id2], id1, self.keyframes)
     
     @profil
     def _extract_clip(self, image: torch.Tensor, binary_maps: torch.Tensor) -> List[Any]:
@@ -677,52 +648,6 @@ class OVO:
             return
         for object in self.objects.values():
             object.update_pe(self.keyframes["ins_pe_descriptors"], force_update=force_update)
-        return
-
-    @profil
-    def _extract_sam3(self, image: torch.Tensor, binary_maps: torch.Tensor) -> torch.Tensor:
-        """Profiled call to self.sam3_generator.extract_sam3. Computes a SAM3 vector for each mask of the segmented image.
-        Args:
-            - image (torch.Tensor): Full source RGB image with dimensions (3,H,W) and range 0-255.
-            - binary_maps (torch.Tensor): A tensor of (N, H, W) containing N binary maps.
-        Return:
-            - sam3_embeds: tensor with dim (N, self.sam3_generator.embed_dim).
-        """
-        image = torch.from_numpy(image.transpose((2,0,1))).to(self.device)
-        return self.sam3_generator.extract_sam3(image, binary_maps).cpu()
-
-    @profil
-    def _update_matched_objects_sam3(self, sam3_embeds: torch.Tensor, matched_ins_ids: List[int], kf_id: int) -> None:
-        """
-        Store sam3_embeds keyframe information, and updates matched 3D instances' SAM3 embeddings.
-        Args:
-            - sam3_embeds (torch.Tensor): A tensor containing the SAM3 embeddings.
-            - matched_ins_ids (List[int]): A list of instance IDs that are matched with the SAM3 embeddings.
-            - kf_id (int): current keyframe id.
-        Updates:
-            self.keyframes["ins_sam3_descriptors"]
-        """
-        ins_embeds = dict()
-        for i, ins_id in enumerate(matched_ins_ids):
-            if ins_id != -1:
-                ins_embeds[ins_id] = sam3_embeds[i]
-
-        # Save keyframe information
-        self.keyframes["ins_sam3_descriptors"][kf_id] = ins_embeds
-
-        for ins_id in matched_ins_ids:
-            self.objects[ins_id].update_sam3(self.keyframes["ins_sam3_descriptors"])
-        return
-
-    def update_objects_sam3(self, force_update: bool = False) -> None:
-        """ Update all 3D instances SAM3 descriptors
-        Args:
-            - force_update (bool): if True, recomputed Instance3D SAM3 descriptors even Instance_3D.to_update_sam3 == False
-        """
-        if self.sam3_generator is None:
-            return
-        for object in self.objects.values():
-            object.update_sam3(self.keyframes["ins_sam3_descriptors"], force_update=force_update)
         return
 
     @torch.no_grad()
