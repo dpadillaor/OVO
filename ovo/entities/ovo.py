@@ -13,6 +13,7 @@ from .sam3_generator import SAM3Generator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy
+from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -70,11 +71,45 @@ class OVO:
 
         # Initialize fusion strategy
         self.fusion_strategy = create_fusion_strategy(config)
+        
+        # Initialize fusion encoder adapter
+        self.fusion_encoder = self._get_fusion_encoder()
+        self._validate_fusion_config()
 
         if config.get("verbose", True):
             print('Semantic config')
             pprint.PrettyPrinter().pprint(config)
 
+
+    def _get_fusion_encoder(self) -> FusionEncoderAdapter | None:
+        """Get the fusion encoder adapter based on config, or None if CLIP-only."""
+        fusion_method = self.fusion_method.lower()
+
+        if fusion_method == "pe":
+            return PEFusionAdapter(self.pe_generator)
+        elif fusion_method == "dino":
+            return DINOFusionAdapter(self.pe_generator) # DINO generator not implemented yet
+
+        # CLIP fusion uses CLIP features directly, no extra encoder needed
+        return None
+
+    def _validate_fusion_config(self):
+        """Validate that fusion_method has required generator available."""
+        method = self.fusion_method.lower()
+
+        # Map fusion method to (generator_instance, readable_name)
+        validation_map = {
+            "pe": (self.pe_generator, "PE generator"),
+            # "dino": (self.dino_generator, "DINO generator"), # Future
+        }
+
+        if method in validation_map:
+            generator, name = validation_map[method]
+            if generator is None:
+                raise ValueError(
+                    f"fusion_method='{method}' requires {name} to be configured. "
+                    f"Add '{method}' key to config or change fusion_method."
+                )
 
     def to(self, device: str) -> None:
         """
@@ -134,7 +169,7 @@ class OVO:
         return wrapper    
     
     def detect_and_track_objects(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor) -> torch.Tensor:
-        """ For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
+        r""" For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
             - frame_data (tuple): current frame data.
@@ -195,7 +230,7 @@ class OVO:
     
     @profil
     def _match_and_track_instances(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor) -> Tuple[List[int], torch.Tensor, int]:
-        """ For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
+        """ For the current frame (1) computes using SAM for each level i \\in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
             - frame_data (tuple): current frame data.
@@ -361,13 +396,13 @@ class OVO:
                     return
                 matched_ins_ids, binary_maps = np.asarray(matched_ins_ids)[obj_to_compute].tolist(), binary_maps[obj_to_compute]
 
+            # 1. CLIP - Always compute (core semantic)
             clip_embeds = self._extract_clip(image, binary_maps).cpu()
             self._update_matched_objects_clip(clip_embeds, matched_ins_ids, kf_id)
 
-            # Extract PE embeddings if PE generator is available
-            if self.pe_generator is not None:
-                pe_embeds = self._extract_pe(image, binary_maps).cpu()
-                self._update_matched_objects_pe(pe_embeds, matched_ins_ids, kf_id)
+            # 2. Fusion Encoder - Conditional (PE, DINO, etc.)
+            if self.fusion_encoder is not None:
+                self._compute_fusion_info(image, binary_maps, matched_ins_ids, kf_id)
 
             # Extract SAM3 embeddings if SAM3 generator is available
             if self.sam3_generator is not None:
@@ -381,46 +416,115 @@ class OVO:
                     "t_clip": round(self._time_cache[0],2),
                     "t_up": round(self._time_cache[1],3)
                 }
-                if self.pe_generator is not None:
-                    log_stats["t_pe"] = round(self._time_cache[2],2)
-                    log_stats["t_up_pe"] = round(self._time_cache[3],3)
-                elif self.sam3_generator is not None:
-                    log_stats["t_sam3"] = round(self._time_cache[2],2)
-                    log_stats["t_up_sam3"] = round(self._time_cache[3],3)
+                # Log fusion stats (PE/DINO)
+                if self.fusion_encoder is not None and len(self._time_cache) > 2:
+                     log_stats["t_fusion"] = round(self._time_cache[2], 2)
+                
+                # Log SAM3 stats if available
+                if self.sam3_generator is not None:
+                    # SAM3 usually comes after CLIP and Fusion
+                    idx = 2 if self.fusion_encoder is None else 4
+                    if len(self._time_cache) > idx + 1:
+                        log_stats["t_sam3"] = round(self._time_cache[idx],2)
+                        log_stats["t_up_sam3"] = round(self._time_cache[idx+1],3)
+
                 self.logger.log_ovo_stats(log_stats, print_output=True)
                 self._time_cache = []
-    
-    def update_map(self, map_data, kfs):
-        # 0. clean the queue
-        self.complete_semantic_info()
-        points_3d, _, points_ins_ids = map_data
 
-        # 0.1 Remove deleted_kfs :
+    @profil
+    def _compute_fusion_info(self, image: torch.Tensor, binary_maps: torch.Tensor, matched_ins_ids: List[int], kf_id: int) -> None:
+        """Profiled call to fusion encoder to extract embeddings and update instances."""
+        self.fusion_encoder.compute_and_update(
+            image, binary_maps, matched_ins_ids, kf_id,
+            self.keyframes, self.objects
+        )
+    
+    def _remove_deleted_keyframes(self, kfs: List[int]) -> None:
+        """ Remove keyframe information for deleted keyframes.
+        Args:
+            - deleted_kfs (List[int]): List of deleted keyframe ids.
+        """
         deleted_kfs = []
         for i, kf in enumerate(self.keyframes["frame_id"]):
             if kf not in kfs:
                 deleted_kfs.append(kf)
                 if kf in self.keyframes["ins_descriptors"]: # Not all Keyframes will have descriptors associated
                     self.keyframes["ins_descriptors"].pop(kf)
-                if kf in self.keyframes["ins_pe_descriptors"]: # Not all Keyframes will have PE descriptors
-                    self.keyframes["ins_pe_descriptors"].pop(kf)
+                
+                # Delegate cleanup to fusion encoder (handles PE descriptors if active)
+                if self.fusion_encoder is not None:
+                    self.fusion_encoder.cleanup_keyframe(kf, self.keyframes)
+
+                # Sam3 cleanup
                 if kf in self.keyframes["ins_sam3_descriptors"]:
                     self.keyframes["ins_sam3_descriptors"].pop(kf)
+
                 self.keyframes["frame_id"][i] = "Deleted" #deleting from self.keyframes["frame_id"] would require a checkpoint refactor to change it from list to dict
                 # self.keyframes["ins_maps"] # This variable is for Debug, better to not remove it
 
-        # 1. remove 3D instances that are not in pcd_obj_ids, despite some instances having been detected with > than 100 points, the deletion of Keyframes, can reduce their support to 1 or 2 points. TODO: We should 1) recompute the support of this instances by projecting the full pcd into them or 2) just remove them.
-        objects_list = []
-        objects_to_del = []
+    def _remove_missing_instances(
+        self,
+        points_ins_ids: torch.Tensor,
+        objects_list: list,
+        objects_to_del: list,
+    ) -> None:
+        """
+         Remove 3D instances that are not in existing_ins_ids.
+        """
         map_ins_ids = points_ins_ids.unique()
         for ins_id in self.objects.keys():
             if ins_id in map_ins_ids:
                 objects_list.append(self.objects[ins_id])
             else:
                 objects_to_del.append(self.objects[ins_id])
+
+    def update_map(self, map_data, kfs):
+        # 0. clean the queue
+        self.complete_semantic_info()
+        points_3d, _, points_ins_ids = map_data
+
+        # 0.1 Remove deleted_kfs :
+        self._remove_deleted_keyframes(kfs)
+
+        # 1. remove 3D instances that are not in pcd_obj_ids
+        objects_list = []
+        objects_to_del = []
+        self._remove_missing_instances(points_ins_ids, objects_list, objects_to_del)
+
         # 2. Fuse 3D instances that fulfill a condition. 
+        new_objects, fused_objects, points_ins_ids = self._fuse_overlapping_instances(
+            objects_list, points_3d, map_data
+        )
+
+        print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
+        
+        # 3. Updated saved info
+        self._update_descriptors_after_fusion(fused_objects)
+
+        self.objects = new_objects
+        # 4. Update object descriptors
+        self.update_objects_clip()
+        if self.fusion_encoder is not None:
+            self.fusion_encoder.update_objects(self.objects, self.keyframes)
+        
+        return  points_ins_ids 
+
+    def _fuse_overlapping_instances(
+        self,
+        objects_list: List[Instance3D],
+        points_3d: torch.Tensor,
+        map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor]:
+        """
+        Identify and fuse overlapping instances based on the fusion strategy.
+        Returns:
+            - objects: Dictionary of updated (surviving) Instance3D objects.
+            - fused_objects: Dictionary mapping {deleted_instance_id: survivor_instance_id}.
+            - points_ins_ids: Updated tensor of instance IDs for each 3D point.
+        """
         # TODO: optimize brute-force approach (compare all instances to each-other)
-        #precompute pointcloud
+        # Precompute pointcloud data for efficiency
+        _, _, points_ins_ids = map_data
         obj_pcds = {}
         for instance in objects_list:
             obj_pcd = points_3d[points_ins_ids == instance.id]
@@ -434,37 +538,47 @@ class OVO:
             for instance2 in objects_list[i+1:]:
                 if instance2.id in fused_objects:
                     continue
-                elif self.fusion_strategy.same_instance(instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id]):
+                elif self.fusion_strategy.same_instance(
+                    instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id]
+                ):
                     instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, map_data)
                     fused_objects[instance2.id] = instance1.id
             objects[instance1.id] = instance1
-        print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
-        # 3. Updated saved info
+            
+        return objects, fused_objects, points_ins_ids
+
+    def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> None:
+        """
+        Update keyframe descriptors and fusion encoder states after instance fusion.
+        Args:
+            - fused_objects: Dictionary mapping {deleted_instance_id: survivor_instance_id}.
+        """
         for id2, id1 in fused_objects.items():
+            # Access old state (self.objects) before it is updated
             for kf in self.objects[id2].kfs_ids:
                 # Handle CLIP descriptors
                 if kf in self.keyframes["ins_descriptors"] and id2 in self.keyframes["ins_descriptors"][kf]:
-                    # If both ins were observed in the same frame, the ins_maps should be fused and descriptors recomputed. Neverthless, it is not probable that two instances seen in the same kf will fulfill the distance threshold
+                    # If both ins were observed in the same frame, the ins_maps should be fused and descriptors recomputed. 
+                    # Nevertheless, it is not probable that two instances seen in the same kf will fulfill the distance threshold
                     ins_descriptor2 = self.keyframes["ins_descriptors"][kf].pop(id2)
                     if id1 not in self.keyframes["ins_descriptors"][kf] or True:
                         self.keyframes["ins_descriptors"][kf][id1] = ins_descriptor2
-                # Handle PE descriptors
-                if kf in self.keyframes["ins_pe_descriptors"] and id2 in self.keyframes["ins_pe_descriptors"][kf]:
+                
+                # Handle Fusion Encoder descriptors (PE, DINO, etc.)
+                if self.fusion_encoder is not None:
+                    self.fusion_encoder.transfer_on_merge([id2], id1, self.keyframes) 
+
+                # Fallback Handle PE descriptors (if not using fusion encoder or for redundancy)
+                if kf in self.keyframes.get("ins_pe_descriptors", {}) and id2 in self.keyframes["ins_pe_descriptors"][kf]:
                     ins_pe_descriptor2 = self.keyframes["ins_pe_descriptors"][kf].pop(id2)
                     if id1 not in self.keyframes["ins_pe_descriptors"][kf] or True:
                         self.keyframes["ins_pe_descriptors"][kf][id1] = ins_pe_descriptor2
+                
                 # Handle SAM3 descriptors
-                if kf in self.keyframes["ins_sam3_descriptors"] and id2 in self.keyframes["ins_sam3_descriptors"][kf]:
+                if kf in self.keyframes.get("ins_sam3_descriptors", {}) and id2 in self.keyframes["ins_sam3_descriptors"][kf]:
                     ins_sam3_descriptor2 = self.keyframes["ins_sam3_descriptors"][kf].pop(id2)
                     if id1 not in self.keyframes["ins_sam3_descriptors"][kf] or True:
                         self.keyframes["ins_sam3_descriptors"][kf][id1] = ins_sam3_descriptor2
-
-        self.objects = objects
-        # 4. Update object descriptors
-        self.update_objects_clip()
-        self.update_objects_pe()
-        self.update_objects_sam3()
-        return  points_ins_ids 
     
     @profil
     def _extract_clip(self, image: torch.Tensor, binary_maps: torch.Tensor) -> List[Any]:

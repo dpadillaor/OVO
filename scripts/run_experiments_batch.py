@@ -7,6 +7,7 @@ import sys
 import itertools
 import time
 import threading
+import argparse
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -49,11 +50,12 @@ class ExperimentRunner:
     Manages the execution of a single OVO experiment, including
     configuration setup, running run_eval.py, and cleanup.
     """
-    def __init__(self, experiment: Experiment, manifest: Manifest):
+    def __init__(self, experiment: Experiment, manifest: Manifest, verbose: bool = False):
         # Basic attributes
         self.label = experiment.label   
         self.experiment = experiment
         self.manifest = manifest 
+        self.verbose = verbose
         self.dataset = self.experiment.dataset if self.experiment.dataset else self.manifest.default_dataset
         self.slam_module = self.experiment.ovo_config.slam.get("slam_module", "groundtruth")
 
@@ -99,7 +101,7 @@ class ExperimentRunner:
                 return "CLIP"
             case "dino":
                 return "DINO"
-            case "PE":
+            case "pe":
                  return "PE"
             case _:
                 raise ValueError(f"Fusion method '{method}' not recognized or supported by experiment runner")
@@ -190,16 +192,22 @@ class ExperimentRunner:
         )
         print(f"    {Colors.BOLD}Executing run_eval.py for:{Colors.ENDC} {self.dataset} - {self.experiment_name} - Scenes: {self.experiment.scenes_id}")
         print(f"    Stages: {', '.join(self.experiment.stages)}")
-        # Capture the process result for potential error reporting
-        process_result = self._run_with_spinner(command)
+        
+        if self.verbose:
+            # Run without spinner and let output flow to stdout
+            print(f"    {Colors.OKBLUE}Command:{Colors.ENDC} {command}")
+            process_result = subprocess.run(command, shell=True, check=False)
+        else:
+            # Capture the process result for potential error reporting
+            process_result = self._run_with_spinner(command)
         
         # Check if there was an error in the subprocess
         if process_result.returncode != 0:
             raise subprocess.CalledProcessError(
                 process_result.returncode,
                 process_result.args,
-                output=process_result.stdout,
-                stderr=process_result.stderr
+                output=process_result.stdout if not self.verbose else None,
+                stderr=process_result.stderr if not self.verbose else None
             )
 
     def _run_with_spinner(self, command: str) -> subprocess.CompletedProcess:
@@ -247,6 +255,13 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
     
     for exp_data in manifest_dict.get("experiments", []):
         ovo_data = exp_data.get("ovo_config", {})
+        
+        # Helper: Allow 'fusion_method' at root of ovo_config for convenience
+        if "fusion_method" in ovo_data and "fusion_method" not in ovo_data.get("semantic", {}):
+            if "semantic" not in ovo_data:
+                ovo_data["semantic"] = {}
+            ovo_data["semantic"]["fusion_method"] = ovo_data["fusion_method"]
+
         ovo_override = OVOConfigOverride(
             slam=ovo_data.get("slam", {}),
             semantic=ovo_data.get("semantic", {})
@@ -285,12 +300,16 @@ def _spinner(msg, stop_event):
     sys.stdout.write("\r")
 
 def main():
+    parser = argparse.ArgumentParser(description="Run OVO experiments batch.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (shows command output).")
+    args = parser.parse_args()
+
     manifest_path = "scripts/experiments_manifest.yaml"
     manifest = _load_experiment_manifest(manifest_path)
 
     for experiment in manifest.experiments:
         print(f"\n{Colors.OKBLUE}{Colors.BOLD}=== Starting Experiment: {experiment.label} ==={Colors.ENDC}")
-        runner = ExperimentRunner(experiment, manifest)
+        runner = ExperimentRunner(experiment, manifest, verbose=args.verbose)
         try:
             runner.setup()
             runner.run()

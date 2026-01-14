@@ -27,6 +27,8 @@ class Logger:
             print_output (bool = False): if True prints logged statistics
         """
         for key, item in stats.items():
+            if key not in self.stats:
+                self.stats[key] = []
             self.stats[key].append(item)
         if self.use_wandb:
             wandb.log({f'Semantic/{key}': value for key, value in stats.items()})
