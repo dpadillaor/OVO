@@ -1,0 +1,38 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--dataset_name", "Replica",
+                "--experiment_name", "noisy_trajectory_test",
+                "--run",
+                //"--segment",
+                //"--eval",
+                "--scenes", "office0"
+            ]
+        },
+        {
+            "name": "C++ Attach (gdb)",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "/home/padidavid/anaconda3/envs/ovo/bin/python",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

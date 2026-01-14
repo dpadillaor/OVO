@@ -27,6 +27,13 @@ class WrapperORBSLAM2(VanillaMapper):
 
         configs_path = Path(config["slam"]["config_path"]) / "orbslam3"
         vocab_path = configs_path  / "vocabulary" / "ORBvoc.txt"
+        print(f"Loading ORB-SLAM2 vocabulary from {vocab_path}")
+        if not vocab_path.exists():
+            raise FileNotFoundError(f"ORB-SLAM2 vocabulary not found at {vocab_path}!")
+        else:
+            print("ORB-SLAM2 vocabulary found.")
+            print(f"Loading ORB-SLAM2 vocabulary from {vocab_path}")
+
         if (configs_path/ config["dataset_name"].lower()/ f"{config['data']['scene_name']}.yaml").exists():
             orbslam_config_path = configs_path / config["dataset_name"].lower()/ f"{config['data']['scene_name']}.yaml"
         else:

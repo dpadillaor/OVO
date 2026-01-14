@@ -2,3 +2,8 @@ ovoslam/submodules/segment-anything-langsplat
 __pycache__
 *.ipynb
 data/
+
+thirdParty/ORB_SLAM3
+thirdParty/**
+thirdParty/perception_models
+.vscode/settings.json

@@ -1,0 +1,42 @@
+python run_eval.py --dataset_name Replica --experiment_name global_correction_test --run --segment --eval --scenes office0 office1
+
+
+python run_eval.py --dataset_name Replica --experiment_name test_estructura --run --scenes office0 office1
+python run_eval.py --dataset_name Replica --experiment_name test_estructura --segment --scenes office0
+python run_eval.py --dataset_name Replica --experiment_name test_estructura --segment --scenes office1
+python run_eval.py --dataset_name Replica --experiment_name test_estructura --eval --scenes office0
+
+
+python visualize_trajectory.py --experiment_name global_correction_test --dataset_name Replica --scene_name office0 --show_pcds --voxel_size 0.05
+
+
+python visualize_trajectory.py --experiment_name 20251210_office0_GT_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p1-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p01-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p001-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p005-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p03-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
+
+-----------------LOOP CLOUSURE-----------------------
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p01-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p001-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p005-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p03-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_image
+
+
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p01-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p001-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p005-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p03-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+-----------------LOOP CLOUSURE-----------------------
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p01-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p001-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p005-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p03-R0p01_CLIP_WithLoopClousure --dataset_name Replica --scene_name office0 --save_pcd_image
+
+
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+
+python visualize_scene.py data/output/Replica/20251210_office0_GT_CLIP_NoDrift/office0 --working_dir /home/padidavid/repos/OVO/ --visualize_obj
+python visualize_scene.py data/output/Replica/20251210_office0_GT_CLIP_NoDrift/office0 --working_dir /home/padidavid/repos/OVO/ --visualize_interactive_query
+python visualize_scene.py data/output/Replica/20251210_office0_GT_CLIP_NoDrift/office0 --working_dir /home/padidavid/repos/OVO/ --visualize_gt_vs_pre

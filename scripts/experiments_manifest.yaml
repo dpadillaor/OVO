@@ -1,0 +1,129 @@
+# OVO Experiments Manifest
+# This file defines the list of experiments to be run by the Orchestrator.
+
+# Default dataset for the experiments (can be overridden per experiment if necessary)
+default_dataset: "Replica"
+
+# List of Experiments
+experiments:
+  # ---------------------------------------------------------------------------
+  # Experiment
+  # ---------------------------------------------------------------------------
+  - label: "NoLoopClousure"
+    scenes_id: "office0"
+    stages: ["run", "segment", "eval"]
+    ovo_config:
+      fusion_method: "clip"
+      slam:
+        slam_module: "groundtruth"
+        close_loops: False
+    slam_config:
+      noise:
+        noise_enabled: False
+        translation_noise_std: 0.03
+        rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "NoLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: False
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.05
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "NoLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: False
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.005
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.001
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.005
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.01
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.03
+  #       rotation_noise_std: 0.01
+  # # ---------------------------------------------------------------------------
+  # # Experiment
+  # # ---------------------------------------------------------------------------
+  # - label: "WithLoopClousure"
+  #   scenes_id: "office0"
+  #   stages: ["run", "segment", "eval"]
+  #   ovo_config:
+  #     fusion_method: "clip"
+  #     slam:
+  #       slam_module: "groundtruth"
+  #       close_loops: True
+  #   slam_config:
+  #     noise:
+  #       translation_noise_std: 0.05
+  #       rotation_noise_std: 0.01

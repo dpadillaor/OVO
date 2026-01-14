@@ -275,3 +275,107 @@ def compute_frustum_point_ids(pts: torch.Tensor, frustum_corners: torch.Tensor, 
 
     inside_aabb_mask[inside_aabb_mask == 1] = inside_frustum_mask
     return torch.where(inside_aabb_mask)[0]
+
+def rodrigues_rotation_matrix(rotation_vector: torch.Tensor) -> torch.Tensor:
+    """
+    Converts a rotation vector (axis-angle representation) to a 3x3 rotation matrix
+    using Rodrigues' rotation formula.
+
+    Args:
+        rotation_vector (torch.Tensor): A tensor of shape (3,) representing the axis of rotation
+                                         multiplied by the angle of rotation in radians.
+
+    Returns:
+        torch.Tensor: The resulting 3x3 rotation matrix.
+    """
+    theta = torch.norm(rotation_vector)
+    if theta < 1e-6:
+        # If the angle is very small, return the identity matrix to avoid division by zero
+        return torch.eye(3, device=rotation_vector.device, dtype=rotation_vector.dtype)
+    
+    k = rotation_vector / theta
+    kx, ky, kz = k[0], k[1], k[2]
+
+    # Skew-symmetric cross-product matrix K
+    K = torch.tensor([[0, -kz, ky],
+                      [kz, 0, -kx],
+                      [-ky, kx, 0]], device=k.device, dtype=k.dtype)
+    
+    cos_theta = torch.cos(theta)
+    sin_theta = torch.sin(theta)
+    
+    # Rodrigues' formula: R = I + sin(theta)*K + (1-cos(theta))*K^2
+    I = torch.eye(3, device=k.device, dtype=k.dtype)
+    rotation_matrix = I + sin_theta * K + (1 - cos_theta) * torch.matmul(K, K)
+    
+    return rotation_matrix
+
+def euler_angles_to_rotation_matrix(euler_angles: torch.Tensor) -> torch.Tensor:
+    """
+    Converts a tensor of Euler angles (roll, pitch, yaw) into a 3x3 rotation matrix.
+    The rotation is applied in ZYX order (Yaw, Pitch, Roll), a common convention.
+
+    Args:
+        euler_angles (torch.Tensor): A tensor of shape (3,) containing the roll, pitch, and yaw angles in radians.
+
+    Returns:
+        torch.Tensor: The resulting 3x3 rotation matrix.
+    """
+    roll, pitch, yaw = euler_angles[0], euler_angles[1], euler_angles[2]
+    
+    # Pre-calculate sin and cos for clarity and minor efficiency gain
+    cos_roll, sin_roll = torch.cos(roll), torch.sin(roll)
+    cos_pitch, sin_pitch = torch.cos(pitch), torch.sin(pitch)
+    cos_yaw, sin_yaw = torch.cos(yaw), torch.sin(yaw)
+
+    # Create individual rotation matrices for each axis
+    # These must be created on the same device/dtype as the input to avoid errors
+    Rx = torch.tensor([[1, 0, 0],
+                       [0, cos_roll, -sin_roll],
+                       [0, sin_roll, cos_roll]], device=euler_angles.device, dtype=euler_angles.dtype)
+    Ry = torch.tensor([[cos_pitch, 0, sin_pitch],
+                       [0, 1, 0],
+                       [-sin_pitch, 0, cos_pitch]], device=euler_angles.device, dtype=euler_angles.dtype)
+    Rz = torch.tensor([[cos_yaw, -sin_yaw, 0],
+                       [sin_yaw, cos_yaw, 0],
+                       [0, 0, 1]], device=euler_angles.device, dtype=euler_angles.dtype)
+    
+    # Combine the matrices in ZYX order.
+    # The order of multiplication is crucial and depends on the chosen convention.
+    rotation_matrix = Rz @ Ry @ Rx
+    return rotation_matrix
+
+def create_transformation_matrix(rotation_matrix: torch.Tensor, translation_vector: torch.Tensor) -> torch.Tensor:
+    """
+    Creates a 4x4 homogeneous transformation matrix from a 3x3 rotation matrix
+    and a translation vector.
+
+    Args:
+        rotation_matrix (torch.Tensor): The 3x3 rotation matrix.
+        translation_vector (torch.Tensor): The translation vector of shape (3,).
+
+    Returns:
+        torch.Tensor: The resulting 4x4 homogeneous transformation matrix.
+    """
+    # Start with an identity matrix to ensure the bottom row is [0, 0, 0, 1]
+    T = torch.eye(4, device=rotation_matrix.device, dtype=rotation_matrix.dtype)
+    T[:3, :3] = rotation_matrix
+    T[:3, 3] = translation_vector
+    return T
+
+def get_relative_pose(pose_a: torch.Tensor, pose_b: torch.Tensor) -> torch.Tensor:
+    """
+    Calculates the relative transformation from pose_a to pose_b.
+    This solves for T_ab in the equation: pose_b = pose_a @ T_ab.
+
+    Args:
+        pose_a (torch.Tensor): The first 4x4 transformation matrix.
+        pose_b (torch.Tensor): The second 4x4 transformation matrix.
+
+    Returns:
+        torch.Tensor: The 4x4 relative transformation matrix T_ab.
+    """
+    # T_ab = inv(pose_a) @ pose_b
+    return torch.inverse(pose_a) @ pose_b
+
+
