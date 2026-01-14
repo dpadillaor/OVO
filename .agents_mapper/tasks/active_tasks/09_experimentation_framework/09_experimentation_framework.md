@@ -104,3 +104,6 @@ Los experimentos se definen en un archivo YAML sencillo.
 *   **`slam_config`**: Permite inyectar ruido (`noise: {translation_noise_std: ...}`).
 
 Este diseño desacopla la definición del experimento de la lógica de ejecución, permitiendo una experimentación flexible y reproducible.
+
+### 6.4. Mejoras en CLI
+*   **Modo Verbose (`-v` / `--verbose`)**: Se ha añadido un flag opcional al script `run_experiments_batch.py` que desactiva el spinner de carga y redirige la salida estándar (stdout/stderr) de `run_eval.py` directamente a la consola. Esto permite debuggear y monitorizar el progreso detallado de los experimentos en tiempo real.

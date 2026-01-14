@@ -6,124 +6,174 @@ default_dataset: "Replica"
 
 # List of Experiments
 experiments:
+#   # ---------------------------------------------------------------------------
+#   # Experiment
+#   # ---------------------------------------------------------------------------
+#   - label: "Original"
+#     scenes_id: "office0"
+#     stages: ["run", "segment", "eval"]
+#     ovo_config:
+#       semantic:
+#         fusion_method: "CLIP"
+#       slam:
+#         slam_module: "groundtruth"
+#         close_loops: True
+#     slam_config:
+#       noise:
+#         translation_noise_std: 0.001
+#         rotation_noise_std: 0.01
+#   # ---------------------------------------------------------------------------
+#   # Experiment
+#   # ---------------------------------------------------------------------------
+#   - label: "Original"
+#     scenes_id: "office0"
+#     stages: ["run", "segment", "eval"]
+#     ovo_config:
+#       semantic:
+#         fusion_method: "CLIP"
+#       slam:
+#         slam_module: "groundtruth"
+#         close_loops: True
+#     slam_config:
+#       noise:
+#         translation_noise_std: 0.005
+#         rotation_noise_std: 0.01
+#   # ---------------------------------------------------------------------------
+#   # Experiment
+#   # ---------------------------------------------------------------------------
+#   - label: "Original"
+#     scenes_id: "office0"
+#     stages: ["run", "segment", "eval"]
+#     ovo_config:
+#       semantic:
+#         fusion_method: "CLIP"
+#       slam:
+#         slam_module: "groundtruth"
+#         close_loops: True
+#     slam_config:
+#       noise:
+#         translation_noise_std: 0.01
+#         rotation_noise_std: 0.01
+#   # ---------------------------------------------------------------------------
+#   # Experiment
+#   # ---------------------------------------------------------------------------
+#   - label: "Original"
+#     scenes_id: "office0"
+#     stages: ["run", "segment", "eval"]
+#     ovo_config:
+#       semantic:
+#         fusion_method: "CLIP"
+#       slam:
+#         slam_module: "groundtruth"
+#         close_loops: True
+#     slam_config:
+#       noise:
+#         translation_noise_std: 0.03
+#         rotation_noise_std: 0.01
+#   # ---------------------------------------------------------------------------
+#   # Experiment
+#   # ---------------------------------------------------------------------------
+#   - label: "Original"
+#     scenes_id: "office0"
+#     stages: ["run", "segment", "eval"]
+#     ovo_config:
+#       semantic:
+#         fusion_method: "CLIP"
+#       slam:
+#         slam_module: "groundtruth"
+#         close_loops: True
+#     slam_config:
+#       noise:
+#         translation_noise_std: 0.05
+#         rotation_noise_std: 0.01
+#  # ---------------------------------------------------------------------------
   # ---------------------------------------------------------------------------
   # Experiment
   # ---------------------------------------------------------------------------
-  - label: "NoLoopClousure"
+  - label: "Spatial"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
-      fusion_method: "clip"
+      semantic:
+        fusion_method: "PE"
+        pe:
+          model_card: "PE-Spatial-L14-448"
       slam:
         slam_module: "groundtruth"
-        close_loops: False
+        close_loops: True
     slam_config:
       noise:
-        noise_enabled: False
+        translation_noise_std: 0.001
+        rotation_noise_std: 0.01
+  # ---------------------------------------------------------------------------
+  # Experiment
+  # ---------------------------------------------------------------------------
+  - label: "Spatial"
+    scenes_id: "office0"
+    stages: ["run", "segment", "eval"]
+    ovo_config:
+      semantic:
+        fusion_method: "PE"
+        pe:
+          model_card: "PE-Spatial-L14-448"
+      slam:
+        slam_module: "groundtruth"
+        close_loops: True
+    slam_config:
+      noise:
+        translation_noise_std: 0.005
+        rotation_noise_std: 0.01
+  # ---------------------------------------------------------------------------
+  # Experiment
+  # ---------------------------------------------------------------------------
+  - label: "Spatial"
+    scenes_id: "office0"
+    stages: ["run", "segment", "eval"]
+    ovo_config:
+      semantic:
+        fusion_method: "PE"
+        pe:
+          model_card: "PE-Spatial-L14-448"
+      slam:
+        slam_module: "groundtruth"
+        close_loops: True
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.01
+  # ---------------------------------------------------------------------------
+  # Experiment
+  # ---------------------------------------------------------------------------
+  - label: "Spatial"
+    scenes_id: "office0"
+    stages: ["run", "segment", "eval"]
+    ovo_config:
+      semantic:
+        fusion_method: "PE"
+        pe:
+          model_card: "PE-Spatial-L14-448"
+      slam:
+        slam_module: "groundtruth"
+        close_loops: True
+    slam_config:
+      noise:
         translation_noise_std: 0.03
         rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "NoLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: False
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.05
-  #       rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "NoLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: False
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.005
-  #       rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "WithLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: True
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.001
-  #       rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "WithLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: True
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.005
-  #       rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "WithLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: True
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.01
-  #       rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "WithLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: True
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.03
-  #       rotation_noise_std: 0.01
-  # # ---------------------------------------------------------------------------
-  # # Experiment
-  # # ---------------------------------------------------------------------------
-  # - label: "WithLoopClousure"
-  #   scenes_id: "office0"
-  #   stages: ["run", "segment", "eval"]
-  #   ovo_config:
-  #     fusion_method: "clip"
-  #     slam:
-  #       slam_module: "groundtruth"
-  #       close_loops: True
-  #   slam_config:
-  #     noise:
-  #       translation_noise_std: 0.05
-  #       rotation_noise_std: 0.01
+  # ---------------------------------------------------------------------------
+  # Experiment
+  # ---------------------------------------------------------------------------
+  - label: "Spatial"
+    scenes_id: "office0"
+    stages: ["run", "segment", "eval"]
+    ovo_config:
+      semantic:
+        fusion_method: "PE"
+        pe:
+          model_card: "PE-Spatial-L14-448"
+      slam:
+        slam_module: "groundtruth"
+        close_loops: True
+    slam_config:
+      noise:
+        translation_noise_std: 0.05
+        rotation_noise_std: 0.01
