@@ -5,4 +5,5 @@ data/
 
 thirdParty/ORB_SLAM3
 thirdParty/**
+thirdParty/perception_models
 .vscode/settings.json
