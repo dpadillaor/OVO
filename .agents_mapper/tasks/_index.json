@@ -18,6 +18,11 @@
   ],
   "completed": [
     {
+      "id": "10",
+      "title": "perception_encoders_integration_review__testing",
+      "status": "COMPLETED"
+    },
+    {
       "id": "11",
       "title": "Fusion Strategy Refactor",
       "status": "COMPLETED"
