@@ -12,3 +12,9 @@ from tests.fixtures.fixtures_fusion import (
     fusion_config,
     minimal_ovo_config,
 )
+from tests.fixtures.fixtures_encoders import (
+    mock_pe_generator,
+    mock_dino_generator,
+    mock_keyframes_data,
+    mock_objects_dict,
+)
