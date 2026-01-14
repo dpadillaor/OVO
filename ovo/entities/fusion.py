@@ -146,6 +146,7 @@ def create_fusion_strategy(config: Dict[str, Any]) -> FusionStrategy:
         "clip": ("clip_feature", SemanticGeometricFusion),
         "dino": ("dino_feature", SemanticGeometricFusion),
         "pe": ("pe_feature", SemanticGeometricFusion),
+        "sam3": ("sam3_feature", SemanticGeometricFusion),
         "geometric": (None, GeometricOnlyFusion),
     }
 

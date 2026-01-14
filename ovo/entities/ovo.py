@@ -9,6 +9,7 @@ from ..utils import geometry_utils, instance_utils
 from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
 from .pe_generator import PEGenerator
+from .sam3_generator import SAM3Generator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy
@@ -43,6 +44,7 @@ class OVO:
 
         self.clip_generator = CLIPGenerator(config["clip"], device=device)
         self.pe_generator = PEGenerator(config["pe"], device=device) if "pe" in config else None
+        self.sam3_generator = SAM3Generator(config["sam3"], device=device) if "sam3" in config else None
         if not eval:
             self.mask_generator = MaskGenerator(config["sam"], scene_name, device=device)
         else:
@@ -50,6 +52,7 @@ class OVO:
         self.keyframes = {
             "ins_descriptors": dict(),
             "ins_pe_descriptors": dict(),
+            "ins_sam3_descriptors": dict(),
             "frame_id": list(),
             "ins_maps": list(),
         }
@@ -92,6 +95,8 @@ class OVO:
         self.clip_generator.cpu()
         if self.pe_generator is not None:
             self.pe_generator.cpu()
+        if self.sam3_generator is not None:
+            self.sam3_generator.cpu()
         if self.mask_generator is not None:
             self.mask_generator.cpu()
 
@@ -103,6 +108,8 @@ class OVO:
         self.clip_generator.cuda()
         if self.pe_generator is not None:
             self.pe_generator.cuda()
+        if self.sam3_generator is not None:
+            self.sam3_generator.cuda()
         if self.mask_generator is not None:
             self.mask_generator.cuda()
 
@@ -362,6 +369,11 @@ class OVO:
                 pe_embeds = self._extract_pe(image, binary_maps).cpu()
                 self._update_matched_objects_pe(pe_embeds, matched_ins_ids, kf_id)
 
+            # Extract SAM3 embeddings if SAM3 generator is available
+            if self.sam3_generator is not None:
+                sam3_embeds = self._extract_sam3(image, binary_maps).cpu()
+                self._update_matched_objects_sam3(sam3_embeds, matched_ins_ids, kf_id)
+
             if self.config.get("log", False):
                 frame_id = self.keyframes["frame_id"][kf_id]
                 log_stats = {
@@ -372,6 +384,9 @@ class OVO:
                 if self.pe_generator is not None:
                     log_stats["t_pe"] = round(self._time_cache[2],2)
                     log_stats["t_up_pe"] = round(self._time_cache[3],3)
+                elif self.sam3_generator is not None:
+                    log_stats["t_sam3"] = round(self._time_cache[2],2)
+                    log_stats["t_up_sam3"] = round(self._time_cache[3],3)
                 self.logger.log_ovo_stats(log_stats, print_output=True)
                 self._time_cache = []
     
@@ -389,6 +404,8 @@ class OVO:
                     self.keyframes["ins_descriptors"].pop(kf)
                 if kf in self.keyframes["ins_pe_descriptors"]: # Not all Keyframes will have PE descriptors
                     self.keyframes["ins_pe_descriptors"].pop(kf)
+                if kf in self.keyframes["ins_sam3_descriptors"]:
+                    self.keyframes["ins_sam3_descriptors"].pop(kf)
                 self.keyframes["frame_id"][i] = "Deleted" #deleting from self.keyframes["frame_id"] would require a checkpoint refactor to change it from list to dict
                 # self.keyframes["ins_maps"] # This variable is for Debug, better to not remove it
 
@@ -436,11 +453,17 @@ class OVO:
                     ins_pe_descriptor2 = self.keyframes["ins_pe_descriptors"][kf].pop(id2)
                     if id1 not in self.keyframes["ins_pe_descriptors"][kf] or True:
                         self.keyframes["ins_pe_descriptors"][kf][id1] = ins_pe_descriptor2
+                # Handle SAM3 descriptors
+                if kf in self.keyframes["ins_sam3_descriptors"] and id2 in self.keyframes["ins_sam3_descriptors"][kf]:
+                    ins_sam3_descriptor2 = self.keyframes["ins_sam3_descriptors"][kf].pop(id2)
+                    if id1 not in self.keyframes["ins_sam3_descriptors"][kf] or True:
+                        self.keyframes["ins_sam3_descriptors"][kf][id1] = ins_sam3_descriptor2
 
         self.objects = objects
         # 4. Update object descriptors
         self.update_objects_clip()
         self.update_objects_pe()
+        self.update_objects_sam3()
         return  points_ins_ids 
     
     @profil
@@ -535,6 +558,52 @@ class OVO:
             object.update_pe(self.keyframes["ins_pe_descriptors"], force_update=force_update)
         return
 
+    @profil
+    def _extract_sam3(self, image: torch.Tensor, binary_maps: torch.Tensor) -> torch.Tensor:
+        """Profiled call to self.sam3_generator.extract_sam3. Computes a SAM3 vector for each mask of the segmented image.
+        Args:
+            - image (torch.Tensor): Full source RGB image with dimensions (3,H,W) and range 0-255.
+            - binary_maps (torch.Tensor): A tensor of (N, H, W) containing N binary maps.
+        Return:
+            - sam3_embeds: tensor with dim (N, self.sam3_generator.embed_dim).
+        """
+        image = torch.from_numpy(image.transpose((2,0,1))).to(self.device)
+        return self.sam3_generator.extract_sam3(image, binary_maps).cpu()
+
+    @profil
+    def _update_matched_objects_sam3(self, sam3_embeds: torch.Tensor, matched_ins_ids: List[int], kf_id: int) -> None:
+        """
+        Store sam3_embeds keyframe information, and updates matched 3D instances' SAM3 embeddings.
+        Args:
+            - sam3_embeds (torch.Tensor): A tensor containing the SAM3 embeddings.
+            - matched_ins_ids (List[int]): A list of instance IDs that are matched with the SAM3 embeddings.
+            - kf_id (int): current keyframe id.
+        Updates:
+            self.keyframes["ins_sam3_descriptors"]
+        """
+        ins_embeds = dict()
+        for i, ins_id in enumerate(matched_ins_ids):
+            if ins_id != -1:
+                ins_embeds[ins_id] = sam3_embeds[i]
+
+        # Save keyframe information
+        self.keyframes["ins_sam3_descriptors"][kf_id] = ins_embeds
+
+        for ins_id in matched_ins_ids:
+            self.objects[ins_id].update_sam3(self.keyframes["ins_sam3_descriptors"])
+        return
+
+    def update_objects_sam3(self, force_update: bool = False) -> None:
+        """ Update all 3D instances SAM3 descriptors
+        Args:
+            - force_update (bool): if True, recomputed Instance3D SAM3 descriptors even Instance_3D.to_update_sam3 == False
+        """
+        if self.sam3_generator is None:
+            return
+        for object in self.objects.values():
+            object.update_sam3(self.keyframes["ins_sam3_descriptors"], force_update=force_update)
+        return
+
     @torch.no_grad()
     def classify_instances(self, classes: List[str], template: str | List[str] = "This is a photo of a {}", th: float = 0):
         """
@@ -615,6 +684,9 @@ class OVO:
             for kf_id, ins_pe_descriptors in self.keyframes["ins_pe_descriptors"].items():
                 for ins_id, descriptors in ins_pe_descriptors.items():
                     scene_dict[f"kf_{kf_id}_ins3d_{ins_id}_pe"] = descriptors.cpu().numpy()
+            for kf_id, ins_sam3_descriptors in self.keyframes["ins_sam3_descriptors"].items():
+                for ins_id, descriptors in ins_sam3_descriptors.items():
+                    scene_dict[f"kf_{kf_id}_ins3d_{ins_id}_sam3"] = descriptors.cpu().numpy()
         return scene_dict
 
     def restore_dict(self, scene_dict: Dict[str, Any], debug_info: bool = False): 
@@ -640,6 +712,7 @@ class OVO:
             for i in range(len(self.keyframes["frame_id"])):
                 self.keyframes["ins_descriptors"][i] = {}
                 self.keyframes["ins_pe_descriptors"][i] = {}
+                self.keyframes["ins_sam3_descriptors"][i] = {}
                 for ins_id in self.objects.keys():
                     descriptor = scene_dict.get(f"kf_{i}_ins3d_{ins_id}_clips", None)
                     if descriptor is not None:
@@ -647,3 +720,6 @@ class OVO:
                     pe_descriptor = scene_dict.get(f"kf_{i}_ins3d_{ins_id}_pe", None)
                     if pe_descriptor is not None:
                         self.keyframes["ins_pe_descriptors"][i][ins_id] = torch.tensor(pe_descriptor, device=self.device)
+                    sam3_descriptor = scene_dict.get(f"kf_{i}_ins3d_{ins_id}_sam3", None)
+                    if sam3_descriptor is not None:
+                        self.keyframes["ins_sam3_descriptors"][i][ins_id] = torch.tensor(sam3_descriptor, device=self.device)
