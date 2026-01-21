@@ -103,6 +103,8 @@ class ExperimentRunner:
                 return "DINO"
             case "pe":
                  return "PE"
+            case "sam3":
+                 return "SAM3"
             case _:
                 raise ValueError(f"Fusion method '{method}' not recognized or supported by experiment runner")
 

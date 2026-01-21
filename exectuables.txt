@@ -40,3 +40,7 @@ python visualize_trajectory.py --experiment_name 20251211_office0_GTNoise-T0p03-
 python visualize_scene.py data/output/Replica/20251210_office0_GT_CLIP_NoDrift/office0 --working_dir /home/padidavid/repos/OVO/ --visualize_obj
 python visualize_scene.py data/output/Replica/20251210_office0_GT_CLIP_NoDrift/office0 --working_dir /home/padidavid/repos/OVO/ --visualize_interactive_query
 python visualize_scene.py data/output/Replica/20251210_office0_GT_CLIP_NoDrift/office0 --working_dir /home/padidavid/repos/OVO/ --visualize_gt_vs_pre
+
+
+
+python run_eval.py --dataset_name Replica --experiment_name 20260121_office0_GTNoise-T0p05-R0p01_SAM3_SAM3-Fusion --eval --scenes office0

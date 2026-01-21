@@ -128,7 +128,10 @@ class SAM3Generator:
             if isinstance(features, dict):
                 last_key = list(features.keys())[-1]
                 features = features[last_key]
-            
+            # Handle potential list return from ViT trunk (multi-scale features)
+            elif isinstance(features, list):
+                features = features[-1]  # Take the last (highest level) feature
+
             if features.ndim == 4:
                 features = F.adaptive_avg_pool2d(features, (1, 1)).flatten(1)
             return F.normalize(features, p=2, dim=-1)
@@ -150,11 +153,15 @@ class SAM3Generator:
             - image (torch.Tensor): Full source RGB image with dimensions (3,H,W) and range 0-255.
             - binary_maps (torch.Tensor): A tensor of (N, H, W) containing N binary maps.
         Return:
-            - sam3_embeds: tensor with dim (N, self.embed_dim).        
+            - sam3_embeds: tensor with dim (N, self.embed_dim).
         """
         if binary_maps.shape[0] == 0:
             return torch.zeros((0, self.embed_dim), device=self.device)
-        
+
+        # Convert numpy array to tensor if needed (image comes as np.ndarray with shape (H,W,3))
+        if not isinstance(image, torch.Tensor):
+            image = torch.from_numpy(image.transpose((2,0,1))).to(self.device)
+
         seg_images = segment_utils.segmap2segimg(binary_maps, image.squeeze(), False, out_l=self.image_size)
         
         if not isinstance(seg_images, torch.Tensor):
