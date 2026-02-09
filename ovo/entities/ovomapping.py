@@ -12,6 +12,7 @@ from .logger import Logger
 from .ovo import OVO
 from .datasets import get_dataset
 from .visualizer import stream_pcd
+from .rerun_visualizer import stream_rerun
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
@@ -47,6 +48,7 @@ class OVOSemMap():
         self.dataset_name = config["dataset_name"]
         self.stream = self.config["vis"]["stream"]
         self.show_stream = self.config["vis"]["show_stream"]
+        self.vis_type = self.config["vis"].get("type", "open3d")
         self.map_every = config["mapping"].get("map_every", 10)
         self.segment_every = config["semantic"].get("segment_every", 10)
         if config.get("tracking", None) is None:
@@ -135,7 +137,14 @@ class OVOSemMap():
                 mpqueue = mp.Queue()
                 query_flag = mp.Value('i',0) #0 idle, 1 requested, 2 completed
                 query_pipe, vis_pipe = mp.Pipe()
-                p = mp.Process(target=stream_pcd, args=(self.ovo,mpqueue, [query_flag, vis_pipe],cam_data, self.config["data"]["scene_name"],self.logger.output_path, show_stream), name="O3DVisualizer")
+                if self.vis_type == "rerun":
+                    target_func = stream_rerun
+                    proc_name = "RerunVisualizer"
+                else:
+                    target_func = stream_pcd
+                    proc_name = "O3DVisualizer"
+
+                p = mp.Process(target=target_func, args=(self.ovo,mpqueue, [query_flag, vis_pipe],cam_data, self.config["data"]["scene_name"],self.logger.output_path, show_stream), name=proc_name)
                 p.start()
 
             torch.cuda.synchronize()
