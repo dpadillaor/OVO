@@ -12,7 +12,7 @@ from .logger import Logger
 from .ovo import OVO
 from .datasets import get_dataset
 from .visualizer import stream_pcd
-from .rerun_visualizer import stream_rerun
+from .rerun_visualizer import stream_rerun, stream_rerun_fusion
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
@@ -49,6 +49,7 @@ class OVOSemMap():
         self.stream = self.config["vis"]["stream"]
         self.show_stream = self.config["vis"]["show_stream"]
         self.vis_type = self.config["vis"].get("type", "open3d")
+        self.rerun_mode = self.config["vis"].get("rerun_mode", "stream")  # "stream" or "fusion"
         self.map_every = config["mapping"].get("map_every", 10)
         self.segment_every = config["semantic"].get("segment_every", 10)
         if config.get("tracking", None) is None:
@@ -138,8 +139,12 @@ class OVOSemMap():
                 query_flag = mp.Value('i',0) #0 idle, 1 requested, 2 completed
                 query_pipe, vis_pipe = mp.Pipe()
                 if self.vis_type == "rerun":
-                    target_func = stream_rerun
-                    proc_name = "RerunVisualizer"
+                    if self.rerun_mode == "fusion":
+                        target_func = stream_rerun_fusion
+                        proc_name = "RerunFusionVis"
+                    else:
+                        target_func = stream_rerun
+                        proc_name = "RerunVisualizer"
                 else:
                     target_func = stream_pcd
                     proc_name = "O3DVisualizer"
@@ -149,97 +154,124 @@ class OVOSemMap():
 
             torch.cuda.synchronize()
             t_start = time.time()
-            for frame_id in range(self.first_frame, len(self.dataset)):
-                if self.track_every == 1 or frame_id%self.track_every==0 or frame_id%self.map_every==0 or frame_id%self.segment_every==0:
-                    frame_data = self.dataset[frame_id]
-                    self.slam_backbone.track_camera(frame_data)
+            try:
+                for frame_id in range(self.first_frame, len(self.dataset)):
+                    if self.track_every == 1 or frame_id%self.track_every==0 or frame_id%self.map_every==0 or frame_id%self.segment_every==0:
+                        frame_data = self.dataset[frame_id]
+                        self.slam_backbone.track_camera(frame_data)
 
-                    estimated_c2w = self.slam_backbone.get_c2w(frame_id)
-                    missing_depth = not (frame_data[2]>0).any()
-                    if estimated_c2w is None or missing_depth :
-                        continue
-                    t_lc = 0
-                    if frame_id % self.map_every == 0 or self.config["slam"]["slam_module"] == "orbslam2":
-                        self.slam_backbone.map(frame_data, estimated_c2w)
-                        if self.slam_backbone.map_updated:
-                            torch.cuda.synchronize()
-                            t_lc_i = time.time()
-                            map_data = self.slam_backbone.get_map()
-                            kfs = self.slam_backbone.get_kfs()
-                            updated_points_ins_ids = self.ovo.update_map(map_data, kfs)
-                            if updated_points_ins_ids is not None:
-                               self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
-                            self.slam_backbone.map_updated = False
-                            torch.cuda.synchronize()
-                            t_lc = time.time() - t_lc_i
-                            print(f"Sem LC update took {t_lc};")
-                    t_sem = 0
-                    if frame_id % self.segment_every == 0:
-                        t_sem_i = time.time()
-                        with torch.inference_mode() and torch.autocast(device_type=self.device, dtype=torch.bfloat16):
-                            if len(frame_data)==5:
-                                image = frame_data[-1]
-                            else:
-                                image = frame_data[1]
+                        estimated_c2w = self.slam_backbone.get_c2w(frame_id)
+                        missing_depth = not (frame_data[2]>0).any()
+                        if estimated_c2w is None or missing_depth :
+                            continue
+                        t_lc = 0
+                        if frame_id % self.map_every == 0 or self.config["slam"]["slam_module"] == "orbslam2":
+                            self.slam_backbone.map(frame_data, estimated_c2w)
+                            if self.slam_backbone.map_updated:
+                                torch.cuda.synchronize()
+                                t_lc_i = time.time()
+                                map_data = self.slam_backbone.get_map()
+                                kfs = self.slam_backbone.get_kfs()
 
-                            if self.dataset.height != image.shape[0] or  self.dataset.width != image.shape[1]:
-                                rgb_depth_ratio = (image.shape[0] / self.dataset.dataset_config["H"], image.shape[1]/self.dataset.dataset_config["W"], self.dataset.crop_edge)
-                            else:
-                                rgb_depth_ratio = ()
+                                # Capture before-fusion state for visualization
+                                if stream and self.rerun_mode == "fusion":
+                                    pcd_before, _, ids_before = map_data
+                                    before_pcd = pcd_before.cpu().numpy().astype(np.float16)
+                                    before_ids = ids_before.cpu().numpy().astype(np.int16)
 
-                            scene_data = [frame_id, image, frame_data[2], rgb_depth_ratio]
+                                updated_points_ins_ids = self.ovo.update_map(map_data, kfs)
 
-                            map_data = self.slam_backbone.get_map()
-                            updated_points_ins_ids = self.ovo.detect_and_track_objects(scene_data, map_data, estimated_c2w)
+                                # Send before/after fusion snapshot to visualizer
+                                if stream and self.rerun_mode == "fusion" and updated_points_ins_ids is not None:
+                                    after_ids = updated_points_ins_ids.cpu().numpy().astype(np.int16)
+                                    mpqueue.put({"type": "fusion", "points": before_pcd, "before_ids": before_ids, "after_ids": after_ids, "frame_id": frame_id})
+
+                                if updated_points_ins_ids is not None:
+                                   self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+                                self.slam_backbone.map_updated = False
+                                torch.cuda.synchronize()
+                                t_lc = time.time() - t_lc_i
+                                print(f"Sem LC update took {t_lc};")
+                        t_sem = 0
+                        if frame_id % self.segment_every == 0:
+                            t_sem_i = time.time()
+                            with torch.inference_mode() and torch.autocast(device_type=self.device, dtype=torch.bfloat16):
+                                if len(frame_data)==5:
+                                    image = frame_data[-1]
+                                else:
+                                    image = frame_data[1]
+
+                                if self.dataset.height != image.shape[0] or  self.dataset.width != image.shape[1]:
+                                    rgb_depth_ratio = (image.shape[0] / self.dataset.dataset_config["H"], image.shape[1]/self.dataset.dataset_config["W"], self.dataset.crop_edge)
+                                else:
+                                    rgb_depth_ratio = ()
+
+                                scene_data = [frame_id, image, frame_data[2], rgb_depth_ratio]
+
+                                map_data = self.slam_backbone.get_map()
+                                updated_points_ins_ids = self.ovo.detect_and_track_objects(scene_data, map_data, estimated_c2w)
+                                
+                                if updated_points_ins_ids is not None:
+                                    self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+
+                                self.ovo.compute_semantic_info()
+                                self.logger.log_memory_usage(frame_id)
+
+                            t_sem = time.time()-t_sem_i
                             
-                            if updated_points_ins_ids is not None:
-                                self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+                            if stream and self.rerun_mode == "stream":
+                                pcd, _, pcd_obj_ids = self.slam_backbone.get_map()
+                                c2w = self.slam_backbone.get_c2w(frame_id)
+                                if c2w is None:
+                                    continue
+                                c2w = c2w.cpu().numpy().astype(np.float16)
+                                colors = self.slam_backbone.get_pcd_colors()
 
-                            self.ovo.compute_semantic_info()
-                            self.logger.log_memory_usage(frame_id)
+                                mpqueue.put([pcd.cpu().numpy().astype(np.float16), pcd_obj_ids.cpu().numpy().astype(np.int16), colors, c2w])
 
-                        t_sem = time.time()-t_sem_i
-                        
-                        if stream:
-                            pcd, _, pcd_obj_ids = self.slam_backbone.get_map()
-                            c2w = self.slam_backbone.get_c2w(frame_id)
-                            if c2w is None:
-                                continue
-                            c2w = c2w.cpu().numpy().astype(np.float16)
-                            colors = self.slam_backbone.get_pcd_colors()
+                                if query_flag.value == 1:
+                                    query = query_pipe.recv()
+                                    self.ovo.complete_semantic_info()
+                                    query_map = self.ovo.query(query).cpu().numpy()
+                                    query_map[query_map<0] = 0
+                                    with query_flag.get_lock():
+                                        query_pipe.send(query_map)
+                                        query_flag.value = 2
+                        if t_sem+t_lc > 0:
+                            spf.append(t_sem + t_lc)         
 
-                            mpqueue.put([pcd.cpu().numpy().astype(np.float16), pcd_obj_ids.cpu().numpy().astype(np.int16), colors, c2w])
-
-                            if query_flag.value == 1:
-                                query = query_pipe.recv()
-                                self.ovo.complete_semantic_info()
-                                query_map = self.ovo.query(query).cpu().numpy()
-                                query_map[query_map<0] = 0
-                                with query_flag.get_lock():
-                                    query_pipe.send(query_map)
-                                    query_flag.value = 2
-                    if t_sem+t_lc > 0:
-                        spf.append(t_sem + t_lc)         
-
-                    if frame_id % 50 == 0:
-                        gc.collect()
+                        if frame_id % 50 == 0:
+                            gc.collect()
+                    
+                self.ovo.complete_semantic_info()
                 
-            self.ovo.complete_semantic_info()
-            
-            torch.cuda.synchronize()
-            t_end = time.time()
-            fps = len(self.dataset)/self.segment_every/(t_end-t_start)
-            if stream and p.is_alive():
-                while mpqueue.qsize()>0 and p.is_alive():
-                    if query_flag.value == 1:
-                        query = query_pipe.recv()
-                        query_map = self.ovo.query(query).cpu().numpy()
-                        with query_flag.get_lock():
-                            query_pipe.send(query_map)
-                            query_flag.value = 2
-                    time.sleep(2)
-                time.sleep(5)
+                torch.cuda.synchronize()
+                t_end = time.time()
+                fps = len(self.dataset)/self.segment_every/(t_end-t_start)
+                if stream and p.is_alive():
+                    while mpqueue.qsize()>0 and p.is_alive():
+                        if query_flag.value == 1:
+                            query = query_pipe.recv()
+                            query_map = self.ovo.query(query).cpu().numpy()
+                            with query_flag.get_lock():
+                                query_pipe.send(query_map)
+                                query_flag.value = 2
+                        time.sleep(2)
+                    time.sleep(5)
+
+            finally:
+                # Always clean up the visualizer process, even on Ctrl+C or crash
+                if stream and p.is_alive():
+                    mpqueue.put(None)  # Signal the visualizer to exit gracefully
+                    p.join(timeout=5)
+                    if p.is_alive():
+                        p.terminate()
+                        p.join(timeout=3)
+                    if p.is_alive():
+                        p.kill()
                 
+        if 'fps' not in dir():
+            fps = 0
         self.logger.log_fps(fps)
         self.logger.log_spf(spf)
         self.logger.log_max_memory_usage()
@@ -251,7 +283,3 @@ class OVOSemMap():
         self.ovo.cpu()
         del self.slam_backbone, self.ovo
         torch.cuda.empty_cache()
-
-        if self.config["vis"].get("stream", False):
-            p.terminate()
-            
