@@ -9,7 +9,7 @@ experiments:
   # ===========================================================================
   # CLIP Fusion
   # ===========================================================================
-  - label: "CLIP-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -23,7 +23,7 @@ experiments:
         translation_noise_std: 0.001
         rotation_noise_std: 0.01
 
-  - label: "CLIP-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -37,7 +37,7 @@ experiments:
         translation_noise_std: 0.005
         rotation_noise_std: 0.01
 
-  - label: "CLIP-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -51,7 +51,7 @@ experiments:
         translation_noise_std: 0.01
         rotation_noise_std: 0.01
 
-  - label: "CLIP-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -68,7 +68,7 @@ experiments:
   # ===========================================================================
   # PE-Core Fusion
   # ===========================================================================
-  - label: "PE-Core-Fusion"
+  - label: "Core-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -84,7 +84,7 @@ experiments:
         translation_noise_std: 0.001
         rotation_noise_std: 0.01
 
-  - label: "PE-Core-Fusion"
+  - label: "Core-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -100,7 +100,7 @@ experiments:
         translation_noise_std: 0.005
         rotation_noise_std: 0.01
 
-  - label: "PE-Core-Fusion"
+  - label: "Core-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -116,7 +116,7 @@ experiments:
         translation_noise_std: 0.01
         rotation_noise_std: 0.01
 
-  - label: "PE-Core-Fusion"
+  - label: "Core-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -135,7 +135,7 @@ experiments:
   # ===========================================================================
   # PE-Spatial Fusion
   # ===========================================================================
-  - label: "PE-Spatial-Fusion"
+  - label: "Spatial-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -151,7 +151,7 @@ experiments:
         translation_noise_std: 0.001
         rotation_noise_std: 0.01
 
-  - label: "PE-Spatial-Fusion"
+  - label: "Spatial-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -167,7 +167,7 @@ experiments:
         translation_noise_std: 0.005
         rotation_noise_std: 0.01
 
-  - label: "PE-Spatial-Fusion"
+  - label: "Spatial-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -183,7 +183,7 @@ experiments:
         translation_noise_std: 0.01
         rotation_noise_std: 0.01
 
-  - label: "PE-Spatial-Fusion"
+  - label: "Spatial-Fusion_Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -202,7 +202,7 @@ experiments:
   # ===========================================================================
   # SAM3 Fusion
   # ===========================================================================
-  - label: "SAM3-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -219,7 +219,7 @@ experiments:
         translation_noise_std: 0.001
         rotation_noise_std: 0.01
 
-  - label: "SAM3-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -236,7 +236,7 @@ experiments:
         translation_noise_std: 0.005
         rotation_noise_std: 0.01
 
-  - label: "SAM3-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
@@ -253,7 +253,7 @@ experiments:
         translation_noise_std: 0.01
         rotation_noise_std: 0.01
 
-  - label: "SAM3-Fusion"
+  - label: "Rerun"
     scenes_id: "office0"
     stages: ["run", "segment", "eval"]
     ovo_config:
