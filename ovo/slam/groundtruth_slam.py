@@ -48,6 +48,9 @@ class GroundTruthSLAM(VanillaMapper):
         self.map_every = self.config.get("mapping", {}).get("map_every", 10)
         self.correction_done = False
 
+        self._lc_pcd_before = None    # snapshot of pcd XYZ before correction
+        self._lc_traj_before = None   # snapshot of estimated_c2ws before correction
+
         self.last_big_change_id = -1
         self.kfs = {}
         self.last_processed_frame_id = -1
@@ -260,7 +263,11 @@ class GroundTruthSLAM(VanillaMapper):
         """
         print("Starting Global Geometric Correction...")
         kf_ids = list(self.kfs.keys())
-        
+
+        # Snapshot before correction (for visualization)
+        self._lc_pcd_before = self.pcd.clone().cpu()
+        self._lc_traj_before = {k: v.clone().cpu() for k, v in self.estimated_c2ws.items()}
+
         for kf_id in kf_ids:
             # 1. Get current estimated pose and GT pose
             est_pose = self.kfs[kf_id]["pose"]
