@@ -12,7 +12,7 @@ from .logger import Logger
 from .ovo import OVO
 from .datasets import get_dataset
 from .visualizer import stream_pcd
-from .rerun_visualizer import stream_rerun, stream_rerun_fusion
+from .rerun_visualizer import stream_rerun, stream_rerun_fusion, stream_rerun_loopclosure
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
@@ -142,6 +142,9 @@ class OVOSemMap():
                     if self.rerun_mode == "fusion":
                         target_func = stream_rerun_fusion
                         proc_name = "RerunFusionVis"
+                    elif self.rerun_mode == "loop_closure":
+                        target_func = stream_rerun_loopclosure
+                        proc_name = "RerunLCVis"
                     else:
                         target_func = stream_rerun
                         proc_name = "RerunVisualizer"
@@ -185,6 +188,29 @@ class OVOSemMap():
                                 if stream and self.rerun_mode == "fusion" and updated_points_ins_ids is not None:
                                     after_ids = updated_points_ins_ids.cpu().numpy().astype(np.int16)
                                     mpqueue.put({"type": "fusion", "points": before_pcd, "before_ids": before_ids, "after_ids": after_ids, "frame_id": frame_id})
+
+                                # Send loop closure snapshot to visualizer
+                                if (stream and self.rerun_mode in ("loop_closure", "fusion")
+                                        and getattr(self.slam_backbone, '_lc_pcd_before', None) is not None):
+                                    pcd_after, _, ids = self.slam_backbone.get_map()
+                                    traj_after = {
+                                        k: v.cpu().numpy().astype(np.float32)
+                                        for k, v in self.slam_backbone.estimated_c2ws.items()
+                                    }
+                                    mpqueue.put({
+                                        "type": "loop_closure",
+                                        "pcd_before": self.slam_backbone._lc_pcd_before.numpy().astype(np.float32),
+                                        "pcd_after": pcd_after.cpu().numpy().astype(np.float32),
+                                        "ids": ids.cpu().numpy().astype(np.int32),
+                                        "traj_before": {
+                                            k: v.numpy().astype(np.float32)
+                                            for k, v in self.slam_backbone._lc_traj_before.items()
+                                        },
+                                        "traj_after": traj_after,
+                                        "frame_id": frame_id,
+                                    })
+                                    self.slam_backbone._lc_pcd_before = None
+                                    self.slam_backbone._lc_traj_before = None
 
                                 if updated_points_ins_ids is not None:
                                    self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)

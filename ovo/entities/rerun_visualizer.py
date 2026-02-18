@@ -176,27 +176,25 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
     """
     rr.init(f"OVO_{scene_name}_fusion", spawn=show)
 
-    # ── Blueprint: side-by-side + stats panel ─────────────────────────────
-    # Both views point to root "/" and auto_layout=True ensures camera sync
+    # ── Blueprint: fusion side-by-side + LC section + stats ───────────────
     blueprint = rrb.Blueprint(
         rrb.Vertical(
             rrb.Horizontal(
                 rrb.Spatial3DView(
                     name="Before Fusion",
-                    contents=[
-                        "before/instances/**",
-                        "diff/**",
-                    ],
+                    contents=["before/instances/**", "diff/**"],
                     origin="/",
                 ),
                 rrb.Spatial3DView(
                     name="After Fusion",
-                    contents=[
-                        "after/instances/**",
-                        "diff/**",
-                    ],
+                    contents=["after/instances/**", "diff/**"],
                     origin="/",
                 ),
+            ),
+            rrb.Spatial3DView(
+                name="Loop Closure",
+                contents=["lc/**"],
+                origin="/",
             ),
             rrb.TextDocumentView(
                 name="Fusion Stats",
@@ -204,11 +202,11 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
             ),
         ),
         collapse_panels=False,
-        auto_layout=True,  # Ensures camera changes propagate between views
+        auto_layout=True,
     )
     rr.send_blueprint(blueprint)
-    print(f"[FusionVis] Blueprint sent with camera sync enabled (auto_layout=True).")
-    print(f"[FusionVis] Waiting for fusion events...")
+    print(f"[FusionVis] Blueprint sent (fusion + loop closure views).")
+    print(f"[FusionVis] Waiting for fusion and loop_closure events...")
 
     cmap = _get_instance_cmap()
     step = 0
@@ -221,8 +219,51 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                 if data is None:
                     break
 
-                # Only handle fusion messages (dicts)
-                if not isinstance(data, dict) or data.get("type") != "fusion":
+                if not isinstance(data, dict):
+                    continue
+
+                # ── Loop Closure message ──────────────────────────────────
+                if data.get("type") == "loop_closure":
+                    pcd_before = data["pcd_before"].astype(np.float32)
+                    pcd_after  = data["pcd_after"].astype(np.float32)
+                    ids        = data["ids"].astype(np.int32)
+                    traj_before = data["traj_before"]
+                    traj_after  = data["traj_after"]
+                    lc_frame_id = data["frame_id"]
+
+                    ceiling_z = pcd_after[:, -1].max() - 0.2
+                    pts_b = pcd_before[pcd_before[:, -1] < ceiling_z]
+                    ids_b = ids[pcd_before[:, -1] < ceiling_z]
+                    pts_a = pcd_after[pcd_after[:, -1] < ceiling_z]
+                    ids_a = ids[pcd_after[:, -1] < ceiling_z]
+
+                    if len(pts_b) > MAX_FUSION_POINTS:
+                        idx = np.random.choice(len(pts_b), MAX_FUSION_POINTS, replace=False)
+                        idx.sort(); pts_b = pts_b[idx]; ids_b = ids_b[idx]
+                    if len(pts_a) > MAX_FUSION_POINTS:
+                        idx = np.random.choice(len(pts_a), MAX_FUSION_POINTS, replace=False)
+                        idx.sort(); pts_a = pts_a[idx]; ids_a = ids_a[idx]
+
+                    traj_b_pos = np.array([v[:3, 3] for _, v in sorted(traj_before.items())], dtype=np.float32)
+                    traj_a_pos = np.array([v[:3, 3] for _, v in sorted(traj_after.items())],  dtype=np.float32)
+
+                    # step 0 — drifted cloud + drifted trajectory only
+                    rr.set_time("lc_event", sequence=0)
+                    rr.log("lc/points", rr.Points3D(pts_b, colors=_get_instance_colors(ids_b, cmap), radii=np.full(len(pts_b), 0.008, dtype=np.float32)))
+                    if len(traj_b_pos) >= 2:
+                        rr.log("lc/traj_before", rr.LineStrips3D([traj_b_pos], colors=[[255, 165, 0]], radii=[0.007]))
+
+                    # step 1 — corrected cloud + both trajectories (traj_before persists from step 0)
+                    rr.set_time("lc_event", sequence=1)
+                    rr.log("lc/points", rr.Points3D(pts_a, colors=_get_instance_colors(ids_a, cmap), radii=np.full(len(pts_a), 0.008, dtype=np.float32)))
+                    if len(traj_a_pos) >= 2:
+                        rr.log("lc/traj_after", rr.LineStrips3D([traj_a_pos], colors=[[0, 255, 0]], radii=[0.007]))
+
+                    print(f"[FusionVis] Loop closure logged at frame {lc_frame_id}: {len(pts_b)} pts before, {len(pts_a)} pts after.")
+                    continue
+
+                # ── Fusion message ────────────────────────────────────────
+                if data.get("type") != "fusion":
                     continue
 
                 points = data["points"].astype(np.float32)
@@ -470,4 +511,137 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                 if d is None:
                     return
             time.sleep(1.0)
+            time.sleep(1.0)
+
+
+def stream_rerun_loopclosure(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show):
+    """
+    Rerun visualizer for loop closure comparison.
+
+    Waits for a single {"type": "loop_closure"} message and then logs two timesteps:
+      - lc_event=0: point cloud + trajectory BEFORE global correction (orange trajectory)
+      - lc_event=1: point cloud + trajectory AFTER global correction (green trajectory)
+
+    Scrubbing between the two steps in Rerun shows the geometric shift clearly.
+    Both point clouds are colored by instance ID using the same colormap as other visualizers.
+    """
+    rr.init(f"OVO_{scene_name}_loopclosure", spawn=show)
+
+    blueprint = rrb.Blueprint(
+        rrb.Spatial3DView(name="Loop Closure", contents="world/**"),
+        collapse_panels=True,
+    )
+    rr.send_blueprint(blueprint)
+    print("[LCVis] Blueprint sent. Waiting for loop_closure event...")
+
+    cmap = _get_instance_cmap()
+    MAX_POINTS = 400_000
+    step = 0
+
+    while True:
+        try:
+            if not mpqueue.empty():
+                data = mpqueue.get()
+                if data is None:
+                    break
+
+                if not isinstance(data, dict) or data.get("type") != "loop_closure":
+                    continue
+
+                pcd_before = data["pcd_before"].astype(np.float32)
+                pcd_after = data["pcd_after"].astype(np.float32)
+                ids = data["ids"].astype(np.int32)
+                traj_before = data["traj_before"]
+                traj_after = data["traj_after"]
+                frame_id = data["frame_id"]
+
+                # ── Ceiling filter ────────────────────────────────────────
+                ceiling_z = pcd_after[:, -1].max() - 0.2
+                mask_before = pcd_before[:, -1] < ceiling_z
+                mask_after = pcd_after[:, -1] < ceiling_z
+
+                pts_before = pcd_before[mask_before]
+                pts_after = pcd_after[mask_after]
+                ids_before = ids[mask_before]
+                ids_after = ids[mask_after]
+
+                # ── Subsample if too large ────────────────────────────────
+                if len(pts_before) > MAX_POINTS:
+                    idx = np.random.choice(len(pts_before), MAX_POINTS, replace=False)
+                    idx.sort()
+                    pts_before = pts_before[idx]
+                    ids_before = ids_before[idx]
+
+                if len(pts_after) > MAX_POINTS:
+                    idx = np.random.choice(len(pts_after), MAX_POINTS, replace=False)
+                    idx.sort()
+                    pts_after = pts_after[idx]
+                    ids_after = ids_after[idx]
+
+                colors_before = _get_instance_colors(ids_before, cmap)
+                colors_after = _get_instance_colors(ids_after, cmap)
+
+                # ── Trajectory positions (sorted by frame id) ─────────────
+                traj_before_pos = np.array(
+                    [v[:3, 3] for _, v in sorted(traj_before.items())], dtype=np.float32
+                )
+                traj_after_pos = np.array(
+                    [v[:3, 3] for _, v in sorted(traj_after.items())], dtype=np.float32
+                )
+
+                # ── BEFORE: timestep 2*step ───────────────────────────────
+                rr.set_time("lc_event", sequence=2 * step)
+
+                rr.log(
+                    "world/points",
+                    rr.Points3D(
+                        pts_before,
+                        colors=colors_before,
+                        radii=np.full(len(pts_before), 0.008, dtype=np.float32),
+                    ),
+                )
+
+                if len(traj_before_pos) >= 2:
+                    rr.log(
+                        "world/trajectory",
+                        rr.LineStrips3D(
+                            [traj_before_pos],
+                            colors=[[255, 165, 0]],  # orange
+                            radii=[0.007],
+                        ),
+                    )
+
+                # ── AFTER: timestep 2*step + 1 ────────────────────────────
+                rr.set_time("lc_event", sequence=2 * step + 1)
+
+                rr.log(
+                    "world/points",
+                    rr.Points3D(
+                        pts_after,
+                        colors=colors_after,
+                        radii=np.full(len(pts_after), 0.008, dtype=np.float32),
+                    ),
+                )
+
+                if len(traj_after_pos) >= 2:
+                    rr.log(
+                        "world/trajectory",
+                        rr.LineStrips3D(
+                            [traj_after_pos],
+                            colors=[[0, 255, 0]],  # green
+                            radii=[0.007],
+                        ),
+                    )
+
+                print(f"[LCVis] Step {step}: frame {frame_id} — logged before ({len(pts_before)} pts) and after ({len(pts_after)} pts).")
+                step += 1
+            else:
+                time.sleep(0.05)
+
+        except Exception as e:
+            print(f"[LCVis] Warning: {e}")
+            while not mpqueue.empty():
+                d = mpqueue.get()
+                if d is None:
+                    return
             time.sleep(1.0)
