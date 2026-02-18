@@ -5,6 +5,7 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import time
 import multiprocessing
+from pathlib import Path
 
 
 def _get_instance_cmap(n_colors=40):
@@ -28,7 +29,7 @@ def _get_instance_colors(obj_ids, cmap):
     return instance_colors
 
 
-def stream_rerun(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show):
+def stream_rerun(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show, save_rrd=False):
     """
     Streams SLAM data to Rerun visualizer — instance-colored point cloud only.
 
@@ -39,6 +40,8 @@ def stream_rerun(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name
     Point clouds are logged as static (overwritten each step) to keep memory low.
     """
     rr.init(f"OVO_{scene_name}", spawn=show)
+    if save_rrd:
+        rr.save(str(Path(output_path) / "rerun.rrd"))
 
     # ── Blueprint: single 3D view ────────────────────────────────────────
     blueprint = rrb.Blueprint(
@@ -160,7 +163,7 @@ def stream_rerun(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name
                     return
 
 
-def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show):
+def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show, save_rrd=False):
     """
     Rerun visualizer for fusion comparison — shows side-by-side Before / After
     point clouds every time instance fusion occurs in update_map().
@@ -173,8 +176,13 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
     - diff/disappeared/ins_X: Instances that were merged away (red points)
     - diff/merge_arrows: 3D arrows showing fusion direction (magenta, origin → survivor)
     - diff/boxes/ins_X: Bounding boxes around merged instances (red)
+
+    Also handles loop_closure messages, showing before/after geometric correction
+    in a dedicated view with lc_event timeline.
     """
     rr.init(f"OVO_{scene_name}_fusion", spawn=show)
+    if save_rrd:
+        rr.save(str(Path(output_path) / "rerun.rrd"))
 
     # ── Blueprint: fusion side-by-side + LC section + stats ───────────────
     blueprint = rrb.Blueprint(
@@ -205,8 +213,6 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
         auto_layout=True,
     )
     rr.send_blueprint(blueprint)
-    print(f"[FusionVis] Blueprint sent (fusion + loop closure views).")
-    print(f"[FusionVis] Waiting for fusion and loop_closure events...")
 
     cmap = _get_instance_cmap()
     step = 0
@@ -229,7 +235,6 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                     ids        = data["ids"].astype(np.int32)
                     traj_before = data["traj_before"]
                     traj_after  = data["traj_after"]
-                    lc_frame_id = data["frame_id"]
 
                     ceiling_z = pcd_after[:, -1].max() - 0.2
                     pts_b = pcd_before[pcd_before[:, -1] < ceiling_z]
@@ -259,7 +264,6 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                     if len(traj_a_pos) >= 2:
                         rr.log("lc/traj_after", rr.LineStrips3D([traj_a_pos], colors=[[0, 255, 0]], radii=[0.007]))
 
-                    print(f"[FusionVis] Loop closure logged at frame {lc_frame_id}: {len(pts_b)} pts before, {len(pts_a)} pts after.")
                     continue
 
                 # ── Fusion message ────────────────────────────────────────
@@ -308,20 +312,11 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                 n_after = len(unique_after)
                 fused = n_before - n_after
 
-                # ── Diff Analysis ─────────────────────────────────────────────
-                # 1. Identify changed points (yellow)
+                # ── Diff Analysis ─────────────────────────────────────────
                 changed_mask = b_ids != a_ids
-
-                # 2. Identify disappeared instances (merged away)
                 disappeared_ids = set(unique_before) - set(unique_after)
 
-                print(f"[FusionVis] Diff Analysis:")
-                print(f"  - unique_before: {sorted(unique_before)}")
-                print(f"  - unique_after: {sorted(unique_after)}")
-                print(f"  - disappeared_ids: {sorted(disappeared_ids) if disappeared_ids else 'None'}")
-                print(f"  - changed_points: {changed_mask.sum()} / {len(pts)}")
-
-                # 3. Build fusion map (which instances merged into which)
+                # ── Build fusion map (which instances merged into which) ───
                 fusion_map = {}  # {deleted_id: survivor_id}
                 fusion_details = []
                 for after_id in unique_after:
@@ -330,7 +325,6 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                     before_ids_in_region = before_ids_in_region[before_ids_in_region >= 0]
 
                     if len(before_ids_in_region) > 1:
-                        # after_id absorbed multiple instances
                         contributors = []
                         for bid in before_ids_in_region:
                             if bid != after_id:
@@ -338,7 +332,7 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                             contributors.append(int(bid))
                         fusion_details.append((int(after_id), contributors))
 
-                # 4. Calculate merge arrows (centroids)
+                # ── Merge arrows (centroids) ───────────────────────────────
                 arrow_origins = []
                 arrow_vectors = []
 
@@ -350,19 +344,16 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                         if mask_deleted.sum() > 0 and mask_survivor.sum() > 0:
                             centroid_deleted = pts[mask_deleted].mean(axis=0)
                             centroid_survivor = pts[mask_survivor].mean(axis=0)
-
-                            # Store origin and vector (destination - origin)
                             arrow_origins.append(centroid_deleted)
                             arrow_vectors.append(centroid_survivor - centroid_deleted)
 
                 rr.set_time("fusion_event", sequence=step)
 
-                # ── Before Fusion - Individual Instances ──────────────────────
-                print(f"[FusionVis] Logging {n_before} before instances individually...")
+                # ── Before Fusion - Individual Instances ──────────────────
                 for ins_id in unique_before:
                     mask = b_ids == ins_id
                     if mask.sum() > 0:
-                        ins_color = before_colors[mask][0]  # Color de esta instancia
+                        ins_color = before_colors[mask][0]
                         rr.log(
                             f"before/instances/ins_{ins_id}",
                             rr.Points3D(
@@ -377,12 +368,11 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                        rr.TextLog(f"Frame {frame_id} | {n_before} instances"),
                        static=True)
 
-                # ── After Fusion - Individual Instances ───────────────────────
-                print(f"[FusionVis] Logging {n_after} after instances individually...")
+                # ── After Fusion - Individual Instances ───────────────────
                 for ins_id in unique_after:
                     mask = a_ids == ins_id
                     if mask.sum() > 0:
-                        ins_color = after_colors[mask][0]  # Color de esta instancia
+                        ins_color = after_colors[mask][0]
                         rr.log(
                             f"after/instances/ins_{ins_id}",
                             rr.Points3D(
@@ -397,14 +387,14 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                        rr.TextLog(f"Frame {frame_id} | {n_after} instances ({fused} fused)"),
                        static=True)
 
-                # ── Diff Visualization Layers ─────────────────────────────────
+                # ── Diff Visualization Layers ─────────────────────────────
                 # Layer 1: Changed points (yellow)
                 if changed_mask.sum() > 0:
                     rr.log(
                         "diff/changed_points",
                         rr.Points3D(
                             pts[changed_mask],
-                            colors=[255, 255, 0],  # Yellow
+                            colors=[255, 255, 0],
                             radii=np.full(changed_mask.sum(), 0.012, dtype=np.float32),
                         ),
                         static=True,
@@ -418,56 +408,46 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                             f"diff/disappeared/ins_{dis_id}",
                             rr.Points3D(
                                 pts[mask],
-                                colors=[255, 0, 0],  # Red
+                                colors=[255, 0, 0],
                                 radii=np.full(mask.sum(), 0.01, dtype=np.float32),
                             ),
                             static=True,
                         )
 
-                # Layer 3: Merge arrows (proper 3D arrows with direction)
+                # Layer 3: Merge arrows
                 if len(arrow_origins) > 0:
                     rr.log(
                         "diff/merge_arrows",
                         rr.Arrows3D(
                             origins=np.array(arrow_origins),
                             vectors=np.array(arrow_vectors),
-                            colors=[255, 0, 255],  # Magenta
+                            colors=[255, 0, 255],
                             radii=[0.02],
                         ),
                         static=True,
                     )
 
                 # Layer 4: Bounding boxes for disappeared instances
-                if len(disappeared_ids) > 0:
-                    print(f"[FusionVis] Creating {len(disappeared_ids)} bounding boxes for disappeared instances: {sorted(disappeared_ids)}")
-
                 for dis_id in disappeared_ids:
                     mask = b_ids == dis_id
                     if mask.sum() > 0:
                         pts_ins = pts[mask]
                         bbox_min = pts_ins.min(axis=0)
                         bbox_max = pts_ins.max(axis=0)
-
-                        # Calculate center and half_sizes for Rerun API
                         center = (bbox_min + bbox_max) / 2
                         half_sizes = (bbox_max - bbox_min) / 2
-
-                        print(f"[FusionVis]   Box for instance {dis_id}: center={center}, half_sizes={half_sizes}, points={mask.sum()}")
-
                         rr.log(
                             f"diff/boxes/ins_{dis_id}",
                             rr.Boxes3D(
                                 centers=[center],
                                 half_sizes=[half_sizes],
                                 labels=[f"Fused: {dis_id}"],
-                                colors=[[255, 0, 0]],  # Red
+                                colors=[[255, 0, 0]],
                             ),
                             static=True,
                         )
-                else:
-                    print(f"[FusionVis] No disappeared instances, skipping boxes")
 
-                # ── Stats Panel (Markdown) ────────────────────────────────────
+                # ── Stats Panel (Markdown) ────────────────────────────────
                 stats_text = f"""# Frame {frame_id} Fusion Event
 
 ## Summary
@@ -496,10 +476,6 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                     static=True,
                 )
 
-                print(f"[FusionVis] Logged stats to 'stats/fusion_info'")
-                print(f"[FusionVis] Stats text:\n{stats_text[:200]}...")  # First 200 chars
-
-                print(f"[FusionVis] Step {step}: frame {frame_id}, {n_before}→{n_after} instances ({fused} fused)")
                 step += 1
             else:
                 time.sleep(0.05)
@@ -511,10 +487,9 @@ def stream_rerun_fusion(semantic_module, mpqueue, query_data, cam_intrinsic, sce
                 if d is None:
                     return
             time.sleep(1.0)
-            time.sleep(1.0)
 
 
-def stream_rerun_loopclosure(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show):
+def stream_rerun_loopclosure(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show, save_rrd=False):
     """
     Rerun visualizer for loop closure comparison.
 
@@ -526,13 +501,14 @@ def stream_rerun_loopclosure(semantic_module, mpqueue, query_data, cam_intrinsic
     Both point clouds are colored by instance ID using the same colormap as other visualizers.
     """
     rr.init(f"OVO_{scene_name}_loopclosure", spawn=show)
+    if save_rrd:
+        rr.save(str(Path(output_path) / "rerun.rrd"))
 
     blueprint = rrb.Blueprint(
         rrb.Spatial3DView(name="Loop Closure", contents="world/**"),
         collapse_panels=True,
     )
     rr.send_blueprint(blueprint)
-    print("[LCVis] Blueprint sent. Waiting for loop_closure event...")
 
     cmap = _get_instance_cmap()
     MAX_POINTS = 400_000
@@ -553,7 +529,6 @@ def stream_rerun_loopclosure(semantic_module, mpqueue, query_data, cam_intrinsic
                 ids = data["ids"].astype(np.int32)
                 traj_before = data["traj_before"]
                 traj_after = data["traj_after"]
-                frame_id = data["frame_id"]
 
                 # ── Ceiling filter ────────────────────────────────────────
                 ceiling_z = pcd_after[:, -1].max() - 0.2
@@ -633,7 +608,6 @@ def stream_rerun_loopclosure(semantic_module, mpqueue, query_data, cam_intrinsic
                         ),
                     )
 
-                print(f"[LCVis] Step {step}: frame {frame_id} — logged before ({len(pts_before)} pts) and after ({len(pts_after)} pts).")
                 step += 1
             else:
                 time.sleep(0.05)

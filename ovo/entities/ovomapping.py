@@ -50,6 +50,7 @@ class OVOSemMap():
         self.show_stream = self.config["vis"]["show_stream"]
         self.vis_type = self.config["vis"].get("type", "open3d")
         self.rerun_mode = self.config["vis"].get("rerun_mode", "stream")  # "stream" or "fusion"
+        self.save_rrd = self.config["vis"].get("save_rrd", False)
         self.map_every = config["mapping"].get("map_every", 10)
         self.segment_every = config["semantic"].get("segment_every", 10)
         if config.get("tracking", None) is None:
@@ -152,7 +153,7 @@ class OVOSemMap():
                     target_func = stream_pcd
                     proc_name = "O3DVisualizer"
 
-                p = mp.Process(target=target_func, args=(self.ovo,mpqueue, [query_flag, vis_pipe],cam_data, self.config["data"]["scene_name"],self.logger.output_path, show_stream), name=proc_name)
+                p = mp.Process(target=target_func, args=(self.ovo, mpqueue, [query_flag, vis_pipe], cam_data, self.config["data"]["scene_name"], self.logger.output_path, show_stream, self.save_rrd), name=proc_name)
                 p.start()
 
             torch.cuda.synchronize()
