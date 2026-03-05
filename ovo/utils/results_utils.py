@@ -61,14 +61,19 @@ def parse_experiment_name(folder_name: str) -> dict | None:
     # Basic validation
     if not _DATE_RE.match(date):
         return None
-    # SLAM_Config must carry both T and R noise markers
+
+    # Extract noise values when present; zero-noise tokens (GT, ORBSLAM3) are valid.
     tm = _TRANS_NOISE_RE.search(slam_cfg)
     rm = _ROT_NOISE_RE.search(slam_cfg)
-    if not (tm and rm):
+    if tm and rm:
+        trans_noise = _noise_str_to_float(tm.group(1), tm.group(2))
+        rot_noise   = _noise_str_to_float(rm.group(1), rm.group(2))
+    elif not tm and not rm:
+        trans_noise = 0.0
+        rot_noise   = 0.0
+    else:
+        # Only one marker found — malformed name.
         return None
-
-    trans_noise = _noise_str_to_float(tm.group(1), tm.group(2))
-    rot_noise   = _noise_str_to_float(rm.group(1), rm.group(2))
 
     return {
         'Date':        date,
