@@ -160,12 +160,13 @@ class GroundTruthSLAM(VanillaMapper):
             pcd_start_idx = self.kfs[list(self.kfs.keys())[-1]]["pcd_idxs"][1] if len(self.kfs) > 0 else 0
             self.kfs[frame_id] = {"id": frame_id, "pcd_idxs": (pcd_start_idx, pcd_end_idx), "pose": c2w}
 
-            # 3. Check for loop closures
+            # 3. Check for loop closures (only meaningful when noise is active)
             # self._check_for_loop_closure(frame_id, c2w) # DISABLED for Global Correction
 
-        # Trigger Global Correction near the end of the sequence
+        # Trigger Global Correction near the end of the sequence.
+        # Only needed when noise is active; without noise, tracking already uses GT poses.
         # We check if we are within the last 'map_every' window to ensure we catch the final map() call.
-        if self.close_loops and not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
+        if self.noise_enabled and self.close_loops and not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
              self.correct_map_globally()
              self.correction_done = True
 
