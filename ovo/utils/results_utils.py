@@ -43,20 +43,22 @@ def _noise_str_to_float(integer_part: str, decimal_part: str) -> float:
 def parse_experiment_name(folder_name: str) -> dict | None:
     """Parse an experiment folder name into its components.
 
-    Convention: {DATE}_{SCENE}_{SLAM_CONFIG}_{FUSION}_{LABEL}
+    Convention: {DATE}_{SLAM_CONFIG}_{FUSION}_{LABEL}
     Parts are split by underscores; SLAM_CONFIG itself uses only hyphens.
     LABEL is the join of all remaining parts (may contain underscores).
+    Dataset is NOT part of the folder name — it is inferred from the parent
+    directory by the loader functions.
 
     Returns a dict with keys:
-        Date, Scene, SLAM_Config, Fusion, Label, Method, Trans_Noise, Rot_Noise
+        Date, SLAM_Config, Fusion, Label, Method, Trans_Noise, Rot_Noise
     or None if the name does not match the convention.
     """
     parts = folder_name.split('_')
-    if len(parts) < 5:
+    if len(parts) < 4:
         return None
 
-    date, scene, slam_cfg, fusion = parts[0], parts[1], parts[2], parts[3]
-    label = '_'.join(parts[4:])
+    date, slam_cfg, fusion = parts[0], parts[1], parts[2]
+    label = '_'.join(parts[3:])
 
     # Basic validation
     if not _DATE_RE.match(date):
@@ -77,7 +79,6 @@ def parse_experiment_name(folder_name: str) -> dict | None:
 
     return {
         'Date':        date,
-        'Scene':       scene,
         'SLAM_Config': slam_cfg,
         'Fusion':      fusion,
         'Label':       label,
@@ -157,22 +158,26 @@ def parse_instance_counts(folder_path: Path, scene_name: str) -> int:
 def load_experiments(
     output_dir: Path,
     date_filter: str | list[str] | None = None,
-    scene_filter: str | list[str] | None = None,
+    dataset_filter: str | list[str] | None = None,
     method_filter: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Scan output_dir and build experiment DataFrames.
 
-    Subdirectories whose names do not match the experiment naming convention
-    are silently skipped.
+    output_dir is expected to contain one subdirectory per dataset (e.g.
+    Replica/, ScanNet/), each of which contains one subdirectory per
+    experiment. The dataset name is inferred from the dataset subdirectory.
+
+    Experiment folders whose names do not match the naming convention are
+    silently skipped.
 
     Parameters
     ----------
     output_dir:
-        Root directory containing one subdirectory per experiment.
+        Root directory containing dataset subdirectories.
     date_filter:
         Keep only experiments whose Date matches (exact string or list).
-    scene_filter:
-        Keep only experiments whose Scene matches (exact string or list).
+    dataset_filter:
+        Keep only experiments whose Dataset matches (exact string or list).
     method_filter:
         Keep only experiments whose Method is in this list.
 
@@ -180,7 +185,7 @@ def load_experiments(
     -------
     (df_experiments, df_class_iou)
         df_experiments  — one row per experiment.
-            Columns: Date, Scene, SLAM_Config, Fusion, Label, Method,
+            Columns: Date, Dataset, SLAM_Config, Fusion, Label, Method,
                      Trans_Noise, Rot_Noise, mIoU, mAcc, Num_Instances,
                      Experiment_ID
         df_class_iou  — one row per (experiment × class).
@@ -190,52 +195,59 @@ def load_experiments(
 
     if isinstance(date_filter, str):
         date_filter = [date_filter]
-    if isinstance(scene_filter, str):
-        scene_filter = [scene_filter]
+    if isinstance(dataset_filter, str):
+        dataset_filter = [dataset_filter]
 
     exp_rows: list[dict]   = []
     class_rows: list[dict] = []
 
-    for folder in sorted(output_dir.iterdir()):
-        if not folder.is_dir():
+    for dataset_dir in sorted(output_dir.iterdir()):
+        if not dataset_dir.is_dir():
             continue
 
-        meta = parse_experiment_name(folder.name)
-        if meta is None:
+        dataset = dataset_dir.name
+        if dataset_filter and dataset not in dataset_filter:
             continue
 
-        # Apply filters early to avoid unnecessary I/O
-        if date_filter and meta['Date'] not in date_filter:
-            continue
-        if scene_filter and meta['Scene'] not in scene_filter:
-            continue
-        if method_filter and meta['Method'] not in method_filter:
-            continue
+        for folder in sorted(dataset_dir.iterdir()):
+            if not folder.is_dir():
+                continue
 
-        # Find statistics file — canonical location is replica/statistics.txt
-        stats_file = folder / 'replica' / 'statistics.txt'
-        if not stats_file.is_file():
-            candidates = list(folder.rglob('statistics.txt'))
-            stats_file = candidates[0] if candidates else None
+            meta = parse_experiment_name(folder.name)
+            if meta is None:
+                continue
 
-        stats = parse_statistics_file(stats_file) if stats_file else None
-        num_instances = parse_instance_counts(folder, meta['Scene'])
+            # Apply filters early to avoid unnecessary I/O
+            if date_filter and meta['Date'] not in date_filter:
+                continue
+            if method_filter and meta['Method'] not in method_filter:
+                continue
 
-        exp_row: dict = {
-            **meta,
-            'mIoU':          stats['mIoU']   if stats else float('nan'),
-            'mAcc':          stats['mAcc']   if stats else float('nan'),
-            'Num_Instances': num_instances,
-            'Experiment_ID': folder.name,
-        }
-        exp_rows.append(exp_row)
+            # Find statistics file — canonical location is replica/statistics.txt
+            stats_file = folder / 'replica' / 'statistics.txt'
+            if not stats_file.is_file():
+                candidates = list(folder.rglob('statistics.txt'))
+                stats_file = candidates[0] if candidates else None
 
-        if stats:
-            for _, cls_row in stats['per_class'].iterrows():
-                class_rows.append({**exp_row, **cls_row.to_dict()})
+            stats = parse_statistics_file(stats_file) if stats_file else None
+            num_instances = parse_instance_counts(folder, folder.name)
+
+            exp_row: dict = {
+                **meta,
+                'Dataset':       dataset,
+                'mIoU':          stats['mIoU'] if stats else float('nan'),
+                'mAcc':          stats['mAcc'] if stats else float('nan'),
+                'Num_Instances': num_instances,
+                'Experiment_ID': folder.name,
+            }
+            exp_rows.append(exp_row)
+
+            if stats:
+                for _, cls_row in stats['per_class'].iterrows():
+                    class_rows.append({**exp_row, **cls_row.to_dict()})
 
     _exp_cols = [
-        'Date', 'Scene', 'SLAM_Config', 'Fusion', 'Label', 'Method',
+        'Date', 'Dataset', 'SLAM_Config', 'Fusion', 'Label', 'Method',
         'Trans_Noise', 'Rot_Noise', 'mIoU', 'mAcc', 'Num_Instances', 'Experiment_ID',
     ]
     _class_cols = _exp_cols + ['Class', 'IoU', 'Acc']
@@ -255,8 +267,13 @@ def get_available_dates(df: pd.DataFrame) -> list[str]:
     return sorted(df['Date'].dropna().unique().tolist())
 
 
+def get_available_datasets(df: pd.DataFrame) -> list[str]:
+    """Return sorted unique dataset names present in the DataFrame."""
+    return sorted(df['Dataset'].dropna().unique().tolist())
+
+
 def get_available_scenes(df: pd.DataFrame) -> list[str]:
-    """Return sorted unique scene names present in the DataFrame."""
+    """Return sorted unique scene names present in a per-scene DataFrame."""
     return sorted(df['Scene'].dropna().unique().tolist())
 
 
@@ -273,17 +290,120 @@ def get_available_noise_levels(df: pd.DataFrame) -> list[float]:
 def filter_experiments(
     df: pd.DataFrame,
     dates: list[str] | None = None,
-    scenes: list[str] | None = None,
+    datasets: list[str] | None = None,
     methods: list[str] | None = None,
     noise_levels: list[float] | None = None,
 ) -> pd.DataFrame:
-    """Filter a DataFrame with AND logic across all provided criteria.
+    """Filter an experiment DataFrame with AND logic across all provided criteria.
 
     Pass None for any parameter to skip that filter.
     """
     mask = pd.Series(True, index=df.index)
     if dates is not None:
         mask &= df['Date'].isin(dates)
+    if datasets is not None:
+        mask &= df['Dataset'].isin(datasets)
+    if methods is not None:
+        mask &= df['Method'].isin(methods)
+    if noise_levels is not None:
+        mask &= df['Trans_Noise'].isin(noise_levels)
+    return df[mask].copy()
+
+
+def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Scan output_dir and build per-scene DataFrames.
+
+    Mirrors the two-level structure of load_experiments(): output_dir contains
+    dataset subdirs, each of which contains experiment folders.  For each
+    experiment, detects per-scene statistics files
+    (replica/statistics_{scene}.txt) and builds DataFrames with one row per
+    (experiment × scene).
+
+    Returns
+    -------
+    (df_scene, df_scene_class)
+        df_scene — one row per (experiment × scene).
+            Columns: Date, Dataset, SLAM_Config, Fusion, Label, Method,
+                     Trans_Noise, Rot_Noise, Scene, mIoU, mAcc,
+                     Num_Instances, Experiment_ID
+        df_scene_class — one row per (experiment × scene × class).
+            Columns: all df_scene columns + Class, IoU, Acc
+    """
+    output_dir = Path(output_dir)
+
+    scene_rows: list[dict] = []
+    scene_class_rows: list[dict] = []
+
+    for dataset_dir in sorted(output_dir.iterdir()):
+        if not dataset_dir.is_dir():
+            continue
+
+        dataset = dataset_dir.name
+
+        for folder in sorted(dataset_dir.iterdir()):
+            if not folder.is_dir():
+                continue
+
+            meta = parse_experiment_name(folder.name)
+            if meta is None:
+                continue
+
+            replica_dir = folder / 'replica'
+            search_dir = replica_dir if replica_dir.is_dir() else folder
+
+            for stats_file in sorted(search_dir.glob('statistics_*.txt')):
+                scene_name = stats_file.stem[len('statistics_'):]
+
+                stats = parse_statistics_file(stats_file)
+                num_instances = parse_instance_counts(folder, scene_name)
+
+                scene_row: dict = {
+                    **meta,
+                    'Dataset':       dataset,
+                    'Scene':         scene_name,
+                    'mIoU':          stats['mIoU'] if stats else float('nan'),
+                    'mAcc':          stats['mAcc'] if stats else float('nan'),
+                    'Num_Instances': num_instances,
+                    'Experiment_ID': folder.name,
+                }
+                scene_rows.append(scene_row)
+
+                if stats:
+                    for _, cls_row in stats['per_class'].iterrows():
+                        scene_class_rows.append({**scene_row, **cls_row.to_dict()})
+
+    _scene_cols = [
+        'Date', 'Dataset', 'SLAM_Config', 'Fusion', 'Label', 'Method',
+        'Trans_Noise', 'Rot_Noise', 'Scene', 'mIoU', 'mAcc',
+        'Num_Instances', 'Experiment_ID',
+    ]
+    _scene_class_cols = _scene_cols + ['Class', 'IoU', 'Acc']
+
+    df_scene = (
+        pd.DataFrame(scene_rows) if scene_rows
+        else pd.DataFrame(columns=_scene_cols)
+    )
+    df_scene_class = (
+        pd.DataFrame(scene_class_rows) if scene_class_rows
+        else pd.DataFrame(columns=_scene_class_cols)
+    )
+    return df_scene, df_scene_class
+
+
+def filter_scene_results(
+    df: pd.DataFrame,
+    dates: list[str] | None = None,
+    datasets: list[str] | None = None,
+    scenes: list[str] | None = None,
+    methods: list[str] | None = None,
+    noise_levels: list[float] | None = None,
+) -> pd.DataFrame:
+    """Filter a per-scene DataFrame with AND logic across all provided criteria."""
+    mask = pd.Series(True, index=df.index)
+    if dates is not None:
+        mask &= df['Date'].isin(dates)
+    if datasets is not None:
+        mask &= df['Dataset'].isin(datasets)
     if scenes is not None:
         mask &= df['Scene'].isin(scenes)
     if methods is not None:
@@ -291,6 +411,11 @@ def filter_experiments(
     if noise_levels is not None:
         mask &= df['Trans_Noise'].isin(noise_levels)
     return df[mask].copy()
+
+
+def get_available_scenes_from_data(df_scene: pd.DataFrame) -> list[str]:
+    """Return sorted unique scene names from a per-scene DataFrame."""
+    return sorted(df_scene['Scene'].dropna().unique().tolist())
 
 
 # ---------------------------------------------------------------------------
