@@ -4,6 +4,7 @@
 # Camera Parameters. Adjust them!
 #--------------------------------------------------------------------------------------------
 
+Camera.type: PinHole
 # Camera calibration and distortion parameters (OpenCV) 
 Camera.fx: 600.0
 Camera.fy: 600.0
@@ -15,7 +16,7 @@ Camera.width: 1200
 Camera.height: 680
 
 # Camera frames per second 
-#Camera.fps: 30.0
+Camera.fps: 30.0
 
 # IR projector baseline times fx (aprox.)
 Camera.bf: 45
