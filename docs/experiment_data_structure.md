@@ -116,10 +116,18 @@ Pre-rendered PNG image. Loaded as-is and displayed in the GUI's Conf. Matrix tab
 | `Method` | `str` | `{Fusion}_{Label}` |
 | `Trans_Noise` | `float` | parsed from SLAM_Config |
 | `Rot_Noise` | `float` | parsed from SLAM_Config |
-| `mIoU` | `float` | nanmean over classes in statistics.txt |
-| `mAcc` | `float` | nanmean over classes in statistics.txt |
+| `mIoU` | `float` | nanmean over all classes in statistics.txt |
+| `mAcc` | `float` | nanmean over all classes in statistics.txt |
+| `Head_mIoU` | `float` | nanmean over first third of classes (by dataset order) |
+| `Head_mAcc` | `float` | nanmean over first third of classes |
+| `Common_mIoU` | `float` | nanmean over middle third of classes |
+| `Common_mAcc` | `float` | nanmean over middle third of classes |
+| `Tail_mIoU` | `float` | nanmean over last third of classes |
+| `Tail_mAcc` | `float` | nanmean over last third of classes |
 | `Num_Instances` | `int` | line count in instance_pred/{folder_name}.txt |
 | `Experiment_ID` | `str` | folder name (raw) |
+
+The Head/Common/Tail split mirrors the computation in `eval_utils.eval_semantics`: classes are divided into three equal thirds (`len(classes)//3`) in the order they appear in `statistics.txt`, which matches the dataset label ordering (most to least frequent). The same split is applied to per-scene DataFrames.
 
 **`df_class`** — one row per (experiment × class):
 
@@ -135,7 +143,7 @@ All `df_exp` columns plus:
 
 Same structure as above but scoped to individual scenes. Each `statistics_{scene}.txt` generates one row.
 
-**`df_scene`** — one row per (experiment × scene): all `df_exp` columns + `Scene` (str).
+**`df_scene`** — one row per (experiment × scene): all `df_exp` columns + `Scene` (str). Head/Common/Tail values are computed per-scene from `statistics_{scene}.txt`.
 
 **`df_scene_class`** — one row per (experiment × scene × class): all `df_scene` columns + `Class`, `IoU`, `Acc`.
 
@@ -151,8 +159,7 @@ Paper baselines are stored separately and are **not** scanned from `data/output/
 references/paper_results.csv
 ```
 
-Same column schema as `df_exp`, plus extra columns for frequency-tertile breakdowns:
-`Head_mIoU`, `Head_mAcc`, `Common_mIoU`, `Common_mAcc`, `Tail_mIoU`, `Tail_mAcc`.
+Same column schema as `df_exp`. Head/Common/Tail columns are populated directly from the paper's reported values (pre-computed).
 
 Loaded by `load_reference_results(csv_path)` in `results_utils.py`. The GUI merges these rows into the main DataFrame when the "Show paper baselines" checkbox is active. All metric values use the same decimal format `[0, 1]` as live experiments.
 

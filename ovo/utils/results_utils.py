@@ -125,7 +125,22 @@ def parse_statistics_file(file_path: Path) -> dict | None:
         df = pd.DataFrame(rows)
         miou = float(np.nanmean(df['IoU'].values))
         macc = float(np.nanmean(df['Acc'].values))
-        return {'mIoU': miou, 'mAcc': macc, 'per_class': df}
+
+        thirds = len(df) // 3
+        head_iou   = float(np.nanmean(df['IoU'].values[0:thirds]))
+        head_acc   = float(np.nanmean(df['Acc'].values[0:thirds]))
+        common_iou = float(np.nanmean(df['IoU'].values[thirds:2*thirds]))
+        common_acc = float(np.nanmean(df['Acc'].values[thirds:2*thirds]))
+        tail_iou   = float(np.nanmean(df['IoU'].values[2*thirds:3*thirds]))
+        tail_acc   = float(np.nanmean(df['Acc'].values[2*thirds:3*thirds]))
+
+        return {
+            'mIoU': miou, 'mAcc': macc,
+            'Head_mIoU': head_iou, 'Head_mAcc': head_acc,
+            'Common_mIoU': common_iou, 'Common_mAcc': common_acc,
+            'Tail_mIoU': tail_iou, 'Tail_mAcc': tail_acc,
+            'per_class': df,
+        }
     except Exception:
         return None
 
@@ -235,8 +250,14 @@ def load_experiments(
             exp_row: dict = {
                 **meta,
                 'Dataset':       dataset,
-                'mIoU':          stats['mIoU'] if stats else float('nan'),
-                'mAcc':          stats['mAcc'] if stats else float('nan'),
+                'mIoU':          stats['mIoU']        if stats else float('nan'),
+                'mAcc':          stats['mAcc']        if stats else float('nan'),
+                'Head_mIoU':     stats['Head_mIoU']   if stats else float('nan'),
+                'Head_mAcc':     stats['Head_mAcc']   if stats else float('nan'),
+                'Common_mIoU':   stats['Common_mIoU'] if stats else float('nan'),
+                'Common_mAcc':   stats['Common_mAcc'] if stats else float('nan'),
+                'Tail_mIoU':     stats['Tail_mIoU']   if stats else float('nan'),
+                'Tail_mAcc':     stats['Tail_mAcc']   if stats else float('nan'),
                 'Num_Instances': num_instances,
                 'Experiment_ID': folder.name,
             }
@@ -248,7 +269,9 @@ def load_experiments(
 
     _exp_cols = [
         'Date', 'Dataset', 'SLAM_Config', 'Fusion', 'Label', 'Method',
-        'Trans_Noise', 'Rot_Noise', 'mIoU', 'mAcc', 'Num_Instances', 'Experiment_ID',
+        'Trans_Noise', 'Rot_Noise', 'mIoU', 'mAcc',
+        'Head_mIoU', 'Head_mAcc', 'Common_mIoU', 'Common_mAcc', 'Tail_mIoU', 'Tail_mAcc',
+        'Num_Instances', 'Experiment_ID',
     ]
     _class_cols = _exp_cols + ['Class', 'IoU', 'Acc']
 
@@ -361,8 +384,14 @@ def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                     **meta,
                     'Dataset':       dataset,
                     'Scene':         scene_name,
-                    'mIoU':          stats['mIoU'] if stats else float('nan'),
-                    'mAcc':          stats['mAcc'] if stats else float('nan'),
+                    'mIoU':          stats['mIoU']        if stats else float('nan'),
+                    'mAcc':          stats['mAcc']        if stats else float('nan'),
+                    'Head_mIoU':     stats['Head_mIoU']   if stats else float('nan'),
+                    'Head_mAcc':     stats['Head_mAcc']   if stats else float('nan'),
+                    'Common_mIoU':   stats['Common_mIoU'] if stats else float('nan'),
+                    'Common_mAcc':   stats['Common_mAcc'] if stats else float('nan'),
+                    'Tail_mIoU':     stats['Tail_mIoU']   if stats else float('nan'),
+                    'Tail_mAcc':     stats['Tail_mAcc']   if stats else float('nan'),
                     'Num_Instances': num_instances,
                     'Experiment_ID': folder.name,
                 }
@@ -375,6 +404,7 @@ def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     _scene_cols = [
         'Date', 'Dataset', 'SLAM_Config', 'Fusion', 'Label', 'Method',
         'Trans_Noise', 'Rot_Noise', 'Scene', 'mIoU', 'mAcc',
+        'Head_mIoU', 'Head_mAcc', 'Common_mIoU', 'Common_mAcc', 'Tail_mIoU', 'Tail_mAcc',
         'Num_Instances', 'Experiment_ID',
     ]
     _scene_class_cols = _scene_cols + ['Class', 'IoU', 'Acc']
