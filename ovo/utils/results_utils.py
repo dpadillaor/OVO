@@ -413,6 +413,19 @@ def filter_scene_results(
     return df[mask].copy()
 
 
+def load_reference_results(csv_path: Path) -> pd.DataFrame:
+    """Load static paper reference results from a CSV file.
+
+    Returns an empty DataFrame if the file doesn't exist.
+    """
+    if not csv_path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(csv_path)
+    if "Date" in df.columns:
+        df["Date"] = pd.to_datetime(df["Date"], format="%Y%m%d")
+    return df
+
+
 def get_available_scenes_from_data(df_scene: pd.DataFrame) -> list[str]:
     """Return sorted unique scene names from a per-scene DataFrame."""
     return sorted(df_scene['Scene'].dropna().unique().tolist())

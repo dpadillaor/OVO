@@ -24,6 +24,7 @@ from ovo.utils.results_utils import (
     get_available_noise_levels,
     get_available_scenes,
     load_experiments,
+    load_reference_results,
     load_scene_results,
     plot_bar_metrics,
     plot_class_heatmap,
@@ -61,10 +62,12 @@ with st.sidebar:
                 for _df in (df_exp, df_class, df_scene, df_scene_class):
                     if not _df.empty and 'Date' in _df.columns:
                         _df["Date"] = pd.to_datetime(_df["Date"], format="%Y%m%d")
+                df_ref = load_reference_results(Path("references/paper_results.csv"))
                 st.session_state["df_exp"] = df_exp
                 st.session_state["df_class"] = df_class
                 st.session_state["df_scene"] = df_scene
                 st.session_state["df_scene_class"] = df_scene_class
+                st.session_state["df_ref"] = df_ref
                 st.session_state["output_dir"] = output_dir
             except Exception as exc:
                 st.error(f"Failed to load experiments: {exc}")
@@ -95,6 +98,9 @@ with st.sidebar:
         )
 
         st.divider()
+        show_paper = st.checkbox(
+            "Show paper baselines", value=True, key="show_paper"
+        )
         total = len(df_all)
         df_filtered = filter_experiments(
             df_all,
@@ -119,6 +125,12 @@ if "df_exp" not in st.session_state:
 if "df_filtered" not in dir():
     df_all = st.session_state["df_exp"]
     df_filtered = df_all.copy()
+
+df_ref = st.session_state.get("df_ref", pd.DataFrame())
+_show_paper = st.session_state.get("show_paper", True)
+if _show_paper and not df_ref.empty:
+    df_all = pd.concat([df_all, df_ref], ignore_index=True)
+    df_filtered = pd.concat([df_filtered, df_ref], ignore_index=True)
 
 df_class_all: "pd.DataFrame" = st.session_state["df_class"]
 df_scene_all: "pd.DataFrame" = st.session_state.get("df_scene", pd.DataFrame())
