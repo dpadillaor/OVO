@@ -1,0 +1,4 @@
+Method,Dataset,mIoU,mAcc,Head_mIoU,Head_mAcc,Common_mIoU,Common_mAcc,Tail_mIoU,Tail_mAcc,Trans_Noise,Rot_Noise,Date,SLAM_Config,Fusion,Label,Num_Instances,Experiment_ID
+OVO-mapping (paper),Replica,0.270,0.391,0.450,0.599,0.251,0.385,0.110,0.188,0.0,0.0,20240101,paper,GT,mapping,0,paper_ovo_mapping
+OVO-Gaussian-SLAM (paper),Replica,0.271,0.386,0.441,0.580,0.250,0.390,0.121,0.189,0.0,0.0,20240101,paper,GaussianSLAM,ovo,0,paper_ovo_gaussian
+OVO-ORB-SLAM2 (paper),Replica,0.256,0.390,0.430,0.591,0.216,0.383,0.121,0.196,0.0,0.0,20240101,paper,ORBSLAM2,ovo,0,paper_ovo_orbslam2

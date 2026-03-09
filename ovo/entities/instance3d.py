@@ -32,6 +32,8 @@ class Instance3D:
         self.clip_feature_kf = None
         self.pe_feature = None
         self.pe_feature_kf = None
+        self.sam3_feature = None
+        self.sam3_feature_kf = None
         self.dino_feature = None
         self.dino_feature_kf = None
         self.kfs_ids = []
@@ -39,6 +41,7 @@ class Instance3D:
         self.top_kf = []
         self.to_update = False
         self.to_update_pe = False
+        self.to_update_sam3 = False
         if kf_id is not None:
             self.update(points_ids, kf_id, mask_area)
 
@@ -85,6 +88,7 @@ class Instance3D:
                 heapq.heapify(self.top_kf)
                 self.to_update = True
                 self.to_update_pe = True
+                self.to_update_sam3 = True
         else:
             self._add_top_kf(kf_id, area)
     
@@ -98,11 +102,13 @@ class Instance3D:
             heapq.heappush(self.top_kf,(area, kf_id))
             self.to_update = True
             self.to_update_pe = True
+            self.to_update_sam3 = True
         else:
             removed = heapq.heappushpop(self.top_kf,(area, kf_id))
             if (self.n_top_kf <= 0) or (removed[1] != kf_id):
                 self.to_update = True
                 self.to_update_pe = True
+                self.to_update_sam3 = True
        
     def idx_in_top_kf(self, kf_id: int) -> int:
         """ If kf_id is in self.top_kf, returns the index. Otherwise return -1.
@@ -193,6 +199,40 @@ class Instance3D:
             self.pe_feature_kf = kf
             self.to_update_pe = False
 
+    def update_sam3(self, keyframes_sam3: Dict[int, Dict[int, torch.Tensor]], force_update: bool = False) -> None:
+        """If self.to_update_sam3 is True, compute SAM3 vector minimizing L1 norm of associated SAM3 vectors from keyframes where the object was observed. Minimizing the L1 norm is equivalent to compute the median of the vector's norm.
+        Args:
+            - keyframes_sam3 (Dict[int, Dict[int, torch.Tensor]]): for each keyframe store a dictionary where the keys are object ids and values are associated SAM3 vectors.
+            - force_update (bool): if True, recomputed Instance3D SAM3 descriptors even self.to_update_sam3 == False
+        Updates:
+            - self.sam3_feature
+            - self.sam3_feature_kf
+            - self.to_update_sam3
+        """
+        if self.to_update_sam3 or force_update:
+            sam3_embeds = []
+            if self.n_top_kf > 0:
+                for _, kf in heapq.nlargest(self.n_top_kf, self.top_kf):
+                    kf_sam3 = keyframes_sam3.get(kf)
+                    if kf_sam3 is not None and self.id in kf_sam3:
+                        sam3_embeds.append(kf_sam3[self.id])
+            else:
+                for kf in self.kfs_ids:
+                    kf_sam3 = keyframes_sam3.get(kf)
+                    if kf_sam3 is not None and self.id in kf_sam3:
+                        sam3_embeds.append(kf_sam3[self.id])
+
+            if len(sam3_embeds) == 0:
+                return
+
+            sam3_embeds = torch.vstack(sam3_embeds)
+            sam3_embeds = sam3_embeds[:, None]
+            l1_distances = torch.abs(sam3_embeds - sam3_embeds.permute(1, 0, 2)).sum((1, 2))
+            kf = l1_distances.argmin()
+            self.sam3_feature = sam3_embeds[kf]
+            self.sam3_feature_kf = kf
+            self.to_update_sam3 = False
+
     def export(self, debug_info: bool = False) -> Dict[str, Any]:
         """Export object properties as a dictionary.
         Args:
@@ -206,6 +246,8 @@ class Instance3D:
             f"ins3d_{self.id}_clip_feature_kf": self.clip_feature_kf,
             f"ins3d_{self.id}_pe_feature": self.pe_feature,
             f"ins3d_{self.id}_pe_feature_kf": self.pe_feature_kf,
+            f"ins3d_{self.id}_sam3_feature": self.sam3_feature,
+            f"ins3d_{self.id}_sam3_feature_kf": self.sam3_feature_kf,
         }
 
         if debug_info:
@@ -230,6 +272,9 @@ class Instance3D:
         self.pe_feature = obj_dict.get(f"ins3d_{self.id}_pe_feature", None)
         self.pe_feature_kf = obj_dict.get(f"ins3d_{self.id}_pe_feature_kf", None)
         self.to_update_pe = self.pe_feature is None
+        self.sam3_feature = obj_dict.get(f"ins3d_{self.id}_sam3_feature", None)
+        self.sam3_feature_kf = obj_dict.get(f"ins3d_{self.id}_sam3_feature_kf", None)
+        self.to_update_sam3 = self.sam3_feature is None
         if debug_info:
             self.kfs_ids = obj_dict[f"ins3d_{self.id}_keyframes_ids"].tolist()
             self.points_ids = obj_dict[f"ins3d_{self.id}_points_ids"].tolist()

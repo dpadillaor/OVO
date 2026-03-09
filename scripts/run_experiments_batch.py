@@ -34,7 +34,8 @@ class SLAMConfigOverride:
 @dataclass # Represents a single experiment entry in the 'experiments' list of the manifest
 class Experiment:
     label: str
-    scenes_id: str
+    scenes_id: Optional[str] = None          # single scene name or list of names
+    scenes_list: Optional[str] = None        # path to a .txt file with one scene per line
     stages: List[str] = field(default_factory=lambda: ["run", "segment", "eval"])
     ovo_config: OVOConfigOverride = field(default_factory=OVOConfigOverride)
     slam_config: SLAMConfigOverride = field(default_factory=SLAMConfigOverride)
@@ -86,6 +87,8 @@ class ExperimentRunner:
                     
             case "orbslam3":
                 return "ORBSLAM3"
+            case "vanilla":
+                return "Vanilla"
             case _:
                 raise ValueError(f"Slam module '{self.slam_module}' not recognized or supported by experiment runner")
 
@@ -102,7 +105,15 @@ class ExperimentRunner:
             case "dino":
                 return "DINO"
             case "pe":
-                 return "PE"
+                model_card = self.experiment.ovo_config.semantic.get("pe", {}).get("model_card", "")
+                if "Spatial" in model_card:
+                    return "PE-Spatial"
+                elif "Core" in model_card:
+                    return "PE-Core"
+                else:
+                    return "PE"
+            case "sam3":
+                 return "SAM3"
             case _:
                 raise ValueError(f"Fusion method '{method}' not recognized or supported by experiment runner")
 
@@ -117,7 +128,7 @@ class ExperimentRunner:
         fusion_config_token = self._get_fusion_token()
         tag = self.experiment.label
 
-        return f"{date_str}_{self.experiment.scenes_id}_{slam_token}_{fusion_config_token}_{tag}"
+        return f"{date_str}_{slam_token}_{fusion_config_token}_{tag}"
 
     def _backup_configs(self):
         """Creates backups of the original config files."""
@@ -125,37 +136,57 @@ class ExperimentRunner:
         shutil.copy(self.ovo_config_path, self.ovo_backup_path)
         shutil.copy(self.slam_config_path, self.slam_backup_path)
 
+    def _build_ovo_data(self) -> dict:
+        """
+        Reads ovo.yaml and applies all experiment overrides in memory.
+        Does NOT write anything to disk. Used by both _apply_config_overrides and preview.
+        """
+        with open(self.ovo_config_path, 'r') as f:
+            ovo_data = yaml.full_load(f)
+
+        if self.experiment.ovo_config.slam:
+            _update_recursive(ovo_data, {"slam": self.experiment.ovo_config.slam})
+
+        if self.experiment.ovo_config.semantic:
+            _update_recursive(ovo_data, {"semantic": self.experiment.ovo_config.semantic})
+
+        # Noise goes to ovo.yaml root (not to the slam config file).
+        # GroundTruthSLAM reads noise from config["noise"] which comes from ovo.yaml.
+        if self.experiment.slam_config.noise:
+            _update_recursive(ovo_data, {
+                "noise": {
+                    "noise_enabled": True,
+                    **self.experiment.slam_config.noise,
+                }
+            })
+
+        return ovo_data
+
     def _apply_config_overrides(self):
         """Applies the experiment-specific config changes to the YAML files."""
         print(f"    Applying overrides for experiment '{self.label}'...")
-        
-        # Apply ovo_config overrides
-        with open(self.ovo_config_path, 'r') as f:
-            ovo_data = yaml.full_load(f)
-        
-        # Envolvemos en 'slam' si es necesario, pero como ovo_config.slam ya es el dict correcto para 'slam' section,
-        # necesitamos ver si ovo_data tiene 'slam' o si ovo_config.slam debe mergearse en root.
-        # ovo.yaml tiene 'slam' en root.
-        if self.experiment.ovo_config.slam:
-             _update_recursive(ovo_data, {"slam": self.experiment.ovo_config.slam})
 
-        # Apply semantic config (including fusion_method)
-        if self.experiment.ovo_config.semantic:
-            _update_recursive(ovo_data, {"semantic": self.experiment.ovo_config.semantic})
-        
+        ovo_data = self._build_ovo_data()   # read before opening for write
         with open(self.ovo_config_path, 'w') as f:
-            yaml.dump(ovo_data, f, default_flow_style=False)
+            yaml.dump(ovo_data, f, default_flow_style=False, sort_keys=False)
 
-        # Apply slam_config overrides
+        # Slam config: read and rewrite (no noise overrides — noise lives in ovo.yaml)
         with open(self.slam_config_path, 'r') as f:
             slam_data = yaml.full_load(f)
-            
-        if self.experiment.slam_config.noise:
-            slam_overrides = {"noise": self.experiment.slam_config.noise}
-            _update_recursive(slam_data, slam_overrides)
-        
         with open(self.slam_config_path, 'w') as f:
-            yaml.dump(slam_data, f, default_flow_style=False)
+            yaml.dump(slam_data, f, default_flow_style=False, sort_keys=False)
+
+    def preview(self, output_dir: Path) -> Path:
+        """
+        Computes the merged ovo.yaml for this experiment and writes it to
+        output_dir/{experiment_name}.yaml. Does NOT touch any real config file.
+        Returns the path of the written file.
+        """
+        ovo_data = self._build_ovo_data()
+        out_path = output_dir / f"{self.experiment_name}.yaml"
+        with open(out_path, 'w') as f:
+            yaml.dump(ovo_data, f, default_flow_style=False, sort_keys=False)
+        return out_path
 
     def _restore_configs(self):
         """
@@ -179,18 +210,29 @@ class ExperimentRunner:
         """
         Executes the run_eval.py command for the experiment.
         """
-        # TODO: Determine if we use --scenes or --scenes_list
-        scenes_arg = f"--scenes {self.experiment.scenes_id}"
-        
+        # Build scenes argument: scenes_list (file) takes priority, then scenes_id (names), then nothing
+        if self.experiment.scenes_list:
+            scenes_arg = f"--scenes_list {self.experiment.scenes_list}"
+            scenes_display = f"(list: {self.experiment.scenes_list})"
+        elif self.experiment.scenes_id:
+            if isinstance(self.experiment.scenes_id, list):
+                scenes_arg = "--scenes " + " ".join(self.experiment.scenes_id)
+            else:
+                scenes_arg = f"--scenes {self.experiment.scenes_id}"
+            scenes_display = str(self.experiment.scenes_id)
+        else:
+            scenes_arg = ""
+            scenes_display = "(from dataset config)"
+
         # Build stage flags dynamically from experiment.stages
         stage_flags = " ".join([f"--{stage}" for stage in self.experiment.stages])
-        
+
         command = (
             f"python run_eval.py --dataset_name {self.dataset} "
             f"--experiment_name {self.experiment_name} {scenes_arg} "
             f"{stage_flags}"
         )
-        print(f"    {Colors.BOLD}Executing run_eval.py for:{Colors.ENDC} {self.dataset} - {self.experiment_name} - Scenes: {self.experiment.scenes_id}")
+        print(f"    {Colors.BOLD}Executing run_eval.py for:{Colors.ENDC} {self.dataset} - {self.experiment_name} - Scenes: {scenes_display}")
         print(f"    Stages: {', '.join(self.experiment.stages)}")
         
         if self.verbose:
@@ -274,7 +316,8 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
         
         experiment_obj = Experiment(
             label=exp_data["label"],
-            scenes_id=exp_data["scenes_id"],
+            scenes_id=exp_data.get("scenes_id"),
+            scenes_list=exp_data.get("scenes_list"),
             stages=exp_data.get("stages", ["run", "segment", "eval"]),
             ovo_config=ovo_override,
             slam_config=slam_override,
@@ -302,10 +345,31 @@ def _spinner(msg, stop_event):
 def main():
     parser = argparse.ArgumentParser(description="Run OVO experiments batch.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (shows command output).")
+    parser.add_argument("--preview", action="store_true",
+                        help="Dry-run: compute and dump the merged ovo.yaml for every experiment "
+                             "without running anything. Useful to verify configs before execution.")
+    parser.add_argument("--preview-dir", default="data/working/config_preview",
+                        help="Directory where preview configs are written (default: data/working/config_preview).")
+    parser.add_argument("--manifest", default="scripts/experiments_manifest.yaml",
+                        help="Path to the experiments manifest YAML (default: scripts/experiments_manifest.yaml).")
     args = parser.parse_args()
 
-    manifest_path = "scripts/experiments_manifest.yaml"
+    manifest_path = args.manifest
     manifest = _load_experiment_manifest(manifest_path)
+
+    # ------------------------------------------------------------------
+    # Preview mode — dump merged ovo.yaml per experiment, no execution
+    # ------------------------------------------------------------------
+    if args.preview:
+        preview_dir = Path(args.preview_dir)
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        print(f"\nPreview mode — writing configs to: {Colors.BOLD}{preview_dir}{Colors.ENDC}\n")
+        for experiment in manifest.experiments:
+            runner = ExperimentRunner(experiment, manifest)
+            out = runner.preview(preview_dir)
+            print(f"  {Colors.OKGREEN}OK{Colors.ENDC}  {out.name}")
+        print(f"\n{Colors.BOLD}{len(manifest.experiments)} config(s) written.{Colors.ENDC}\n")
+        return
 
     for experiment in manifest.experiments:
         print(f"\n{Colors.OKBLUE}{Colors.BOLD}=== Starting Experiment: {experiment.label} ==={Colors.ENDC}")

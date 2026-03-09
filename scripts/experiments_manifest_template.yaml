@@ -1,0 +1,578 @@
+# OVO Experiments Manifest — Full coverage
+#
+# Dimensions covered:
+#   - fusion_method : clip | pe-core | pe-spatial | sam3
+#   - slam_module   : groundtruth | orbslam3
+#   - noise         : none | t=0.001 | t=0.005 | t=0.01 | t=0.05 (r=0.01 fixed)
+#                     + rotation-only (t=0, r=0.05)
+#                     + translation-only (t=0.01, r=0)
+#   - close_loops   : True | False
+#   - scenes        : single scene | list of scenes | scenes_list file | (all from dataset config)
+#   - dataset       : Replica | ScanNet
+#   - stages        : all | run-only | segment+eval | eval-only
+#
+# Use: python scripts/run_experiments_batch.py --preview
+
+default_dataset: Replica
+
+experiments:
+
+  # ===========================================================================
+  # SECTION 1 — CLIP, groundtruth, noise sweep
+  # ===========================================================================
+
+  - label: clip-no-noise
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  - label: clip-noise-t001-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.001
+        rotation_noise_std: 0.01
+
+  - label: clip-noise-t005-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.005
+        rotation_noise_std: 0.01
+
+  - label: clip-noise-t01-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.01
+
+  - label: clip-noise-t05-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.05
+        rotation_noise_std: 0.01
+
+  # Noise edge cases: rotation-only, translation-only
+  - label: clip-noise-rotation-only
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.0
+        rotation_noise_std: 0.05
+
+  - label: clip-noise-translation-only
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.0
+
+  # close_loops: False variant
+  - label: clip-noise-t01-no-loops
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: False
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.01
+
+  # ===========================================================================
+  # SECTION 2 — PE-Core, groundtruth, noise sweep
+  # ===========================================================================
+
+  - label: pe-core-no-noise
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+
+  - label: pe-core-noise-t001-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+    slam_config:
+      noise:
+        translation_noise_std: 0.001
+        rotation_noise_std: 0.01
+
+  - label: pe-core-noise-t005-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+    slam_config:
+      noise:
+        translation_noise_std: 0.005
+        rotation_noise_std: 0.01
+
+  - label: pe-core-noise-t01-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.01
+
+  - label: pe-core-noise-t05-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+    slam_config:
+      noise:
+        translation_noise_std: 0.05
+        rotation_noise_std: 0.01
+
+  # ===========================================================================
+  # SECTION 3 — PE-Spatial, groundtruth, noise sweep
+  # ===========================================================================
+
+  - label: pe-spatial-no-noise
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+
+  - label: pe-spatial-noise-t001-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+    slam_config:
+      noise:
+        translation_noise_std: 0.001
+        rotation_noise_std: 0.01
+
+  - label: pe-spatial-noise-t005-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+    slam_config:
+      noise:
+        translation_noise_std: 0.005
+        rotation_noise_std: 0.01
+
+  - label: pe-spatial-noise-t01-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.01
+
+  - label: pe-spatial-noise-t05-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+    slam_config:
+      noise:
+        translation_noise_std: 0.05
+        rotation_noise_std: 0.01
+
+  # ===========================================================================
+  # SECTION 4 — SAM3, groundtruth, noise sweep
+  # ===========================================================================
+
+  - label: sam3-no-noise
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: sam3
+        sam3:
+          components: vit_only
+          load_from_hf: True
+
+  - label: sam3-noise-t001-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: sam3
+        sam3:
+          components: vit_only
+          load_from_hf: True
+    slam_config:
+      noise:
+        translation_noise_std: 0.001
+        rotation_noise_std: 0.01
+
+  - label: sam3-noise-t01-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: sam3
+        sam3:
+          components: vit_only
+          load_from_hf: True
+    slam_config:
+      noise:
+        translation_noise_std: 0.01
+        rotation_noise_std: 0.01
+
+  - label: sam3-noise-t05-r001
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: sam3
+        sam3:
+          components: vit_only
+          load_from_hf: True
+    slam_config:
+      noise:
+        translation_noise_std: 0.05
+        rotation_noise_std: 0.01
+
+  # ===========================================================================
+  # SECTION 5 — Vanilla, all fusion methods (no noise)
+  # ===========================================================================
+
+  - label: vanilla-clip
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: vanilla
+      semantic:
+        fusion_method: clip
+
+  - label: vanilla-pe-core
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: vanilla
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+
+  - label: vanilla-pe-spatial
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: vanilla
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+
+  - label: vanilla-sam3
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: vanilla
+      semantic:
+        fusion_method: sam3
+        sam3:
+          components: vit_only
+          load_from_hf: True
+
+  # ===========================================================================
+  # SECTION 6 — ORBSLAM3, all fusion methods (no noise)
+  # ===========================================================================
+
+  - label: orbslam3-clip
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: orbslam3
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  - label: orbslam3-pe-core
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: orbslam3
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+
+  - label: orbslam3-pe-spatial
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: orbslam3
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Spatial-L14-448
+
+  - label: orbslam3-sam3
+    scenes_id: office0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: orbslam3
+        close_loops: True
+      semantic:
+        fusion_method: sam3
+        sam3:
+          components: vit_only
+          load_from_hf: True
+
+  # ===========================================================================
+  # SECTION 7 — Scene selection variants (using CLIP+GT as base)
+  # ===========================================================================
+
+  # Single scene (string)
+  - label: scenes-single
+    scenes_id: room0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  # Multiple scenes (list)
+  - label: scenes-list-inline
+    scenes_id:
+      - office0
+      - office1
+      - room0
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  # scenes_list file (all Replica scenes)
+  - label: scenes-from-file
+    scenes_list: scenes.txt
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  # No scenes specified → uses dataset config default
+  - label: scenes-default-from-dataset
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  # ===========================================================================
+  # SECTION 8 — Dataset variants
+  # ===========================================================================
+
+  - label: scannet-clip-no-noise
+    dataset: ScanNet
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  - label: scannet-pe-core-no-noise
+    dataset: ScanNet
+    stages: [run, segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: pe
+        pe:
+          model_card: PE-Core-L14-336
+
+  # ===========================================================================
+  # SECTION 9 — Stage variants (CLIP+GT+no-noise base)
+  # ===========================================================================
+
+  - label: stages-run-only
+    scenes_id: office0
+    stages: [run]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  - label: stages-segment-only
+    scenes_id: office0
+    stages: [segment]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  - label: stages-eval-only
+    scenes_id: office0
+    stages: [eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+
+  - label: stages-segment-and-eval
+    scenes_id: office0
+    stages: [segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip

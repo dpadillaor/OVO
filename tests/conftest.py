@@ -12,9 +12,22 @@ from tests.fixtures.fixtures_fusion import (
     fusion_config,
     minimal_ovo_config,
 )
+
+from tests.fixtures.fixtures_sam3 import (
+    sam3_config_vit_only,
+    sam3_config_vit_neck,
+    sam3_config_full,
+    sample_image,
+    sample_image_batch,
+    sample_masks,
+    mock_instance_sam3,
+    minimal_ovo_config_sam3,
+)
+
 from tests.fixtures.fixtures_encoders import (
     mock_pe_generator,
     mock_dino_generator,
+    mock_sam3_generator,
     mock_keyframes_data,
     mock_objects_dict,
 )

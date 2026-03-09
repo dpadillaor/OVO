@@ -145,3 +145,89 @@ class DINOFusionAdapter(FusionEncoderAdapter):
     def cleanup_keyframe(self, kf_id: int, keyframes: Dict[str, Any]) -> None:
         # Placeholder implementation
         pass
+
+
+class SAM3FusionAdapter(FusionEncoderAdapter):
+    """Adapter for SAM3 fusion."""
+
+    def __init__(self, sam3_generator: "SAM3Generator", storage_key: str = "ins_sam3_descriptors"):
+        self.generator = sam3_generator
+        self.storage_key = storage_key
+
+    def compute_and_update(self, image: torch.Tensor, binary_maps: torch.Tensor, matched_ins_ids: List[int], kf_id: int, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
+        """
+        Extract SAM3 embeddings and store in keyframes + update instances.
+
+        Args:
+            image: RGB image tensor/array.
+            binary_maps: Binary masks for instances.
+            matched_ins_ids: List of instance IDs matched to masks.
+            kf_id: Current keyframe ID.
+            keyframes: Global keyframes dictionary.
+            objects: Global objects dictionary.
+        """
+        # Handle empty input
+        if image is None or binary_maps is None or len(matched_ins_ids) == 0:
+            return
+
+        # Extract embeddings
+        sam3_embeds = self.generator.extract_sam3(image, binary_maps).cpu()
+
+        # Initialize storage for keyframe if needed
+        if kf_id not in keyframes[self.storage_key]:
+            keyframes[self.storage_key][kf_id] = {}
+
+        # Store embeddings and update instances
+        for idx, ins_id in enumerate(matched_ins_ids):
+            if ins_id == -1:
+                continue
+
+            # Store in keyframes
+            keyframes[self.storage_key][kf_id][ins_id] = sam3_embeds[idx:idx+1]
+
+            # Update object if it exists
+            if ins_id in objects:
+                objects[ins_id].update_sam3(keyframes[self.storage_key])
+
+    def update_objects(self, objects: Dict[int, Instance3D], keyframes: Dict[str, Any]) -> None:
+        """
+        Batch update all objects with fused SAM3 descriptors.
+
+        Args:
+            objects: Dictionary of Instance3D objects.
+            keyframes: Global keyframes dictionary.
+        """
+        for obj in objects.values():
+            if obj.to_update_sam3:
+                obj.update_sam3(keyframes[self.storage_key])
+
+    def transfer_on_merge(self, source_ids: List[int], target_id: int, keyframes: Dict[str, Any]) -> None:
+        """
+        Transfer SAM3 descriptors from source instances to target during merge.
+
+        Args:
+            source_ids: List of source instance IDs to merge from.
+            target_id: Target instance ID to merge into.
+            keyframes: Global keyframes dictionary.
+        """
+        if self.storage_key not in keyframes:
+            return
+
+        for kf_id in keyframes[self.storage_key]:
+            for source_id in source_ids:
+                if source_id in keyframes[self.storage_key][kf_id]:
+                    # Move descriptor from source to target
+                    # If multiple sources map to same target in same frame, last one wins (simple override)
+                    keyframes[self.storage_key][kf_id][target_id] = \
+                        keyframes[self.storage_key][kf_id].pop(source_id)
+
+    def cleanup_keyframe(self, kf_id: int, keyframes: Dict[str, Any]) -> None:
+        """
+        Remove SAM3 descriptors for deleted keyframe.
+
+        Args:
+            kf_id: ID of keyframe to remove.
+            keyframes: Global keyframes dictionary.
+        """
+        if kf_id in keyframes[self.storage_key]:
+            del keyframes[self.storage_key][kf_id]

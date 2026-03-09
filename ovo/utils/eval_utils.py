@@ -188,11 +188,19 @@ def eval_semantics(output_path: str, gt_path: str, scenes: List[str], dataset_in
 
     # Per scene:
     for i in range(len(scenes)):
-        iou_values, iou_valid_mask, weights_values, acc_values, acc_valid_mask = iou_acc_from_confmat(confusion[i], num_classes, ignore, mask_nan, False, labels)
+        iou_values_s, iou_valid_mask_s, weights_values_s, acc_values_s, acc_valid_mask_s = iou_acc_from_confmat(confusion[i], num_classes, ignore, mask_nan, False, labels)
         if verbose:
             print(f"Scene: {scenes[i]}")
-            print(f'mIoU: \t {np.mean(iou_values[iou_valid_mask]):.2%}; mAcc: \t {np.mean(acc_values[acc_valid_mask]):.2%}\n ')
-            print(f'f-mIoU: \t {np.sum(iou_values[iou_valid_mask]*weights_values[iou_valid_mask])/weights_values[iou_valid_mask].sum():.2%}; f-mAcc: \t {np.sum(acc_values[acc_valid_mask]*weights_values[acc_valid_mask])/weights_values[acc_valid_mask].sum():.2%}\n')
+            print(f'mIoU: \t {np.mean(iou_values_s[iou_valid_mask_s]):.2%}; mAcc: \t {np.mean(acc_values_s[acc_valid_mask_s]):.2%}\n ')
+            print(f'f-mIoU: \t {np.sum(iou_values_s[iou_valid_mask_s]*weights_values_s[iou_valid_mask_s])/weights_values_s[iou_valid_mask_s].sum():.2%}; f-mAcc: \t {np.sum(acc_values_s[acc_valid_mask_s]*weights_values_s[acc_valid_mask_s])/weights_values_s[acc_valid_mask_s].sum():.2%}\n')
+        _out = Path(output_path)
+        with open(_out / f"statistics_{scenes[i]}.txt", "w") as f:
+            f.write("label, acc, iou, \n")
+            count = 0
+            for j in range(len(labels)):
+                if j not in ignore:
+                    f.write(f"{labels[j]}, {acc_values_s[count]}, {iou_values_s[count]}, \n")
+                    count += 1
     confusion = confusion.sum(0) #agregate all scenes statistics
     iou_values, iou_valid_mask, weights_values, acc_values, acc_valid_mask = iou_acc_from_confmat(confusion, num_classes, ignore, mask_nan, verbose, labels)
     metrics = {
