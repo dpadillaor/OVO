@@ -316,10 +316,14 @@ def filter_experiments(
     datasets: list[str] | None = None,
     methods: list[str] | None = None,
     noise_levels: list[float] | None = None,
+    experiment_ids: list[str] | None = None,
+    exclude_experiment_ids: list[str] | None = None,
 ) -> pd.DataFrame:
     """Filter an experiment DataFrame with AND logic across all provided criteria.
 
     Pass None for any parameter to skip that filter.
+    experiment_ids: keep only these IDs (include filter).
+    exclude_experiment_ids: drop these IDs (exclude filter).
     """
     mask = pd.Series(True, index=df.index)
     if dates is not None:
@@ -330,6 +334,10 @@ def filter_experiments(
         mask &= df['Method'].isin(methods)
     if noise_levels is not None:
         mask &= df['Trans_Noise'].isin(noise_levels)
+    if experiment_ids is not None:
+        mask &= df['Experiment_ID'].isin(experiment_ids)
+    if exclude_experiment_ids is not None:
+        mask &= ~df['Experiment_ID'].isin(exclude_experiment_ids)
     return df[mask].copy()
 
 
