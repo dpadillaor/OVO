@@ -56,7 +56,6 @@ def _minimal_exp_df(**overrides) -> pd.DataFrame:
     """Return a single-row DataFrame suitable for plot tests."""
     row = {
         "Date": "20260101",
-        "Scene": "office0",
         "SLAM_Config": "GTNoise-T0p01-R0p01",
         "Fusion": "CLIP",
         "Label": "Test",
@@ -66,7 +65,7 @@ def _minimal_exp_df(**overrides) -> pd.DataFrame:
         "mIoU": 0.25,
         "mAcc": 0.35,
         "Num_Instances": 100,
-        "Experiment_ID": "20260101_office0_GTNoise-T0p01-R0p01_CLIP_Test",
+        "Experiment_ID": "20260101_GTNoise-T0p01-R0p01_CLIP_Test",
     }
     row.update(overrides)
     return pd.DataFrame([row])
@@ -78,11 +77,10 @@ def _minimal_exp_df(**overrides) -> pd.DataFrame:
 
 class TestParseExperimentName:
 
-    def test_standard_5_parts(self):
-        result = parse_experiment_name("20251218_office0_GTNoise-T0p001-R0p01_CLIP_Original")
+    def test_standard_4_parts(self):
+        result = parse_experiment_name("20251218_GTNoise-T0p001-R0p01_CLIP_Original")
         assert result is not None
         assert result["Date"] == "20251218"
-        assert result["Scene"] == "office0"
         assert result["SLAM_Config"] == "GTNoise-T0p001-R0p01"
         assert result["Fusion"] == "CLIP"
         assert result["Label"] == "Original"
@@ -91,7 +89,7 @@ class TestParseExperimentName:
     def test_label_with_underscores(self):
         """Labels spanning multiple underscore-separated parts must be joined."""
         result = parse_experiment_name(
-            "20260218_office0_GTNoise-T0p001-R0p01_PE_PE-Spatial-Fusion_Rerun"
+            "20260218_GTNoise-T0p001-R0p01_PE_PE-Spatial-Fusion_Rerun"
         )
         assert result is not None
         assert result["Fusion"] == "PE"
@@ -99,34 +97,39 @@ class TestParseExperimentName:
         assert result["Method"] == "PE_PE-Spatial-Fusion_Rerun"
 
     def test_noise_extraction_small(self):
-        result = parse_experiment_name("20260101_office0_GTNoise-T0p001-R0p01_CLIP_Test")
+        result = parse_experiment_name("20260101_GTNoise-T0p001-R0p01_CLIP_Test")
         assert result is not None
         assert math.isclose(result["Trans_Noise"], 0.001)
         assert math.isclose(result["Rot_Noise"], 0.01)
 
     def test_noise_extraction_large(self):
-        result = parse_experiment_name("20260101_office0_GTNoise-T0p05-R0p01_PE_Test")
+        result = parse_experiment_name("20260101_GTNoise-T0p05-R0p01_PE_Test")
         assert result is not None
         assert math.isclose(result["Trans_Noise"], 0.05)
 
     def test_sam3_fusion(self):
-        result = parse_experiment_name(
-            "20260121_office0_GTNoise-T0p05-R0p01_SAM3_SAM3-Fusion"
-        )
+        result = parse_experiment_name("20260121_GTNoise-T0p05-R0p01_SAM3_SAM3-Fusion")
         assert result is not None
         assert result["Fusion"] == "SAM3"
         assert result["Label"] == "SAM3-Fusion"
 
     def test_invalid_too_few_parts(self):
         assert parse_experiment_name("global_correction_test") is None
-        assert parse_experiment_name("only_four_parts_here") is None
+        assert parse_experiment_name("only_three_parts") is None
 
     def test_invalid_no_date(self):
-        assert parse_experiment_name("notadate_office0_GTNoise-T0p01-R0p01_CLIP_X") is None
+        assert parse_experiment_name("notadate_GTNoise-T0p01-R0p01_CLIP_X") is None
 
-    def test_invalid_no_noise_markers(self):
-        """SLAM_Config without T/R noise markers → rejected."""
-        assert parse_experiment_name("20260101_office0_ORBSLAM3_CLIP_Test") is None
+    def test_zero_noise_config_is_valid(self):
+        """SLAM configs without T/R markers (GT, ORBSLAM3) are valid with zero noise."""
+        result = parse_experiment_name("20260101_ORBSLAM3_CLIP_Test")
+        assert result is not None
+        assert math.isclose(result["Trans_Noise"], 0.0)
+        assert math.isclose(result["Rot_Noise"], 0.0)
+
+        result_gt = parse_experiment_name("20260101_GT_CLIP_Test")
+        assert result_gt is not None
+        assert math.isclose(result_gt["Trans_Noise"], 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -225,20 +228,21 @@ class TestParseInstanceCounts:
 
 class TestLoadExperiments:
 
-    def _make_experiment(self, root: Path, name: str, stats_rows, n_instances: int):
-        exp = root / name
+    def _make_experiment(self, root: Path, name: str, stats_rows, n_instances: int,
+                         dataset: str = "Replica"):
+        """Create a fake experiment under root/{dataset}/{name}/ as the loader expects."""
+        exp = root / dataset / name
         replica = exp / "replica"
         replica.mkdir(parents=True)
         pred = exp / "instance_pred"
         pred.mkdir(parents=True)
-        meta = parse_experiment_name(name)
         _make_stats_file(replica / "statistics.txt", stats_rows)
-        _make_instance_file(pred / f"{meta['Scene']}.txt", n_instances)
+        _make_instance_file(pred / "office0.txt", n_instances)
 
     def test_loads_valid_experiments(self, tmp_path):
         self._make_experiment(
             tmp_path,
-            "20260101_office0_GTNoise-T0p01-R0p01_CLIP_Test",
+            "20260101_GTNoise-T0p01-R0p01_CLIP_Test",
             ["wall, 0.5, 0.4, \n", "chair, 0.8, 0.7, \n"],
             50,
         )
@@ -257,7 +261,7 @@ class TestLoadExperiments:
         for date in ["20260101", "20260202"]:
             self._make_experiment(
                 tmp_path,
-                f"{date}_office0_GTNoise-T0p01-R0p01_CLIP_Test",
+                f"{date}_GTNoise-T0p01-R0p01_CLIP_Test",
                 ["wall, 0.5, 0.4, \n"],
                 10,
             )
@@ -270,7 +274,7 @@ class TestLoadExperiments:
             fusion, label = method_label.split("_", 1)
             self._make_experiment(
                 tmp_path,
-                f"20260101_office0_GTNoise-T0p01-R0p01_{fusion}_{label}",
+                f"20260101_GTNoise-T0p01-R0p01_{fusion}_{label}",
                 ["wall, 0.5, 0.4, \n"],
                 10,
             )
@@ -289,12 +293,12 @@ class TestLoadExperiments:
     def test_required_columns_present(self, tmp_path):
         self._make_experiment(
             tmp_path,
-            "20260101_office0_GTNoise-T0p01-R0p01_CLIP_Test",
+            "20260101_GTNoise-T0p01-R0p01_CLIP_Test",
             ["wall, 0.5, 0.4, \n"],
             5,
         )
         df_exp, df_class = load_experiments(tmp_path)
-        exp_cols = {"Date", "Scene", "SLAM_Config", "Fusion", "Label", "Method",
+        exp_cols = {"Date", "SLAM_Config", "Fusion", "Label", "Method",
                     "Trans_Noise", "Rot_Noise", "mIoU", "mAcc", "Num_Instances", "Experiment_ID"}
         assert exp_cols.issubset(df_exp.columns)
         assert {"Class", "IoU", "Acc"}.issubset(df_class.columns)

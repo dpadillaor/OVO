@@ -342,9 +342,9 @@ class TestSAM3FusionAdapter:
 
         adapter.update_objects(objects, mock_keyframes_data)
 
-        # Both should be called (adapter delegates to all objects, objects decide internally)
+        # Adapter checks the flag itself: only flagged instances are updated
         obj1.update_sam3.assert_called_once()
-        obj2.update_sam3.assert_called_once()
+        obj2.update_sam3.assert_not_called()
 
     # --- Merge Transfer Tests ---
 

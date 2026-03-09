@@ -16,7 +16,7 @@ class TestOVOSAM3Initialization:
 
     def test_ovo_initializes_sam3_generator_when_config_present(self, minimal_ovo_config_sam3):
         """OVO should create SAM3Generator when 'sam3' key is in config."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -40,7 +40,7 @@ class TestOVOSAM3Initialization:
 
     def test_ovo_creates_sam3_fusion_strategy(self, minimal_ovo_config_sam3):
         """OVO should create SAM3 fusion strategy when fusion_method='sam3'."""
-        with patch('ovo.entities.ovo.SAM3Generator'), \
+        with patch('ovo.entities.sam3_generator.SAM3Generator'), \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -58,7 +58,7 @@ class TestOVOSAM3FusionAdapter:
 
     def test_get_fusion_encoder_returns_sam3_adapter(self, minimal_ovo_config_sam3):
         """_get_fusion_encoder should return SAM3FusionAdapter when method is 'sam3'."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -77,7 +77,7 @@ class TestOVOSAM3FusionAdapter:
 
     def test_validate_fusion_config_raises_on_missing_generator(self, minimal_ovo_config_sam3):
         """Should raise ValueError if fusion_method='sam3' but generator missing."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -97,7 +97,7 @@ class TestOVOSAM3DelegationToAdapter:
 
     def test_compute_semantic_info_delegates_to_sam3_adapter(self, minimal_ovo_config_sam3):
         """_compute_semantic_info should call SAM3 adapter.compute_and_update."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -113,12 +113,14 @@ class TestOVOSAM3DelegationToAdapter:
             mock_adapter = MagicMock()
             ovo.fusion_encoder = mock_adapter
 
-            # Mock queue return
+            # Mock queue return (replace deque with a mock to allow popleft override)
             image = torch.randn(100, 100, 3).numpy()
             binary_maps = torch.ones(2, 100, 100)
             matched_ids = [1, 2]
             kf_id = 5
-            ovo.keyframes_queue.popleft = MagicMock(return_value=(matched_ids, binary_maps, image, kf_id))
+            mock_queue = MagicMock()
+            mock_queue.popleft.return_value = (matched_ids, binary_maps, image, kf_id)
+            ovo.keyframes_queue = mock_queue
 
             # Mock CLIP extraction (always runs)
             ovo._extract_clip = MagicMock(return_value=torch.randn(2, 512))
@@ -135,7 +137,7 @@ class TestOVOSAM3DelegationToAdapter:
 
     def test_update_map_delegates_update_to_sam3_adapter(self, minimal_ovo_config_sam3):
         """update_map should call SAM3 adapter.update_objects."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -169,7 +171,7 @@ class TestOVOSAM3DelegationToAdapter:
 
     def test_update_map_delegates_cleanup_to_sam3_adapter(self, minimal_ovo_config_sam3):
         """update_map should call SAM3 adapter.cleanup_keyframe for deleted KFs."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -201,7 +203,7 @@ class TestOVOSAM3DelegationToAdapter:
 
     def test_update_map_delegates_transfer_on_merge(self, minimal_ovo_config_sam3):
         """update_map should call SAM3 adapter.transfer_on_merge when instances merge."""
-        with patch('ovo.entities.ovo.SAM3Generator') as MockSAM3Gen, \
+        with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
@@ -220,10 +222,11 @@ class TestOVOSAM3DelegationToAdapter:
             ovo.complete_semantic_info = MagicMock()
             ovo.update_objects_clip = MagicMock()
 
-            # Create map data
+            # Create map data — points_ins_ids must contain both obj IDs so they
+            # survive _remove_missing_instances and reach the merge check
             points_3d = torch.randn(10, 3)
             points_ids = torch.arange(10)
-            points_ins_ids = torch.zeros(10, dtype=torch.long)
+            points_ins_ids = torch.tensor([1]*5 + [2]*5, dtype=torch.long)
             map_data = (points_3d, points_ids, points_ins_ids)
 
             # Mock fusion strategy to FORCE a merge
@@ -271,10 +274,12 @@ class TestOVOSAM3BackwardCompatibility:
             mock_logger = MagicMock(spec=Logger)
             ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
 
-            # Mock queue return
-            ovo.keyframes_queue.popleft = MagicMock(return_value=(
+            # Mock queue return (replace deque with a mock to allow popleft override)
+            mock_queue = MagicMock()
+            mock_queue.popleft.return_value = (
                 [1], torch.ones(1, 10, 10), torch.randn(10, 10, 3).numpy(), 1
-            ))
+            )
+            ovo.keyframes_queue = mock_queue
 
             # Mock CLIP
             ovo._extract_clip = MagicMock(return_value=torch.randn(1, 512))

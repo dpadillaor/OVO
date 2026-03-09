@@ -27,9 +27,9 @@ from matplotlib.figure import Figure
 # Section 1 — Parsing & data loading
 # ---------------------------------------------------------------------------
 
-# Folder name convention: {DATE}_{SCENE}_{SLAM_CONFIG}_{FUSION}_{LABEL}
+# Folder name convention: {DATE}_{SLAM_CONFIG}_{FUSION}_{LABEL}
 # Parts are underscore-separated; SLAM_CONFIG itself uses only hyphens.
-# Minimum 5 underscore-split parts required; LABEL may span multiple parts.
+# Minimum 4 underscore-split parts required; LABEL may span multiple parts.
 _DATE_RE        = re.compile(r'^\d{8}$')
 _TRANS_NOISE_RE = re.compile(r'T(\d+)p(\d+)')
 _ROT_NOISE_RE   = re.compile(r'R(\d+)p(\d+)')
