@@ -225,11 +225,10 @@ df_scene_class_filtered = (
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_overview, tab_noise, tab_class, tab_instances, tab_confmat, tab_scene = st.tabs([
+tab_overview, tab_noise, tab_class, tab_confmat, tab_scene = st.tabs([
     "📊 Overview",
     "📈 Noise Analysis",
     "🎨 Per-class",
-    "🔢 Instances",
     "🗂️ Conf. Matrix",
     "🗺️ By Scene",
 ])
@@ -327,19 +326,6 @@ with tab_class:
                     st.pyplot(fig, width='stretch')
                     _save_expander(fig, f"class_heatmap_{cls_sc_scene}.png", "cls_sc_save")
 
-# ── Instances ────────────────────────────────────────────────────────────────
-
-with tab_instances:
-    _show_table(df_filtered, key="inst_table", label="📋 Experiment Table")
-
-    st.subheader("Instance Counts")
-    if df_filtered.empty:
-        st.warning("No experiments match the current filters.")
-    else:
-        fig = plot_instance_counts(df_filtered)
-        st.pyplot(fig, width='stretch')
-        _save_expander(fig, "instances.png", "inst_save")
-
 # ── Confusion Matrix ─────────────────────────────────────────────────────────
 
 with tab_confmat:
@@ -382,6 +368,14 @@ with tab_scene:
                 )
                 st.pyplot(fig, width='stretch')
                 _save_expander(fig, "scene_bar.png", "sc_bar_save")
+
+        st.subheader("Instance Counts")
+        if df_scene_filtered.empty:
+            st.warning("No scene data matches the current filters.")
+        else:
+            fig = plot_instance_counts(df_scene_filtered, x="Scene", hue="Method")
+            st.pyplot(fig, width='stretch')
+            _save_expander(fig, "instances.png", "inst_save")
 
         st.subheader("Per-class Heatmap")
         col1, col2 = st.columns([1, 3])

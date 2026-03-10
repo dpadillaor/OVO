@@ -82,7 +82,7 @@ def parse_experiment_name(folder_name: str) -> dict | None:
         'SLAM_Config': slam_cfg,
         'Fusion':      fusion,
         'Label':       label,
-        'Method':      f"{fusion}_{label}",
+        'Method':      f"{slam_cfg}_{fusion}_{label}",
         'Trans_Noise': trans_noise,
         'Rot_Noise':   rot_noise,
     }
