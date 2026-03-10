@@ -14,6 +14,11 @@
       "id": "12",
       "title": "SAM3 Finetuned Perception Model Integration",
       "status": "IN_REVIEW"
+    },
+    {
+      "id": "13",
+      "title": "Class-Agnostic Instance AP Evaluation",
+      "status": "PENDING PLANNING"
     }
   ],
   "completed": [
