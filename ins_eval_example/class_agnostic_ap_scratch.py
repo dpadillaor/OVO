@@ -14,10 +14,33 @@ from ovo.utils.io_utils import rle_decode
 
 
 # ============================================================
-# Section 1 — Load & Visualize (diagnostic)
+# ANALYSIS PIPELINE — 3 steps
+#
+#   Step 1  --align   : Overlay pred PCL vs GT mesh vertices.
+#                       Confirms coordinate-frame alignment before any matching.
+#
+#   Step 2  --match   : Side-by-side instance viewer (GT left, pred right).
+#                       Navigate with N=next / P=prev (sorted best→worst IoU).
+#                       Requires alignment to be confirmed first.
+#
+#   Step 3  --eval    : Compute class-agnostic AP metrics.
+#                       Requires instances to be loaded & aligned.
+#
+# Optional:
+#   --save-ply        : Export colored instance PLY files (GT + pred).
+#   --save-png        : Save matplotlib projection of alignment (no GUI needed).
+#   --clip-z FLOAT    : Remove ceiling/floor above this Z value.
 # ============================================================
 
-EXPERIMENT_PATH = "data/output/Replica/20260305_GT_PE-Core_ComparativaPaper"
+
+# ============================================================
+# Step 1 helpers — alignment check
+# ============================================================
+
+EXPERIMENT_PATH = "data/output/Replica/20260310_GTNoise-T0p005-R0p01_SAM3_ComparativaPaper"
+# EXPERIMENT_PATH = "data/output/Replica/20260305_GT_CLIP_ComparativaPaper"
+# EXPERIMENT_PATH = "data/output/Replica/20260305_GT_CLIP_ComparativaPaper"
+
 SCENE = "office0"
 MESH_PATH = f"data/input/Datasets/Replica/{SCENE}_mesh.ply"
 
@@ -89,10 +112,14 @@ def visualize_alignment():
 
 
 # ============================================================
-# Section 2 — AP evaluation (run with --eval)
+# Step 2 helpers — instance matching viewer (see inspect_instances below)
 # ============================================================
 
-def load_predictions(experiment_path, scene_name):
+# wall=0, ceiling=1, floor=2, window=8, door=10  (indices in class_names_reduced)
+BACKGROUND_CLASS_IDS = {0, 1, 2, 8, 10}
+
+
+def load_predictions(experiment_path, scene_name, no_background=False):
     pred_dir = pathlib.Path(experiment_path) / "instance_pred"
     pred_file = pred_dir / f"{scene_name}.txt"
 
@@ -102,6 +129,7 @@ def load_predictions(experiment_path, scene_name):
     with open(pred_file, 'r') as f:
         lines = f.read().splitlines()
 
+    bg_masks_list = []   # background instance masks (to compute bg point mask)
     masks_list = []
     classes_list = []
     scores_list = []
@@ -115,11 +143,22 @@ def load_predictions(experiment_path, scene_name):
         mask_path = pred_dir / mask_file
         with open(mask_path, 'r') as f:
             rle = json.load(f)
-
         mask = rle_decode(rle)
+
+        if no_background and label in BACKGROUND_CLASS_IDS:
+            bg_masks_list.append(mask)
+            continue
+
         masks_list.append(mask)
         classes_list.append(label)
         scores_list.append(conf)
+
+    if no_background and bg_masks_list:
+        # points the prediction considered background — remove from every remaining mask
+        bg_pts = np.stack(bg_masks_list, axis=1).any(axis=1)  # (n_pts,) bool
+        masks_list = [m & ~bg_pts for m in masks_list]
+        print(f"  [--no-background] removed {len(bg_masks_list)} bg instances "
+              f"({bg_pts.sum()} points masked out)")
 
     if len(masks_list) > 0:
         pred_masks = np.stack(masks_list, axis=1)
@@ -206,7 +245,7 @@ def test_class_agnostic_ap(args):
         raise ValueError("Wrong path for ground_truth data")
 
     print(f"Loading predictions from: {EXPERIMENT_PATH}")
-    predictions = {SCENE: load_predictions(EXPERIMENT_PATH, SCENE)}
+    predictions = {SCENE: load_predictions(EXPERIMENT_PATH, SCENE, no_background=args.no_background)}
 
     pred_masks = predictions[SCENE]['pred_masks']
     pred_classes = predictions[SCENE]['pred_classes']
@@ -355,6 +394,11 @@ def vis_masks(gt_path, clip_z=None):
     )
 
 
+# ============================================================
+# Step 3 helpers — AP evaluation
+# ============================================================
+
+
 def _compute_best_ious(pred_masks, gt_ids):
     unique_gt = np.unique(gt_ids)
     gt_masks = (unique_gt[None] == gt_ids[:, None])  # (n_pts, n_gt)
@@ -370,12 +414,12 @@ def _compute_best_ious(pred_masks, gt_ids):
     return best_ious
 
 
-def inspect_instances(gt_path, clip_z=None):
+def inspect_instances(gt_path, clip_z=None, no_background=False):
     """GT (left, green highlight) and Pred (right, red highlight) side by side.
     Pred instances sorted best→worst IoU. N=next, P=prev."""
     import open3d as o3d
 
-    preds = load_predictions(EXPERIMENT_PATH, SCENE)
+    preds = load_predictions(EXPERIMENT_PATH, SCENE, no_background=no_background)
     pred_masks_full = preds["pred_masks"]  # (M, N_pred)
 
     with open(pathlib.Path(gt_path) / f"{SCENE}.txt") as f:
@@ -476,28 +520,68 @@ def inspect_instances(gt_path, clip_z=None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Class-agnostic instance AP analysis — run in order:\n"
+            "  Step 1  --align   Overlay pred PCL vs GT mesh (confirm alignment)\n"
+            "  Step 2  --match   Navigate pred↔GT instance pairs (N=next P=prev)\n"
+            "  Step 3  --eval    Compute class-agnostic AP metrics\n"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     parser.add_argument('--dataset', default='replica', type=str)
     parser.add_argument('--gt_path', default="./replica_gt/", type=str)
+
+    # --- step flags ---
+    parser.add_argument('--all', action='store_true',
+                        help="Run all steps in order (close each window to advance)")
+    parser.add_argument('--align', action='store_true',
+                        help="Step 1: overlay pred PCL (red) vs GT mesh (green) in Open3D")
+    parser.add_argument('--match', action='store_true',
+                        help="Step 2: side-by-side instance viewer, N=next P=prev (sorted by IoU)")
     parser.add_argument('--eval', action='store_true',
-                        help="Run AP evaluation (Section 2)")
+                        help="Step 3: compute class-agnostic AP metrics")
+
+    # --- optional extras ---
     parser.add_argument('--save-ply', action='store_true',
-                        help="Save colored instance PLY files for GT and predictions")
-    parser.add_argument('--vis-masks', action='store_true',
-                        help="Save masks_comparison.png (GT vs pred, colored by instance)")
+                        help="Export colored instance PLY files (GT + pred) for external viewers")
+    parser.add_argument('--save-png', action='store_true',
+                        help="Save matplotlib projection of alignment (no GUI needed)")
     parser.add_argument('--clip-z', type=float, default=None,
                         help="Remove points above this Z value (e.g. 1.3 to cut ceiling)")
-    parser.add_argument('--inspect', action='store_true',
-                        help="GT (izq) y Pred (dcha) side-by-side. N=next, P=prev")
+    parser.add_argument('--no-background', action='store_true',
+                        help="Exclude predicted instances classified as wall/ceiling/floor/window/door")
+
     args = parser.parse_args()
 
-    if args.inspect:
-        inspect_instances(args.gt_path, clip_z=args.clip_z)
-    elif args.vis_masks:
-        vis_masks(args.gt_path, clip_z=args.clip_z)
+    if args.all:
+        print("=== Step 1/3: Alignment check (close window to continue) ===")
+        visualize_alignment()
+        print("=== Step 2/3: Instance matching viewer (Q to continue) ===")
+        inspect_instances(args.gt_path, clip_z=args.clip_z, no_background=args.no_background)
+        print("=== Step 3/3: AP metrics ===")
+        test_class_agnostic_ap(args)
+    elif args.align:
+        # Step 1 — alignment check
+        if args.save_png:
+            import torch
+            ckpt = torch.load(
+                os.path.join(EXPERIMENT_PATH, SCENE, "ovo_map.ckpt"), map_location="cpu"
+            )
+            pcd_pred = ckpt["map_params"]["xyz"].numpy()
+            import open3d as o3d
+            mesh = o3d.io.read_triangle_mesh(MESH_PATH)
+            pcd_gt = np.asarray(mesh.vertices)
+            _save_projection_png(pcd_pred, pcd_gt)
+        else:
+            visualize_alignment()
+    elif args.match:
+        # Step 2 — instance matching viewer
+        inspect_instances(args.gt_path, clip_z=args.clip_z, no_background=args.no_background)
+    elif args.eval:
+        # Step 3 — AP metrics
+        test_class_agnostic_ap(args)
     elif args.save_ply:
         save_masks_ply(args.gt_path)
-    elif not args.eval:
-        visualize_alignment()
     else:
-        test_class_agnostic_ap(args)
+        parser.print_help()
