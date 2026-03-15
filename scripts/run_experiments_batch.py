@@ -85,8 +85,8 @@ class ExperimentRunner:
                 else:
                     return "GT"
                     
-            case "orbslam3":
-                return "ORBSLAM3"
+            case "orbslam2":
+                return "orbslam2"
             case "vanilla":
                 return "Vanilla"
             case _:
@@ -171,10 +171,13 @@ class ExperimentRunner:
             yaml.dump(ovo_data, f, default_flow_style=False, sort_keys=False)
 
         # Slam config: read and rewrite (no noise overrides — noise lives in ovo.yaml)
-        with open(self.slam_config_path, 'r') as f:
-            slam_data = yaml.full_load(f)
-        with open(self.slam_config_path, 'w') as f:
-            yaml.dump(slam_data, f, default_flow_style=False, sort_keys=False)
+        # ORB-SLAM configs use OpenCV's %YAML:1.0 header which PyYAML cannot parse,
+        # and have no Python-side overrides to apply, so skip the round-trip.
+        if not self.slam_module.startswith("orbslam"):
+            with open(self.slam_config_path, 'r') as f:
+                slam_data = yaml.full_load(f)
+            with open(self.slam_config_path, 'w') as f:
+                yaml.dump(slam_data, f, default_flow_style=False, sort_keys=False)
 
     def preview(self, output_dir: Path) -> Path:
         """
