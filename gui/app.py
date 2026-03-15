@@ -12,6 +12,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -20,7 +22,9 @@ from ovo.utils.results_utils import (
     filter_scene_results,
     get_available_datasets,
     get_available_dates,
+    get_available_fusions,
     get_available_methods,
+    get_available_slam_configs,
     get_available_noise_levels,
     get_available_scenes,
     load_experiments,
@@ -46,11 +50,17 @@ st.set_page_config(layout="wide", page_title="OVO Results Dashboard")
 
 _DATE_COL_CFG = {"Date": st.column_config.DateColumn("Date", format="DD-MM-YYYY")}
 
+_SLAM_NOISE_RE = re.compile(r'Noise|-T\d+p\d+|-R\d+p\d+')
+
+
+def _slam_base_name(config: str) -> str:
+    return _SLAM_NOISE_RE.sub('', config)
+
 
 def _show_table(df: pd.DataFrame, key: str, label: str = "📋 Table") -> None:
     """Render a collapsible DataFrame."""
     with st.expander(label, expanded=False):
-        st.dataframe(df, use_container_width=True, column_config=_DATE_COL_CFG)
+        st.dataframe(df, width='stretch', column_config=_DATE_COL_CFG)
 
 
 def _save_expander(fig, default_path: str, key_prefix: str) -> None:
@@ -74,7 +84,7 @@ with st.sidebar:
         value=st.session_state.get("output_dir", "data/output"),
     )
 
-    load_clicked = st.button("🔄 Load Experiments", use_container_width=True)
+    load_clicked = st.button("🔄 Load Experiments", width='stretch')
 
     if load_clicked:
         with st.spinner("Loading experiments…"):
@@ -113,6 +123,16 @@ with st.sidebar:
         )
         sel_methods = st.multiselect(
             "Methods", options=get_available_methods(df_all)
+        )
+        sel_fusions = st.multiselect(
+            "Fusion", options=get_available_fusions(df_all)
+        )
+        _all_slam_configs = get_available_slam_configs(df_all)
+        _slam_base_options = sorted({_slam_base_name(s) for s in _all_slam_configs})
+        sel_slam_base = st.multiselect("SLAM", options=_slam_base_options)
+        sel_slam = (
+            [s for s in _all_slam_configs if _slam_base_name(s) in sel_slam_base]
+            if sel_slam_base else []
         )
         sel_noise = st.multiselect(
             "Trans Noise",
@@ -154,6 +174,8 @@ with st.sidebar:
             dates=sel_dates or None,
             datasets=sel_datasets or None,
             methods=sel_methods or None,
+            fusions=sel_fusions or None,
+            slam_configs=sel_slam or None,
             noise_levels=sel_noise or None,
             exclude_experiment_ids=sel_exclude_experiments or None,
         )
@@ -188,6 +210,8 @@ df_scene_class_all: "pd.DataFrame" = st.session_state.get("df_scene_class", pd.D
 _dates        = (sel_dates       or None) if "sel_dates"       in dir() else None
 _datasets     = (sel_datasets    or None) if "sel_datasets"    in dir() else None
 _methods      = (sel_methods     or None) if "sel_methods"     in dir() else None
+_fusions      = (sel_fusions     or None) if "sel_fusions"     in dir() else None
+_slam         = (sel_slam        or None) if "sel_slam"        in dir() else None
 _noise        = (sel_noise       or None) if "sel_noise"       in dir() else None
 _exclude_experiment_ids = (sel_exclude_experiments or None) if "sel_exclude_experiments" in dir() else None
 _scenes       = (sel_scenes      or None) if "sel_scenes"      in dir() else None
@@ -195,13 +219,14 @@ _scenes       = (sel_scenes      or None) if "sel_scenes"      in dir() else Non
 df_class_filtered = filter_experiments(
     df_class_all,
     dates=_dates, datasets=_datasets, methods=_methods,
-    noise_levels=_noise, exclude_experiment_ids=_exclude_experiment_ids,
+    fusions=_fusions, slam_configs=_slam, noise_levels=_noise,
+    exclude_experiment_ids=_exclude_experiment_ids,
 )
 df_scene_filtered = (
     filter_scene_results(
         df_scene_all,
         dates=_dates, datasets=_datasets, methods=_methods,
-        noise_levels=_noise, scenes=_scenes,
+        fusions=_fusions, slam_configs=_slam, noise_levels=_noise, scenes=_scenes,
     )
     if not df_scene_all.empty else df_scene_all
 )
@@ -209,7 +234,7 @@ df_scene_class_filtered = (
     filter_scene_results(
         df_scene_class_all,
         dates=_dates, datasets=_datasets, methods=_methods,
-        noise_levels=_noise, scenes=_scenes,
+        fusions=_fusions, slam_configs=_slam, noise_levels=_noise, scenes=_scenes,
     )
     if not df_scene_class_all.empty else df_scene_class_all
 )
@@ -218,11 +243,10 @@ df_scene_class_filtered = (
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_overview, tab_noise, tab_class, tab_instances, tab_confmat, tab_scene = st.tabs([
+tab_overview, tab_noise, tab_class, tab_confmat, tab_scene = st.tabs([
     "📊 Overview",
     "📈 Noise Analysis",
     "🎨 Per-class",
-    "🔢 Instances",
     "🗂️ Conf. Matrix",
     "🗺️ By Scene",
 ])
@@ -242,12 +266,24 @@ with tab_overview:
         _prefix = "" if ov_segment == "All" else f"{ov_segment}_"
         _suffix = "mIoU" if ov_type == "IoU" else "mAcc"
         ov_metric = f"{_prefix}{_suffix}"
+        ov_hue = st.radio(
+            "Color by",
+            ["SLAM - Fusion", "Fusion", "Method", "SLAM_Config", "Label"],
+            key="ov_hue",
+        )
     with col2:
         if df_filtered.empty:
             st.warning("No experiments match the current filters.")
         else:
-            fig = plot_bar_metrics(df_filtered, metric=ov_metric)
-            st.pyplot(fig, use_container_width=True)
+            df_plot = df_filtered.copy()
+            if ov_hue == "SLAM - Fusion":
+                import re as _re
+                _slam_base = df_plot["SLAM_Config"].str.replace(
+                    r'Noise|-T\d+p\d+|-R\d+p\d+', '', regex=True
+                )
+                df_plot["SLAM - Fusion"] = _slam_base + " - " + df_plot["Fusion"]
+            fig = plot_bar_metrics(df_plot, metric=ov_metric, hue=ov_hue)
+            st.pyplot(fig, width='stretch')
             _save_expander(fig, "overview_bar.png", "ov_save")
 
 # ── Noise Analysis ──────────────────────────────────────────────────────────
@@ -271,7 +307,7 @@ with tab_noise:
             st.warning("Select at least one metric.")
         else:
             fig = plot_line_metrics(df_filtered, metrics=noise_metrics)
-            st.pyplot(fig, use_container_width=True)
+            st.pyplot(fig, width='stretch')
             _save_expander(fig, "noise_line.png", "noise_save")
 
 # ── Per-class ────────────────────────────────────────────────────────────────
@@ -291,7 +327,7 @@ with tab_class:
                 st.warning("No per-class data available for the current filters.")
             else:
                 fig = plot_class_heatmap(df_class_filtered, value=cls_value)
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, width='stretch')
                 _save_expander(fig, "class_heatmap.png", "cls_save")
 
     with subtab_scene:
@@ -317,21 +353,8 @@ with tab_class:
                     st.warning("No data for the selected scene.")
                 else:
                     fig = plot_class_heatmap(df_sc_cls_sel, value=cls_sc_value)
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, width='stretch')
                     _save_expander(fig, f"class_heatmap_{cls_sc_scene}.png", "cls_sc_save")
-
-# ── Instances ────────────────────────────────────────────────────────────────
-
-with tab_instances:
-    _show_table(df_filtered, key="inst_table", label="📋 Experiment Table")
-
-    st.subheader("Instance Counts")
-    if df_filtered.empty:
-        st.warning("No experiments match the current filters.")
-    else:
-        fig = plot_instance_counts(df_filtered)
-        st.pyplot(fig, use_container_width=True)
-        _save_expander(fig, "instances.png", "inst_save")
 
 # ── Confusion Matrix ─────────────────────────────────────────────────────────
 
@@ -348,7 +371,7 @@ with tab_confmat:
             if fig is None:
                 st.warning(f"No confmat.png found for **{chosen}**.")
             else:
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, width='stretch')
                 _save_expander(fig, f"confmat_{chosen}.png", "cm_save")
 
 # ── By Scene ─────────────────────────────────────────────────────────────────
@@ -373,8 +396,16 @@ with tab_scene:
                 fig = plot_bar_metrics(
                     df_scene_filtered, metric=sc_metric, x="Scene", hue="Method"
                 )
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, width='stretch')
                 _save_expander(fig, "scene_bar.png", "sc_bar_save")
+
+        st.subheader("Instance Counts")
+        if df_scene_filtered.empty:
+            st.warning("No scene data matches the current filters.")
+        else:
+            fig = plot_instance_counts(df_scene_filtered, x="Scene", hue="Method")
+            st.pyplot(fig, width='stretch')
+            _save_expander(fig, "instances.png", "inst_save")
 
         st.subheader("Per-class Heatmap")
         col1, col2 = st.columns([1, 3])
@@ -385,5 +416,5 @@ with tab_scene:
                 st.warning("No per-class scene data available for the current filters.")
             else:
                 fig = plot_class_heatmap(df_scene_class_filtered, value=sc_cls_value)
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, width='stretch')
                 _save_expander(fig, "scene_class_heatmap.png", "sc_cls_save")

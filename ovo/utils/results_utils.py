@@ -82,7 +82,7 @@ def parse_experiment_name(folder_name: str) -> dict | None:
         'SLAM_Config': slam_cfg,
         'Fusion':      fusion,
         'Label':       label,
-        'Method':      f"{fusion}_{label}",
+        'Method':      f"{slam_cfg}_{fusion}_{label}",
         'Trans_Noise': trans_noise,
         'Rot_Noise':   rot_noise,
     }
@@ -305,6 +305,16 @@ def get_available_methods(df: pd.DataFrame) -> list[str]:
     return sorted(df['Method'].dropna().unique().tolist())
 
 
+def get_available_fusions(df: pd.DataFrame) -> list[str]:
+    """Return sorted unique Fusion values present in the DataFrame."""
+    return sorted(df['Fusion'].dropna().unique().tolist())
+
+
+def get_available_slam_configs(df: pd.DataFrame) -> list[str]:
+    """Return sorted unique SLAM_Config values present in the DataFrame."""
+    return sorted(df['SLAM_Config'].dropna().unique().tolist())
+
+
 def get_available_noise_levels(df: pd.DataFrame) -> list[float]:
     """Return sorted unique Trans_Noise values present in the DataFrame."""
     return sorted(df['Trans_Noise'].dropna().unique().tolist())
@@ -315,6 +325,8 @@ def filter_experiments(
     dates: list[str] | None = None,
     datasets: list[str] | None = None,
     methods: list[str] | None = None,
+    fusions: list[str] | None = None,
+    slam_configs: list[str] | None = None,
     noise_levels: list[float] | None = None,
     experiment_ids: list[str] | None = None,
     exclude_experiment_ids: list[str] | None = None,
@@ -332,6 +344,10 @@ def filter_experiments(
         mask &= df['Dataset'].isin(datasets)
     if methods is not None:
         mask &= df['Method'].isin(methods)
+    if fusions is not None:
+        mask &= df['Fusion'].isin(fusions)
+    if slam_configs is not None:
+        mask &= df['SLAM_Config'].isin(slam_configs)
     if noise_levels is not None:
         mask &= df['Trans_Noise'].isin(noise_levels)
     if experiment_ids is not None:
@@ -434,6 +450,8 @@ def filter_scene_results(
     datasets: list[str] | None = None,
     scenes: list[str] | None = None,
     methods: list[str] | None = None,
+    fusions: list[str] | None = None,
+    slam_configs: list[str] | None = None,
     noise_levels: list[float] | None = None,
 ) -> pd.DataFrame:
     """Filter a per-scene DataFrame with AND logic across all provided criteria."""
@@ -446,6 +464,10 @@ def filter_scene_results(
         mask &= df['Scene'].isin(scenes)
     if methods is not None:
         mask &= df['Method'].isin(methods)
+    if fusions is not None:
+        mask &= df['Fusion'].isin(fusions)
+    if slam_configs is not None:
+        mask &= df['SLAM_Config'].isin(slam_configs)
     if noise_levels is not None:
         mask &= df['Trans_Noise'].isin(noise_levels)
     return df[mask].copy()

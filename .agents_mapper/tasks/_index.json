@@ -18,6 +18,11 @@
   ],
   "completed": [
     {
+      "id": "13",
+      "title": "Class-Agnostic Instance AP Evaluation",
+      "status": "COMPLETED"
+    },
+    {
       "id": "10",
       "title": "perception_encoders_integration_review__testing",
       "status": "COMPLETED"
