@@ -9,3 +9,4 @@ thirdParty/perception_models
 .vscode/settings.json
 tests/output_yaml/
 scripts/experiments_manifest.yaml
+ovo_paper.png
