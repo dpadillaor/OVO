@@ -12,6 +12,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -22,6 +24,7 @@ from ovo.utils.results_utils import (
     get_available_dates,
     get_available_fusions,
     get_available_methods,
+    get_available_slam_configs,
     get_available_noise_levels,
     get_available_scenes,
     load_experiments,
@@ -46,6 +49,12 @@ st.set_page_config(layout="wide", page_title="OVO Results Dashboard")
 # ---------------------------------------------------------------------------
 
 _DATE_COL_CFG = {"Date": st.column_config.DateColumn("Date", format="DD-MM-YYYY")}
+
+_SLAM_NOISE_RE = re.compile(r'Noise|-T\d+p\d+|-R\d+p\d+')
+
+
+def _slam_base_name(config: str) -> str:
+    return _SLAM_NOISE_RE.sub('', config)
 
 
 def _show_table(df: pd.DataFrame, key: str, label: str = "📋 Table") -> None:
@@ -118,6 +127,13 @@ with st.sidebar:
         sel_fusions = st.multiselect(
             "Fusion", options=get_available_fusions(df_all)
         )
+        _all_slam_configs = get_available_slam_configs(df_all)
+        _slam_base_options = sorted({_slam_base_name(s) for s in _all_slam_configs})
+        sel_slam_base = st.multiselect("SLAM", options=_slam_base_options)
+        sel_slam = (
+            [s for s in _all_slam_configs if _slam_base_name(s) in sel_slam_base]
+            if sel_slam_base else []
+        )
         sel_noise = st.multiselect(
             "Trans Noise",
             options=get_available_noise_levels(df_all),
@@ -159,6 +175,7 @@ with st.sidebar:
             datasets=sel_datasets or None,
             methods=sel_methods or None,
             fusions=sel_fusions or None,
+            slam_configs=sel_slam or None,
             noise_levels=sel_noise or None,
             exclude_experiment_ids=sel_exclude_experiments or None,
         )
@@ -194,6 +211,7 @@ _dates        = (sel_dates       or None) if "sel_dates"       in dir() else Non
 _datasets     = (sel_datasets    or None) if "sel_datasets"    in dir() else None
 _methods      = (sel_methods     or None) if "sel_methods"     in dir() else None
 _fusions      = (sel_fusions     or None) if "sel_fusions"     in dir() else None
+_slam         = (sel_slam        or None) if "sel_slam"        in dir() else None
 _noise        = (sel_noise       or None) if "sel_noise"       in dir() else None
 _exclude_experiment_ids = (sel_exclude_experiments or None) if "sel_exclude_experiments" in dir() else None
 _scenes       = (sel_scenes      or None) if "sel_scenes"      in dir() else None
@@ -201,14 +219,14 @@ _scenes       = (sel_scenes      or None) if "sel_scenes"      in dir() else Non
 df_class_filtered = filter_experiments(
     df_class_all,
     dates=_dates, datasets=_datasets, methods=_methods,
-    fusions=_fusions, noise_levels=_noise,
+    fusions=_fusions, slam_configs=_slam, noise_levels=_noise,
     exclude_experiment_ids=_exclude_experiment_ids,
 )
 df_scene_filtered = (
     filter_scene_results(
         df_scene_all,
         dates=_dates, datasets=_datasets, methods=_methods,
-        fusions=_fusions, noise_levels=_noise, scenes=_scenes,
+        fusions=_fusions, slam_configs=_slam, noise_levels=_noise, scenes=_scenes,
     )
     if not df_scene_all.empty else df_scene_all
 )
@@ -216,7 +234,7 @@ df_scene_class_filtered = (
     filter_scene_results(
         df_scene_class_all,
         dates=_dates, datasets=_datasets, methods=_methods,
-        fusions=_fusions, noise_levels=_noise, scenes=_scenes,
+        fusions=_fusions, slam_configs=_slam, noise_levels=_noise, scenes=_scenes,
     )
     if not df_scene_class_all.empty else df_scene_class_all
 )
@@ -248,11 +266,23 @@ with tab_overview:
         _prefix = "" if ov_segment == "All" else f"{ov_segment}_"
         _suffix = "mIoU" if ov_type == "IoU" else "mAcc"
         ov_metric = f"{_prefix}{_suffix}"
+        ov_hue = st.radio(
+            "Color by",
+            ["SLAM - Fusion", "Fusion", "Method", "SLAM_Config", "Label"],
+            key="ov_hue",
+        )
     with col2:
         if df_filtered.empty:
             st.warning("No experiments match the current filters.")
         else:
-            fig = plot_bar_metrics(df_filtered, metric=ov_metric)
+            df_plot = df_filtered.copy()
+            if ov_hue == "SLAM - Fusion":
+                import re as _re
+                _slam_base = df_plot["SLAM_Config"].str.replace(
+                    r'Noise|-T\d+p\d+|-R\d+p\d+', '', regex=True
+                )
+                df_plot["SLAM - Fusion"] = _slam_base + " - " + df_plot["Fusion"]
+            fig = plot_bar_metrics(df_plot, metric=ov_metric, hue=ov_hue)
             st.pyplot(fig, width='stretch')
             _save_expander(fig, "overview_bar.png", "ov_save")
 
