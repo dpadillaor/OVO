@@ -10,3 +10,6 @@ thirdParty/perception_models
 tests/output_yaml/
 scripts/experiments_manifest.yaml
 ovo_paper.png
+
+# Agent task tracking
+.agents_mapper/
