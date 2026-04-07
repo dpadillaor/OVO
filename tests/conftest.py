@@ -3,6 +3,13 @@ Pytest configuration and shared fixtures.
 
 This file automatically loads fixtures from the fixtures directory.
 """
+import sys
+from pathlib import Path
+
+# Make thirdParty/perception_models importable as a top-level package
+_pm_path = str(Path(__file__).parent.parent / "thirdParty" / "perception_models")
+if _pm_path not in sys.path:
+    sys.path.insert(0, _pm_path)
 
 # Import fixtures to make them available to all tests
 from tests.fixtures.fixtures_fusion import (
