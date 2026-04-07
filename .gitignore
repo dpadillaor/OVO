@@ -13,3 +13,6 @@ ovo_paper.png
 
 # Agent task tracking
 .agents_mapper/
+
+# Claude Code
+.claude/

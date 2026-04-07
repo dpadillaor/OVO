@@ -1,11 +1,18 @@
-Run the task completion script to mark task $ARGUMENTS as completed.
+Complete task $ARGUMENTS: push branch, open PR to develop, remove worktree, and archive.
 
-Execute: `python .agents_mapper/scripts/complete_task.py $ARGUMENTS`
+## Steps
 
-This script will:
-1. Verify the task with ID $ARGUMENTS exists and is in REVIEW status
-2. Move the task folder from `active_tasks` to `completed_tasks`
-3. Update the `_index.json` to move the task from active to completed section
-4. Change the task status to COMPLETED
+1. Run `python .agents_mapper/scripts/get_task_info.py $ARGUMENTS` and parse the JSON.
+   - If `success` is false: show the error and STOP.
+   - If `status` is not `IN_REVIEW`: tell the user and STOP.
 
-Report the result to me.
+2. Show a summary of what is about to happen:
+   - Task title and ID
+   - Branch to push
+   - Worktree to remove (if any)
+
+   Ask the user to confirm before proceeding.
+
+3. Run `python .agents_mapper/scripts/complete_task.py $ARGUMENTS`
+
+4. Report the result and show the PR URL.
