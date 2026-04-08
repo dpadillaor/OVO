@@ -35,6 +35,7 @@ class GroundTruthSLAM(VanillaMapper):
         print(f"Initialized GroundTruthSLAM with {len(self.trajectory)} poses for scene {scene_name}.")
 
         self._init_noise_params()
+        self._init_jump_params()
 
         # Set thresholds for KF selection and loop closure from config
         self.kf_dist_thresh = self.config.get("kf_dist_thresh", 0.1)
@@ -75,20 +76,98 @@ class GroundTruthSLAM(VanillaMapper):
             self.translation_noise_std = 0.0
             self.rotation_noise_std = 0.0
 
+    def _init_jump_params(self) -> None:
+        """
+        Initializes jump drift parameters for simulating abrupt pose offsets.
+        Jump drift applies one or more large, discrete pose jumps at configurable keyframe indices,
+        creating sharp duplicated instances rather than noisy point clouds.
+        """
+        noise_config = self.config.get("noise", {})
+        self.jump_drift_enabled = noise_config.get("jump_drift_enabled", False)
+        self._jump_offset = torch.eye(4, device=self.device)
+        self._applied_jump_kf_indices = set()
+        self.jump_configs = []
+
+        if not self.jump_drift_enabled:
+            return
+
+        self.jump_seed = noise_config.get("jump_seed", 42)
+        self.jump_generator = torch.Generator(device=self.device).manual_seed(self.jump_seed)
+
+        jump_list = noise_config.get("jumps", [])
+        for jump_entry in jump_list:
+            kf_index = int(jump_entry["kf_index"])
+
+            # Resolve translation
+            if "translation" in jump_entry:
+                translation = torch.tensor(jump_entry["translation"], dtype=torch.float32, device=self.device)
+            elif "translation_magnitude" in jump_entry:
+                mag = float(jump_entry["translation_magnitude"])
+                rand_vec = torch.randn(3, generator=self.jump_generator, device=self.device)
+                rand_vec = rand_vec / torch.norm(rand_vec)
+                translation = rand_vec * mag
+            else:
+                translation = torch.zeros(3, device=self.device)
+
+            # Resolve rotation
+            if "rotation" in jump_entry:
+                euler_deg = torch.tensor(jump_entry["rotation"], dtype=torch.float32, device=self.device)
+                euler_rad = euler_deg * (torch.pi / 180.0)
+                rotation_matrix = geometry_utils.rodrigues_rotation_matrix(euler_rad)
+            elif "rotation_magnitude" in jump_entry:
+                mag_deg = float(jump_entry["rotation_magnitude"])
+                mag_rad = mag_deg * (torch.pi / 180.0)
+                rand_axis = torch.randn(3, generator=self.jump_generator, device=self.device)
+                rand_axis = rand_axis / torch.norm(rand_axis)
+                rotation_vector = rand_axis * mag_rad
+                rotation_matrix = geometry_utils.rodrigues_rotation_matrix(rotation_vector)
+            else:
+                rotation_matrix = torch.eye(3, device=self.device)
+
+            self.jump_configs.append({
+                "kf_index": kf_index,
+                "translation": translation,
+                "rotation_matrix": rotation_matrix,
+            })
+
+        print(f"Jump drift enabled: {len(self.jump_configs)} jumps configured, seed={self.jump_seed}")
+
     def track_camera(self, frame_data: List[Any]) -> None:
         """
         Tracks the camera's pose for the current frame.
-        This function acts as a dispatcher, calling either `_noisy_tracking` or
-        `_ground_truth_tracking` based on whether noise simulation is enabled.
+        This function acts as a dispatcher, calling either `_noisy_tracking`,
+        `_jump_tracking`, or `_ground_truth_tracking` based on configuration.
         """
         frame_id = frame_data[0]
         if self.noise_enabled:
             self._noisy_tracking(frame_data)
+        elif self.jump_drift_enabled:
+            self._jump_tracking(frame_data)
         else:
             self._ground_truth_tracking(frame_data)
-        
-        # Store the calculated pose (either noisy or ground truth)
+
+        # Store the calculated pose (either noisy, jump-drifted, or ground truth)
         self.estimated_c2ws[frame_id] = self.c2w
+
+    def _compute_jump_transform(self, translation: torch.Tensor, rotation_matrix: torch.Tensor) -> torch.Tensor:
+        """
+        Returns a 4x4 transformation matrix from a translation vector and rotation matrix.
+        """
+        return geometry_utils.create_transformation_matrix(rotation_matrix, translation)
+
+    def _jump_tracking(self, frame_data: List[Any]) -> None:
+        """
+        "Tracks" the camera by applying the accumulated jump offset to the ground truth pose.
+        The jump offset is a 4x4 transformation matrix that encodes all applied jumps so far.
+        This method is pure and stateless — all jump state lives in _jump_offset.
+        """
+        frame_id = frame_data[0]
+        if frame_id < len(self.trajectory):
+            gt_pose = self.trajectory[frame_id].to(self.device)
+            self.c2w = self._jump_offset @ gt_pose
+        else:
+            print(f"Warning: Frame ID {frame_id} is out of bounds for the trajectory of length {len(self.trajectory)}.")
+            self.c2w = self.kfs[list(self.kfs.keys())[-1]]["pose"]
 
     def _ground_truth_tracking(self, frame_data: List[Any]) -> None:
         """
@@ -152,9 +231,23 @@ class GroundTruthSLAM(VanillaMapper):
         frame_id = frame_data[0]
 
         if self._is_new_keyframe(c2w):
+            # Check if any jump should be triggered at this new KF index
+            if self.jump_drift_enabled:
+                N = len(self.kfs)  # index of the keyframe about to be created
+                for jump_cfg in self.jump_configs:
+                    if jump_cfg["kf_index"] == N and N not in self._applied_jump_kf_indices:
+                        T_jump = self._compute_jump_transform(jump_cfg["translation"], jump_cfg["rotation_matrix"])
+                        self._jump_offset = T_jump @ self._jump_offset
+                        self._applied_jump_kf_indices.add(N)
+                        # Retroactively fix the current frame's stored pose
+                        gt_pose = self.trajectory[frame_id].to(self.device) if frame_id < len(self.trajectory) else c2w
+                        self.estimated_c2ws[frame_id] = self._jump_offset @ gt_pose
+                        # Update c2w to reflect the jump for the KF being stored
+                        c2w = self.estimated_c2ws[frame_id]
+
             # 1. Add points to the map using the parent's map method
             super().map(frame_data, c2w)
-            
+
             # 2. Store KeyFrame info
             pcd_end_idx = self.pcd.shape[0]
             pcd_start_idx = self.kfs[list(self.kfs.keys())[-1]]["pcd_idxs"][1] if len(self.kfs) > 0 else 0
@@ -164,9 +257,9 @@ class GroundTruthSLAM(VanillaMapper):
             # self._check_for_loop_closure(frame_id, c2w) # DISABLED for Global Correction
 
         # Trigger Global Correction near the end of the sequence.
-        # Only needed when noise is active; without noise, tracking already uses GT poses.
+        # Only needed when noise or jump drift is active; without them, tracking already uses GT poses.
         # We check if we are within the last 'map_every' window to ensure we catch the final map() call.
-        if self.noise_enabled and self.close_loops and not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
+        if (self.noise_enabled or self.jump_drift_enabled) and self.close_loops and not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
              self.correct_map_globally()
              self.correction_done = True
 
@@ -305,7 +398,11 @@ class GroundTruthSLAM(VanillaMapper):
             if frame_id < len(self.trajectory):
                 self.estimated_c2ws[frame_id] = self.trajectory[frame_id].to(self.device)
 
-        # 6. Signal OVO that the whole map has changed
+        # 6. Reset jump offset so any remaining frames tracked after correction use GT directly
+        if self.jump_drift_enabled:
+            self._jump_offset = torch.eye(4, device=self.device)
+
+        # 7. Signal OVO that the whole map has changed
         print(f"Global Geometric Correction completed for {len(kf_ids)} keyframes and {len(self.estimated_c2ws)} total frames.")
         self.last_big_change_id = 0 # 0 implies the map changed from the start
         self.map_updated = True
