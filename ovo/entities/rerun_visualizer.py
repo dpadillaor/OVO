@@ -159,7 +159,7 @@ def _log_instances(prefix, points, instance_ids, instance_colors):
         )
 
 
-def stream_rerun(semantic_module, mpqueu    e, query_data, cam_intrinsic, scene_name, output_path, show, save_rrd=False):
+def stream_rerun(semantic_module, mpqueue, query_data, cam_intrinsic, scene_name, output_path, show, save_rrd=False):
     """
     Streams SLAM data to Rerun visualizer — instance-colored point cloud only.
 
