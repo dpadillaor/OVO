@@ -26,6 +26,7 @@ class Colors:
 class OVOConfigOverride:
     slam: Dict[str, Any] = field(default_factory=dict)
     semantic: Dict[str, Any] = field(default_factory=dict)
+    vis: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class SLAMConfigOverride:
@@ -150,6 +151,9 @@ class ExperimentRunner:
         if self.experiment.ovo_config.semantic:
             _update_recursive(ovo_data, {"semantic": self.experiment.ovo_config.semantic})
 
+        if self.experiment.ovo_config.vis:
+            _update_recursive(ovo_data, {"vis": self.experiment.ovo_config.vis})
+
         # Noise goes to ovo.yaml root (not to the slam config file).
         # GroundTruthSLAM reads noise from config["noise"] which comes from ovo.yaml.
         if self.experiment.slam_config.noise:
@@ -256,17 +260,27 @@ class ExperimentRunner:
             )
 
     def _run_with_spinner(self, command: str) -> subprocess.CompletedProcess:
+        import os
+        import signal
+
         stop_event = threading.Event()
-        # Pass the message to the spinner function
         t = threading.Thread(target=_spinner, args=("    Running experiment", stop_event), daemon=True)
         t.start()
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,  # own process group so SIGTERM reaches children
+        )
         try:
-            result = subprocess.run(command,
-                                    shell=True,
-                                    check=False, # We will check return code manually
-                                    capture_output=True, # Capture stdout and stderr
-                                    text=True) # Decode stdout/stderr as text
-            return result
+            stdout, stderr = proc.communicate()
+            return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
+        except KeyboardInterrupt:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            proc.wait()
+            raise
         finally:
             stop_event.set()
             t.join()
@@ -309,7 +323,8 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
 
         ovo_override = OVOConfigOverride(
             slam=ovo_data.get("slam", {}),
-            semantic=ovo_data.get("semantic", {})
+            semantic=ovo_data.get("semantic", {}),
+            vis=ovo_data.get("vis", {}),
         )
         
         slam_data = exp_data.get("slam_config", {})

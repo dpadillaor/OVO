@@ -11,8 +11,7 @@ import gc
 from .logger import Logger
 from .ovo import OVO
 from .datasets import get_dataset
-from .visualizer import stream_pcd
-from .rerun_visualizer import stream_rerun, stream_rerun_fusion, stream_rerun_loopclosure
+from .visualizers.selection import resolve_rerun_visual_mode, select_visualizer_target
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
@@ -50,6 +49,10 @@ class OVOSemMap():
         self.show_stream = self.config["vis"]["show_stream"]
         self.vis_type = self.config["vis"].get("type", "open3d")
         self.rerun_mode = self.config["vis"].get("rerun_mode", "stream")  # "stream" or "fusion"
+        self.rerun_visual_mode = resolve_rerun_visual_mode(
+            self.config["vis"].get("rerun_visual_mode", None),
+            self.show_stream,
+        )
         self.save_rrd = self.config["vis"].get("save_rrd", False)
         self.map_every = config["mapping"].get("map_every", 10)
         self.segment_every = config["semantic"].get("segment_every", 10)
@@ -139,21 +142,33 @@ class OVOSemMap():
                 mpqueue = mp.Queue()
                 query_flag = mp.Value('i',0) #0 idle, 1 requested, 2 completed
                 query_pipe, vis_pipe = mp.Pipe()
-                if self.vis_type == "rerun":
-                    if self.rerun_mode == "fusion":
-                        target_func = stream_rerun_fusion
-                        proc_name = "RerunFusionVis"
-                    elif self.rerun_mode == "loop_closure":
-                        target_func = stream_rerun_loopclosure
-                        proc_name = "RerunLCVis"
-                    else:
-                        target_func = stream_rerun
-                        proc_name = "RerunVisualizer"
-                else:
-                    target_func = stream_pcd
-                    proc_name = "O3DVisualizer"
+                target_func, proc_name = select_visualizer_target(self.vis_type, self.rerun_mode)
 
-                p = mp.Process(target=target_func, args=(self.ovo, mpqueue, [query_flag, vis_pipe], cam_data, self.config["data"]["scene_name"], self.logger.output_path, show_stream, self.save_rrd), name=proc_name)
+                if self.vis_type == "rerun":
+                    query_payload = [query_flag, vis_pipe, self.rerun_visual_mode]
+                    proc_args = (
+                        self.ovo,
+                        mpqueue,
+                        query_payload,
+                        cam_data,
+                        self.config["data"]["scene_name"],
+                        self.logger.output_path,
+                        show_stream,
+                        self.save_rrd,
+                    )
+                else:
+                    query_payload = [query_flag, vis_pipe]
+                    proc_args = (
+                        self.ovo,
+                        mpqueue,
+                        query_payload,
+                        cam_data,
+                        self.config["data"]["scene_name"],
+                        self.logger.output_path,
+                        show_stream,
+                    )
+
+                p = mp.Process(target=target_func, args=proc_args, name=proc_name)
                 p.start()
 
             torch.cuda.synchronize()
