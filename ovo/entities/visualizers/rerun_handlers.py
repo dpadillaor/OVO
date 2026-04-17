@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -48,17 +49,67 @@ class BaseRerunRenderer:
         self.visual_mode = str(visual_mode).lower()
 
     def setup(self):
-        spawn_viewer = self.visual_mode == "spawn" and self.show
-        rr.init(f"OVO_{self.scene_name}{self.app_suffix}", spawn=spawn_viewer)
+        rr.init(f"OVO_{self.scene_name}{self.app_suffix}")
 
         if self.visual_mode == "serve":
-            rr.serve_grpc(grpc_port=RERUN_PORT_LIVE, server_memory_limit="500MB")
+            self.live_rec = rr.RecordingStream(
+                f"OVO_{self.scene_name}{self.app_suffix}_live",
+                batcher_config=rr.ChunkBatcherConfig(
+                    flush_tick=timedelta(milliseconds=33),
+                    flush_num_bytes=512_000,
+                    flush_num_rows=256,
+                ),
+            )
+            rr.serve_grpc(
+                grpc_port=RERUN_PORT_LIVE,
+                server_memory_limit="200MB",
+                recording=self.live_rec,
+            )
+        else:
+            self.live_rec = None
 
         if self.save_rrd:
-            rr.save(str(Path(self.output_path) / "rerun.rrd"))
+            self.file_rec = rr.RecordingStream(
+                f"OVO_{self.scene_name}{self.app_suffix}_file",
+            )
+            rr.save(
+                str(Path(self.output_path) / "rerun.rrd"),
+                recording=self.file_rec,
+            )
+        else:
+            self.file_rec = None
 
-        rr.send_blueprint(self.build_blueprint())
+        if self.visual_mode == "spawn" and self.show:
+            rr.spawn()
+
+        self._send_blueprint()
         self.post_setup()
+
+    def _send_blueprint(self):
+        bp = self.build_blueprint()
+        if self.live_rec is not None:
+            rr.send_blueprint(bp, recording=self.live_rec)
+        if self.file_rec is not None:
+            rr.send_blueprint(bp, recording=self.file_rec)
+        if self.live_rec is None and self.file_rec is None:
+            rr.send_blueprint(bp)
+
+    def _log(self, path: str, entity, *, file_static: bool = False):
+        """Log to live stream (never static) and file stream (with file_static)."""
+        if self.live_rec is not None:
+            rr.log(path, entity, recording=self.live_rec)
+        if self.file_rec is not None:
+            rr.log(path, entity, static=file_static, recording=self.file_rec)
+        if self.live_rec is None and self.file_rec is None:
+            rr.log(path, entity)
+
+    def _set_time(self, timeline: str, **kwargs):
+        if self.live_rec is not None:
+            rr.set_time(timeline, recording=self.live_rec, **kwargs)
+        if self.file_rec is not None:
+            rr.set_time(timeline, recording=self.file_rec, **kwargs)
+        if self.live_rec is None and self.file_rec is None:
+            rr.set_time(timeline, **kwargs)
 
     def build_blueprint(self):
         raise NotImplementedError
@@ -74,19 +125,18 @@ class StreamRenderer(BaseRerunRenderer):
     name = "RerunVis"
     idle_sleep_s = 0.01
 
+    MAX_LIVE_POINTS = 80_000
+
     def post_setup(self):
         width = self.cam_intrinsic["width"]
         height = self.cam_intrinsic["height"]
         K = self.cam_intrinsic["intrinsic"]
 
-        rr.log(
-            "world/camera",
-            rr.Pinhole(
-                resolution=[width, height],
-                image_from_camera=K,
-            ),
-            static=True,
-        )
+        pinhole = rr.Pinhole(resolution=[width, height], image_from_camera=K)
+        for rec in [r for r in [self.live_rec, self.file_rec] if r is not None]:
+            rr.log("world/camera", pinhole, static=True, recording=rec)
+        if self.live_rec is None and self.file_rec is None:
+            rr.log("world/camera", pinhole, static=True)
 
         self.cmap = get_instance_cmap()
         self.step = 0
@@ -110,12 +160,11 @@ class StreamRenderer(BaseRerunRenderer):
         instance_ids = resolve_instance_ids(obj_ids, points.shape[0])
 
         mask = ceiling_mask(points)
-        points = points[mask]
-        instance_ids = instance_ids[mask]
+        points_full = points[mask]
+        instance_ids_full = instance_ids[mask]
+        instance_colors_full = get_instance_colors(instance_ids_full, self.cmap)
 
-        instance_colors = get_instance_colors(instance_ids, self.cmap)
-
-        unique_ids = np.unique(instance_ids[instance_ids >= 0])
+        unique_ids = np.unique(instance_ids_full[instance_ids_full >= 0])
         if len(unique_ids) > 0:
             annotations = [
                 rr.AnnotationInfo(
@@ -125,43 +174,97 @@ class StreamRenderer(BaseRerunRenderer):
                 )
                 for uid in unique_ids
             ]
-            rr.log("world/points", rr.AnnotationContext(annotations), static=True)
-
-        rr.set_time("step", sequence=self.step)
-
-        rr.log(
-            "world/camera",
-            rr.Transform3D(
-                translation=c2w[:3, 3],
-                mat3x3=c2w[:3, :3],
-            ),
-        )
+            self._log("world/points", rr.AnnotationContext(annotations), file_static=True)
 
         self.trajectory.append(c2w[:3, 3].tolist())
-        if len(self.trajectory) >= 2:
+
+        class_ids_full = instance_ids_full.copy().astype(np.uint16)
+        class_ids_full[instance_ids_full < 0] = 0
+
+        # Subsample only for live stream
+        if len(points_full) > self.MAX_LIVE_POINTS and self.live_rec is not None:
+            idx = np.random.choice(len(points_full), self.MAX_LIVE_POINTS, replace=False)
+            idx.sort()
+            points_live = points_full[idx]
+            instance_ids_live = instance_ids_full[idx]
+            instance_colors_live = instance_colors_full[idx]
+            class_ids_live = class_ids_full[idx]
+        else:
+            points_live = points_full
+            instance_ids_live = instance_ids_full
+            instance_colors_live = instance_colors_full
+            class_ids_live = class_ids_full
+
+        if self.live_rec is not None:
+            rr.set_time("step", sequence=self.step, recording=self.live_rec)
             rr.log(
-                "world/trajectory",
-                rr.LineStrips3D(
-                    [self.trajectory],
-                    colors=[[0, 255, 255]],
-                    radii=[0.005],
+                "world/points",
+                rr.Points3D(
+                    points_live,
+                    colors=instance_colors_live,
+                    class_ids=class_ids_live,
+                    radii=np.full(len(points_live), 0.008, dtype=np.float32),
+                ),
+                recording=self.live_rec,
+            )
+            rr.log(
+                "world/camera",
+                rr.Transform3D(translation=c2w[:3, 3], mat3x3=c2w[:3, :3]),
+                recording=self.live_rec,
+            )
+            if len(self.trajectory) >= 2:
+                rr.log(
+                    "world/trajectory",
+                    rr.LineStrips3D([self.trajectory], colors=[[0, 255, 255]], radii=[0.005]),
+                    recording=self.live_rec,
+                )
+
+        if self.file_rec is not None:
+            rr.set_time("step", sequence=self.step, recording=self.file_rec)
+            rr.log(
+                "world/points",
+                rr.Points3D(
+                    points_full,
+                    colors=instance_colors_full,
+                    class_ids=class_ids_full,
+                    radii=np.full(len(points_full), 0.008, dtype=np.float32),
                 ),
                 static=True,
+                recording=self.file_rec,
             )
+            rr.log(
+                "world/camera",
+                rr.Transform3D(translation=c2w[:3, 3], mat3x3=c2w[:3, :3]),
+                recording=self.file_rec,
+            )
+            if len(self.trajectory) >= 2:
+                rr.log(
+                    "world/trajectory",
+                    rr.LineStrips3D([self.trajectory], colors=[[0, 255, 255]], radii=[0.005]),
+                    static=True,
+                    recording=self.file_rec,
+                )
 
-        class_ids = instance_ids.copy().astype(np.uint16)
-        class_ids[instance_ids < 0] = 0
-
-        rr.log(
-            "world/points",
-            rr.Points3D(
-                points,
-                colors=instance_colors,
-                class_ids=class_ids,
-                radii=np.full(len(points), 0.008, dtype=np.float32),
-            ),
-            static=True,
-        )
+        if self.live_rec is None and self.file_rec is None:
+            rr.set_time("step", sequence=self.step)
+            rr.log(
+                "world/camera",
+                rr.Transform3D(translation=c2w[:3, 3], mat3x3=c2w[:3, :3]),
+            )
+            if len(self.trajectory) >= 2:
+                rr.log(
+                    "world/trajectory",
+                    rr.LineStrips3D([self.trajectory], colors=[[0, 255, 255]], radii=[0.005]),
+                )
+            rr.log(
+                "world/points",
+                rr.Points3D(
+                    points_full,
+                    colors=instance_colors_full,
+                    class_ids=class_ids_full,
+                    radii=np.full(len(points_full), 0.008, dtype=np.float32),
+                ),
+            )
 
         self.step += 1
 
@@ -297,23 +400,23 @@ class FusionRenderer(BaseRerunRenderer):
             arrow_origins.append(centroid_deleted)
             arrow_vectors.append(centroid_survivor - centroid_deleted)
 
-        rr.set_time("fusion_event", sequence=self.step)
+        self._set_time("fusion_event", sequence=self.step)
 
         log_instances("before", pts, b_ids, before_colors)
-        rr.log("before/info", rr.TextLog(f"Frame {frame_id} | {n_before} instances"), static=True)
+        self._log("before/info", rr.TextLog(f"Frame {frame_id} | {n_before} instances"), file_static=True)
 
         log_instances("after", pts, a_ids, after_colors)
-        rr.log("after/info", rr.TextLog(f"Frame {frame_id} | {n_after} instances ({fused} fused)"), static=True)
+        self._log("after/info", rr.TextLog(f"Frame {frame_id} | {n_after} instances ({fused} fused)"), file_static=True)
 
         if changed_mask.sum() > 0:
-            rr.log(
+            self._log(
                 "diff/changed_points",
                 rr.Points3D(
                     pts[changed_mask],
                     colors=[255, 255, 0],
                     radii=np.full(changed_mask.sum(), 0.012, dtype=np.float32),
                 ),
-                static=True,
+                file_static=True,
             )
 
         for dis_id in disappeared_ids:
@@ -321,14 +424,14 @@ class FusionRenderer(BaseRerunRenderer):
             if mask_dis.sum() == 0:
                 continue
 
-            rr.log(
+            self._log(
                 f"diff/disappeared/ins_{dis_id}",
                 rr.Points3D(
                     pts[mask_dis],
                     colors=[255, 0, 0],
                     radii=np.full(mask_dis.sum(), 0.01, dtype=np.float32),
                 ),
-                static=True,
+                file_static=True,
             )
 
             pts_ins = pts[mask_dis]
@@ -336,7 +439,7 @@ class FusionRenderer(BaseRerunRenderer):
             bbox_max = pts_ins.max(axis=0)
             center = (bbox_min + bbox_max) / 2
             half_sizes = (bbox_max - bbox_min) / 2
-            rr.log(
+            self._log(
                 f"diff/boxes/ins_{dis_id}",
                 rr.Boxes3D(
                     centers=[center],
@@ -344,11 +447,11 @@ class FusionRenderer(BaseRerunRenderer):
                     labels=[f"Fused: {dis_id}"],
                     colors=[[255, 0, 0]],
                 ),
-                static=True,
+                file_static=True,
             )
 
         if len(arrow_origins) > 0:
-            rr.log(
+            self._log(
                 "diff/merge_arrows",
                 rr.Arrows3D(
                     origins=np.array(arrow_origins),
@@ -356,7 +459,7 @@ class FusionRenderer(BaseRerunRenderer):
                     colors=[255, 0, 255],
                     radii=[0.02],
                 ),
-                static=True,
+                file_static=True,
             )
 
         stats_text = f"""# Frame {frame_id} Fusion Event
@@ -380,10 +483,10 @@ class FusionRenderer(BaseRerunRenderer):
         else:
             stats_text += "*None*"
 
-        rr.log(
+        self._log(
             "stats/fusion_info",
             rr.TextDocument(stats_text, media_type=rr.MediaType.MARKDOWN),
-            static=True,
+            file_static=True,
         )
 
         self.step += 1

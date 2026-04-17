@@ -15,6 +15,19 @@ from .visualizers.selection import resolve_rerun_visual_mode, select_visualizer_
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
+def _queue_put_dropping(queue, item) -> None:
+    """Put item in queue, dropping oldest item if full. Never blocks."""
+    while True:
+        try:
+            queue.put_nowait(item)
+            return
+        except Exception:
+            try:
+                queue.get_nowait()
+            except Exception:
+                return
+
+
 def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Tensor) -> VanillaMapper | WrapperGaussianSLAM:
     backbone = config["slam"].get("slam_module","vanilla")
     if backbone == "gaussian_slam":
@@ -139,7 +152,7 @@ class OVOSemMap():
         with mp.Manager() as manager: 
             if stream:
                 cam_data = {"height":self.dataset.height, "width": self.dataset.width, "intrinsic": self.dataset.intrinsics} 
-                mpqueue = mp.Queue()
+                mpqueue = mp.Queue(maxsize=8)
                 query_flag = mp.Value('i',0) #0 idle, 1 requested, 2 completed
                 query_pipe, vis_pipe = mp.Pipe()
                 target_func, proc_name = select_visualizer_target(self.vis_type, self.rerun_mode)
@@ -203,7 +216,7 @@ class OVOSemMap():
                                 # Send before/after fusion snapshot to visualizer
                                 if stream and self.rerun_mode == "fusion" and updated_points_ins_ids is not None:
                                     after_ids = updated_points_ins_ids.cpu().numpy().astype(np.int16)
-                                    mpqueue.put({"type": "fusion", "points": before_pcd, "before_ids": before_ids, "after_ids": after_ids, "frame_id": frame_id})
+                                    _queue_put_dropping(mpqueue, {"type": "fusion", "points": before_pcd, "before_ids": before_ids, "after_ids": after_ids, "frame_id": frame_id})
 
                                 # Send loop closure snapshot to visualizer
                                 if (stream and self.rerun_mode in ("loop_closure", "fusion")
@@ -213,7 +226,7 @@ class OVOSemMap():
                                         k: v.cpu().numpy().astype(np.float32)
                                         for k, v in self.slam_backbone.estimated_c2ws.items()
                                     }
-                                    mpqueue.put({
+                                    _queue_put_dropping(mpqueue, {
                                         "type": "loop_closure",
                                         "pcd_before": self.slam_backbone._lc_pcd_before.numpy().astype(np.float32),
                                         "pcd_after": pcd_after.cpu().numpy().astype(np.float32),
@@ -269,7 +282,7 @@ class OVOSemMap():
                                 c2w = c2w.cpu().numpy().astype(np.float16)
                                 colors = self.slam_backbone.get_pcd_colors()
 
-                                mpqueue.put([pcd.cpu().numpy().astype(np.float16), pcd_obj_ids.cpu().numpy().astype(np.int16), colors, c2w])
+                                _queue_put_dropping(mpqueue, [pcd.cpu().numpy().astype(np.float16), pcd_obj_ids.cpu().numpy().astype(np.int16), colors, c2w])
 
                                 if query_flag.value == 1:
                                     query = query_pipe.recv()
