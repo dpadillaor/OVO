@@ -1,7 +1,8 @@
 from __future__ import annotations
 from typing import Any, Dict
+import csv
 import torch
-import torch.multiprocessing as mp 
+import torch.multiprocessing as mp
 from pathlib import Path
 import numpy as np
 import time
@@ -110,6 +111,10 @@ class OVOSemMap():
             self.ovo.mask_generator.precompute(self.dataset, self.segment_every)
 
         # Optional map restoration state.
+        self._fusion_log_path = self.output_path / "fusion_decisions.csv"
+        with open(self._fusion_log_path, "w", newline="") as f:
+            csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist"]).writeheader()
+
         self.first_frame = 0
         if self.config.get("restore_map", False):
             assert config["slam"].get("slam_module", "vanilla") == "vanilla", "Restoring representation only implemented for 'vanilla' configuration!"
@@ -288,15 +293,29 @@ class OVOSemMap():
                 return t_sem
             c2w = c2w.cpu().numpy().astype(np.float16)
             colors = self.slam_backbone.get_pcd_colors()
+            visual_snapshot = self.ovo.get_last_visual_snapshot()
+
+            rgb = None
+            ins_map = None
+            sam_map = None
+            if visual_snapshot is not None and visual_snapshot.get("frame_id") == frame_id:
+                rgb = visual_snapshot.get("rgb")
+                ins_map = visual_snapshot.get("ins_map")
+                sam_map = visual_snapshot.get("sam_map")
 
             _queue_put_dropping(
                 mpqueue,
-                [
-                    pcd.cpu().numpy().astype(np.float16),
-                    pcd_obj_ids.cpu().numpy().astype(np.int16),
-                    colors,
-                    c2w,
-                ],
+                {
+                    "type": "stream_frame",
+                    "frame_id": frame_id,
+                    "points": pcd.cpu().numpy().astype(np.float16),
+                    "obj_ids": pcd_obj_ids.cpu().numpy().astype(np.int16),
+                    "colors": colors,
+                    "c2w": c2w,
+                    "rgb": rgb,
+                    "ins_map": ins_map,
+                    "sam_map": sam_map,
+                },
             )
 
             if query_flag.value == 1:
@@ -344,12 +363,24 @@ class OVOSemMap():
         if self.stream and self.rerun_mode == "fusion":
             before_pcd, before_ids = self._capture_points_and_ids(map_data, points_dtype=np.float16, ids_dtype=np.int16)
 
-        updated_points_ins_ids = self.ovo.update_map(map_data, kfs)
+        updated_points_ins_ids, fusion_decisions = self.ovo.update_map(map_data, kfs)
 
-        # Send before/after fusion snapshot to visualizer
+        # Send before/after fusion snapshot to fusion visualizer
         if self.stream and self.rerun_mode == "fusion" and updated_points_ins_ids is not None:
             after_ids = updated_points_ins_ids.cpu().numpy().astype(np.int16)
             _queue_put_dropping(mpqueue, {"type": "fusion", "points": before_pcd, "before_ids": before_ids, "after_ids": after_ids, "frame_id": frame_id})
+
+        # Send update_map event to stream visualizer
+        if self.stream and self.rerun_mode == "stream":
+            c2w = self.slam_backbone.get_c2w(frame_id)
+            if c2w is not None:
+                _queue_put_dropping(mpqueue, {
+                    "type": "update_map",
+                    "frame_id": frame_id,
+                    "c2w": c2w.cpu().numpy().astype(np.float32),
+                    "n_fused": sum(1 for d in fusion_decisions if d["result"] == "ACCEPTED"),
+                    "decisions": fusion_decisions,
+                })
 
         # Send loop closure snapshot to visualizer
         if (self.stream and self.rerun_mode in ("loop_closure", "fusion") and getattr(self.slam_backbone, '_lc_pcd_before', None) is not None):
