@@ -112,9 +112,9 @@ class TestGetSlamToken:
         token = runner._get_slam_token()
         assert token == "GTNoise-T0p001-R0p01"
 
-    def test_orbslam3(self):
-        runner = _make_runner(slam_module="orbslam3")
-        assert runner._get_slam_token() == "ORBSLAM3"
+    def test_orbslam2(self):
+        runner = _make_runner(slam_module="orbslam2")
+        assert runner._get_slam_token() == "orbslam2"
 
     def test_vanilla(self):
         runner = _make_runner(slam_module="vanilla")
@@ -226,13 +226,13 @@ class TestConfigOverrides:
     def test_slam_module_updated_in_ovo(self, tmp_path):
         ovo_path, slam_path = self._setup_files(tmp_path)
         runner = _make_runner(
-            slam_module="orbslam3",
+            slam_module="orbslam2",
             ovo_config_path=str(ovo_path),
             slam_config_path=str(slam_path),
         )
         runner._apply_config_overrides()
         result = yaml.full_load(ovo_path.read_text())
-        assert result["slam"]["slam_module"] == "orbslam3"
+        assert result["slam"]["slam_module"] == "orbslam2"
 
     def test_fusion_method_updated_in_ovo(self, tmp_path):
         ovo_path, slam_path = self._setup_files(tmp_path)

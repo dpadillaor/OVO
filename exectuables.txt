@@ -13,6 +13,9 @@ python run_eval.py --dataset_name Replica --experiment_name Prueba_ORB_SLAM3_Las
 python visualize_trajectory.py --experiment_name global_correction_test --dataset_name Replica --scene_name office0 --show_pcds --voxel_size 0.05
 
 
+rerun --serve-grpc /home/padidavid/repos/OVO/data/output/Replica/20260415_GTJump-J1-T0p5-R5p0_CLIP_task18-jump-no-cooc/office0/rerun.rrd
+
+rerun /home/padidavid/repos/OVO/data/output/Replica/20260415_GTJump-J1-T0p5-R5p0_CLIP_task18-jump-no-cooc/office0/rerun.rrd --connect
 python visualize_trajectory.py --experiment_name 20251210_office0_GT_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
 python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p1-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image
 python visualize_trajectory.py --experiment_name 20251210_office0_GTNoise-T0p01-R0p01_CLIP_NoLoopClousure --dataset_name Replica --scene_name office0 --save_image

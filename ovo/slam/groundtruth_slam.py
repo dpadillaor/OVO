@@ -259,9 +259,12 @@ class GroundTruthSLAM(VanillaMapper):
         # Trigger Global Correction near the end of the sequence.
         # Only needed when noise or jump drift is active; without them, tracking already uses GT poses.
         # We check if we are within the last 'map_every' window to ensure we catch the final map() call.
-        if (self.noise_enabled or self.jump_drift_enabled) and self.close_loops and not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
-             self.correct_map_globally()
-             self.correction_done = True
+        if not self.correction_done and frame_id >= len(self.trajectory) - self.map_every - 1:
+            if (self.noise_enabled or self.jump_drift_enabled) and self.close_loops:
+                self.correct_map_globally()
+            else:
+                self.map_updated = True
+            self.correction_done = True
 
     def _is_new_keyframe(self, current_c2w: torch.Tensor) -> bool:
         """
