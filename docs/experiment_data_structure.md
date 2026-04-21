@@ -12,8 +12,10 @@ data/output/
 └── {Dataset}/                          # e.g. "Replica", "ScanNet"
     └── {EXPERIMENT_FOLDER}/            # one folder per experiment run
         ├── replica/
-        │   ├── statistics.txt          # aggregate metrics (all scenes combined)
-        │   ├── statistics_{scene}.txt  # per-scene metrics (one file per scene)
+        │   ├── statistics.txt          # aggregate semantic metrics (all scenes combined)
+        │   ├── statistics_{scene}.txt  # per-scene semantic metrics (one file per scene)
+        │   ├── instance_ap.txt               # aggregate instance AP (all scenes combined)
+        │   ├── instance_ap_{scene}.txt       # per-scene instance AP
         │   └── confmat.png             # confusion matrix image
         └── instance_pred/
             ├── {scene}.txt             # predicted instance list for that scene
@@ -79,6 +81,23 @@ switch, 0.3203125, 0.22631094756209752,
 ### `replica/statistics_{scene}.txt` — Per-scene metrics
 
 Identical format to `statistics.txt` but scoped to a single scene. The scene name is extracted from the filename stem: `statistics_{scene}.txt` → scene = `{scene}` (e.g. `office0`, `room1`).
+
+### `replica/instance_ap.txt` — Instance AP metrics
+
+Aggregate instance segmentation AP over all scenes. Written by `eval_instance_ap` (`--eval_instances` stage).
+
+```text
+metric, value
+AP, 0.012
+AP_50, 0.021
+AP_25, 0.038
+AP_agnostic, 0.106
+AP_agnostic_50, 0.188
+AP_agnostic_25, 0.286
+```
+
+- `AP` / `AP_50` / `AP_25`: class-aware AP at IoU thresholds [0.5:0.95], 0.5, 0.25
+- `AP_agnostic` / `AP_agnostic_50` / `AP_agnostic_25`: class-agnostic AP (ignores predicted class label)
 
 ### `instance_pred/{scene}.txt` — Predicted instances
 
@@ -171,6 +190,8 @@ Loaded by `load_reference_results(csv_path)` in `results_utils.py`. The GUI merg
 | --- | --- |
 | Aggregate stats | `data/output/{Dataset}/{EXPERIMENT}/replica/statistics.txt` |
 | Per-scene stats | `data/output/{Dataset}/{EXPERIMENT}/replica/statistics_{scene}.txt` |
+| Instance AP (aggregate) | `data/output/{Dataset}/{EXPERIMENT}/replica/instance_ap.txt` |
+| Instance AP (per-scene) | `data/output/{Dataset}/{EXPERIMENT}/replica/instance_ap_{scene}.txt` |
 | Instance predictions | `data/output/{Dataset}/{EXPERIMENT}/instance_pred/{scene}.txt` |
 | Confusion matrix | `data/output/{Dataset}/{EXPERIMENT}/replica/confmat.png` |
 | Paper baselines | `references/paper_results.csv` |
