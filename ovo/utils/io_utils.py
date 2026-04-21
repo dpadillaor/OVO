@@ -183,6 +183,36 @@ def write_instances(experiment_path: str,scene_name: str, instances_info: Dict[s
     with open(os.path.join(save_path, f"{scene_name}.txt"), "w") as f:
             f.write('\n'.join(lines_to_write))
 
+def load_instance_preds(experiment_path: str, scene_name: str) -> Dict[str, Any]:
+    pred_dir = Path(experiment_path) / "instance_pred"
+    pred_file = pred_dir / f"{scene_name}.txt"
+
+    with open(pred_file, "r") as f:
+        lines = f.read().splitlines()
+
+    masks_list, classes_list, scores_list = [], [], []
+    for line in lines:
+        parts = line.split()
+        mask_path = pred_dir / parts[0]
+        with open(mask_path, "r") as f:
+            rle = json.load(f)
+        masks_list.append(rle_decode(rle))
+        classes_list.append(int(parts[1]))
+        scores_list.append(float(parts[2]))
+
+    if masks_list:
+        return {
+            "pred_masks": np.stack(masks_list, axis=1),
+            "pred_classes": np.array(classes_list),
+            "pred_scores": np.array(scores_list),
+        }
+    return {
+        "pred_masks": np.zeros((0, 0)),
+        "pred_classes": np.array([]),
+        "pred_scores": np.array([]),
+    }
+
+
 def write_labels(output_file: str, pcd_labels: np.ndarray) -> None:
     n_vtx = pcd_labels.shape[0]
     labels_list = [str(int(pcd_labels[i].item())) for i in range(n_vtx)]

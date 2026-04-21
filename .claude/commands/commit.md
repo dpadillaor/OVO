@@ -2,7 +2,9 @@ Analyze the current git state and create one or more commits to leave the histor
 
 Follow these steps:
 
-1. **Inspect the working tree**: Run `git status` and `git diff` (including untracked files) to see everything that has changed.
+1. **Run the tests first**: Run `python -m pytest tests/ -q`. If any tests fail, stop and report the failures — do not commit until all tests pass.
+
+2. **Inspect the working tree**: Run `git status` and `git diff` (including untracked files) to see everything that has changed.
 
 2. **Decide how many commits are needed**: Group changes by logical concern. A single commit is fine when all changes belong to the same feature or fix. Split into multiple commits when changes are clearly independent (e.g. a bug fix + a new feature, or code changes + documentation). Err on the side of fewer commits unless separation genuinely improves clarity.
 
@@ -16,3 +18,4 @@ Follow these steps:
 4. **Stage and commit**: For each commit, stage only the relevant files explicitly (never `git add -A` blindly) and create the commit.
 
 5. **Confirm**: After all commits are done, run `git log --oneline -5` and show the result to the user.
+
