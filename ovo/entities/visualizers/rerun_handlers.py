@@ -145,11 +145,18 @@ class StreamRenderer(BaseRerunRenderer):
         self.cmap = get_instance_cmap()
         self.step = 0
         self.trajectory = []
+        self._known_instance_ids: dict[int, set[int]] = {}  # keyed by id(recording) or -1 for default
 
     def _log_instances_3d(self, points: np.ndarray, instance_ids: np.ndarray, *, recording=None, static: bool = False):
         radii = np.full(len(points), 0.008, dtype=np.float32)
         kwargs = {"recording": recording} if recording is not None else {}
-        unique_ids = np.unique(instance_ids)
+        rec_key = id(recording) if recording is not None else -1
+        unique_ids = set(int(uid) for uid in np.unique(instance_ids))
+
+        for uid in self._known_instance_ids.get(rec_key, set()) - unique_ids:
+            if uid >= 0:
+                rr.log(f"world/instances/obj_{uid}", rr.Clear(recursive=False), **kwargs)
+
         for uid in unique_ids:
             mask = instance_ids == uid
             pts = points[mask]
@@ -158,8 +165,10 @@ class StreamRenderer(BaseRerunRenderer):
                 colors = np.full((len(pts), 3), 60, dtype=np.uint8)
             else:
                 path = f"world/instances/obj_{uid}"
-                colors = np.tile(self.cmap[int(uid) % len(self.cmap)], (len(pts), 1)).astype(np.uint8)
+                colors = np.tile(self.cmap[uid % len(self.cmap)], (len(pts), 1)).astype(np.uint8)
             rr.log(path, rr.Points3D(pts, colors=colors, radii=radii[:len(pts)]), static=static, **kwargs)
+
+        self._known_instance_ids[rec_key] = unique_ids
 
     def build_blueprint(self):
         return rrb.Blueprint(
