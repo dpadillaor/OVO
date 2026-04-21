@@ -35,7 +35,7 @@ class TestSelectVisualizerTarget:
 class TestResolveRerunVisualMode:
 
     def test_uses_explicit_mode_when_valid(self):
-        assert resolve_rerun_visual_mode("connect", legacy_show_stream=True) == "connect"
+        assert resolve_rerun_visual_mode("serve", legacy_show_stream=True) == "serve"
         assert resolve_rerun_visual_mode("off", legacy_show_stream=True) == "off"
 
     def test_falls_back_to_legacy_show_stream_true(self):
