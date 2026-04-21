@@ -239,6 +239,43 @@ class OVOSemMap():
         ids_np = ids.cpu().numpy().astype(ids_dtype)
         return points_np, ids_np
 
+    def _send_stream_frame(self, frame_id: int, mpqueue) -> None:
+        """Capture and send a stream frame snapshot to the visualizer."""
+        if not self.stream or self.rerun_mode != "stream":
+            return
+
+        pcd, _, pcd_obj_ids = self.slam_backbone.get_map()
+        c2w = self.slam_backbone.get_c2w(frame_id)
+        if c2w is None:
+            return
+        
+        c2w_np = c2w.cpu().numpy().astype(np.float16)
+        colors = self.slam_backbone.get_pcd_colors()
+        visual_snapshot = self.ovo.get_last_visual_snapshot()
+
+        rgb = None
+        ins_map = None
+        sam_map = None
+        if visual_snapshot is not None and visual_snapshot.get("frame_id") == frame_id:
+            rgb = visual_snapshot.get("rgb")
+            ins_map = visual_snapshot.get("ins_map")
+            sam_map = visual_snapshot.get("sam_map")
+
+        _queue_put_dropping(
+            mpqueue,
+            {
+                "type": "stream_frame",
+                "frame_id": frame_id,
+                "points": pcd.cpu().numpy().astype(np.float16),
+                "obj_ids": pcd_obj_ids.cpu().numpy().astype(np.int16),
+                "colors": colors,
+                "c2w": c2w_np,
+                "rgb": rgb,
+                "ins_map": ins_map,
+                "sam_map": sam_map,
+            },
+        )
+
     def _run_semantic_step(
         self, frame_id: int, frame_data, estimated_c2w: torch.Tensor, mpqueue, query_flag, query_pipe
     ) -> float:
@@ -286,38 +323,9 @@ class OVOSemMap():
 
         t_sem = time.time() - t_sem_i
 
+        self._send_stream_frame(frame_id, mpqueue)
+
         if self.stream and self.rerun_mode == "stream":
-            pcd, _, pcd_obj_ids = self.slam_backbone.get_map()
-            c2w = self.slam_backbone.get_c2w(frame_id)
-            if c2w is None:
-                return t_sem
-            c2w = c2w.cpu().numpy().astype(np.float16)
-            colors = self.slam_backbone.get_pcd_colors()
-            visual_snapshot = self.ovo.get_last_visual_snapshot()
-
-            rgb = None
-            ins_map = None
-            sam_map = None
-            if visual_snapshot is not None and visual_snapshot.get("frame_id") == frame_id:
-                rgb = visual_snapshot.get("rgb")
-                ins_map = visual_snapshot.get("ins_map")
-                sam_map = visual_snapshot.get("sam_map")
-
-            _queue_put_dropping(
-                mpqueue,
-                {
-                    "type": "stream_frame",
-                    "frame_id": frame_id,
-                    "points": pcd.cpu().numpy().astype(np.float16),
-                    "obj_ids": pcd_obj_ids.cpu().numpy().astype(np.int16),
-                    "colors": colors,
-                    "c2w": c2w,
-                    "rgb": rgb,
-                    "ins_map": ins_map,
-                    "sam_map": sam_map,
-                },
-            )
-
             if query_flag.value == 1:
                 query = query_pipe.recv()
                 self.ovo.complete_semantic_info()
@@ -359,16 +367,15 @@ class OVOSemMap():
         map_data = self.slam_backbone.get_map()
         kfs = self.slam_backbone.get_kfs()
 
-        # Capture before-fusion state for visualization
-        if self.stream and self.rerun_mode == "fusion":
-            before_pcd, before_ids = self._capture_points_and_ids(map_data, points_dtype=np.float16, ids_dtype=np.int16)
+        # Send "before fusion" snapshot to stream visualizer
+        self._send_stream_frame(frame_id, mpqueue)
 
         updated_points_ins_ids, fusion_decisions = self.ovo.update_map(map_data, kfs)
 
-        # Send before/after fusion snapshot to fusion visualizer
-        if self.stream and self.rerun_mode == "fusion" and updated_points_ins_ids is not None:
-            after_ids = updated_points_ins_ids.cpu().numpy().astype(np.int16)
-            _queue_put_dropping(mpqueue, {"type": "fusion", "points": before_pcd, "before_ids": before_ids, "after_ids": after_ids, "frame_id": frame_id})
+        if updated_points_ins_ids is not None:
+            self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+            # Send "after fusion" snapshot to stream visualizer
+            self._send_stream_frame(frame_id, mpqueue)
 
         # Send update_map event to stream visualizer
         if self.stream and self.rerun_mode == "stream":
@@ -404,8 +411,6 @@ class OVOSemMap():
             self.slam_backbone._lc_pcd_before = None
             self.slam_backbone._lc_traj_before = None
 
-        if updated_points_ins_ids is not None:
-            self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
         self.slam_backbone.map_updated = False
         torch.cuda.synchronize()
         t_lc = time.time() - t_lc_i

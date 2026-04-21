@@ -1,0 +1,18 @@
+default_dataset: Replica
+
+experiments:
+  - label: vis-serve-test
+    scenes_id: office0
+    stages: [run]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: true
+      semantic:
+        fusion_method: clip
+      vis:
+        stream: true
+        type: "rerun"
+        rerun_mode: stream
+        rerun_visual_mode: "off"
+        save_rrd: true
