@@ -23,6 +23,7 @@ from ovo.utils.results_utils import (
     get_available_datasets,
     get_available_dates,
     get_available_fusions,
+    get_available_jump_counts,
     get_available_methods,
     get_available_slam_configs,
     get_available_noise_levels,
@@ -32,9 +33,13 @@ from ovo.utils.results_utils import (
     load_scene_results,
     plot_bar_metrics,
     plot_class_heatmap,
+    plot_compare_scene_bars,
     plot_confusion_matrix,
+    plot_delta_heatmap,
+    plot_fusion_compare,
     plot_instance_counts,
     plot_line_metrics,
+    plot_radar_chart,
     save_figure,
 )
 
@@ -243,12 +248,13 @@ df_scene_class_filtered = (
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_overview, tab_noise, tab_class, tab_confmat, tab_scene = st.tabs([
+tab_overview, tab_noise, tab_class, tab_confmat, tab_scene, tab_compare = st.tabs([
     "📊 Overview",
     "📈 Noise Analysis",
     "🎨 Per-class",
     "🗂️ Conf. Matrix",
     "🗺️ By Scene",
+    "🔬 Compare",
 ])
 
 # ── Overview ────────────────────────────────────────────────────────────────
@@ -289,26 +295,64 @@ with tab_overview:
 # ── Noise Analysis ──────────────────────────────────────────────────────────
 
 with tab_noise:
-    _show_table(df_filtered, key="noise_table", label="📋 Experiment Table")
+    st.subheader("Drift Analysis")
 
-    st.subheader("Metrics vs Translational Noise")
     col1, col2 = st.columns([1, 3])
     with col1:
+        noise_x = st.radio(
+            "X axis",
+            options=["Trans_Noise", "Jump_Count"],
+            key="noise_x",
+        )
+        _noise_metric_opts = [
+            m for m in ["mIoU", "mAcc", "AP_agnostic", "AP_agnostic_50"]
+            if m in df_filtered.columns or (
+                not df_scene_filtered.empty and m in df_scene_filtered.columns
+            )
+        ] or ["mIoU", "mAcc"]
         noise_metrics = st.multiselect(
-            "Metrics to display",
-            options=["mIoU", "mAcc"],
-            default=["mIoU", "mAcc"],
+            "Metrics",
+            options=_noise_metric_opts,
+            default=[m for m in ["mIoU", "mAcc"] if m in _noise_metric_opts],
             key="noise_metrics",
         )
+        noise_per_scene = st.checkbox("Per-scene lines", key="noise_per_scene")
+        noise_hue = st.radio(
+            "Color by",
+            options=["Method", "SLAM_Config", "Fusion", "Label"],
+            key="noise_hue",
+        )
+
     with col2:
-        if df_filtered.empty:
-            st.warning("No experiments match the current filters.")
-        elif not noise_metrics:
+        if not noise_metrics:
             st.warning("Select at least one metric.")
+        elif noise_per_scene:
+            if df_scene_filtered.empty:
+                st.warning("No per-scene data. Re-run experiments to generate statistics_{scene}.txt files.")
+            else:
+                _noise_df = df_scene_filtered.copy()
+                if noise_x == "Jump_Count" and _noise_df["Jump_Count"].nunique() < 2:
+                    st.info("Only one Jump_Count value in data — line will be a single point per scene.")
+                fig = plot_line_metrics(
+                    _noise_df, metrics=noise_metrics, x=noise_x,
+                    hue=noise_hue, style="Scene",
+                )
+                st.pyplot(fig, width='stretch')
+                _save_expander(fig, "noise_line_scene.png", "noise_sc_save")
         else:
-            fig = plot_line_metrics(df_filtered, metrics=noise_metrics)
-            st.pyplot(fig, width='stretch')
-            _save_expander(fig, "noise_line.png", "noise_save")
+            if df_filtered.empty:
+                st.warning("No experiments match the current filters.")
+            else:
+                _noise_df = df_filtered.copy()
+                if noise_x == "Jump_Count" and _noise_df["Jump_Count"].nunique() < 2:
+                    st.info("Only one Jump_Count value in data — line will be a single point.")
+                fig = plot_line_metrics(
+                    _noise_df, metrics=noise_metrics, x=noise_x, hue=noise_hue,
+                )
+                st.pyplot(fig, width='stretch')
+                _save_expander(fig, "noise_line.png", "noise_save")
+
+    _show_table(df_filtered, key="noise_table", label="📋 Experiment Table")
 
 # ── Per-class ────────────────────────────────────────────────────────────────
 
@@ -418,3 +462,239 @@ with tab_scene:
                 fig = plot_class_heatmap(df_scene_class_filtered, value=sc_cls_value)
                 st.pyplot(fig, width='stretch')
                 _save_expander(fig, "scene_class_heatmap.png", "sc_cls_save")
+
+# ── Compare ──────────────────────────────────────────────────────────────────
+
+with tab_compare:
+    st.caption(
+        "Pick experiments directly — independent of sidebar filters. "
+        "Baseline is the reference; all deltas are computed against it."
+    )
+
+    _all_exp = st.session_state["df_exp"]
+    _exp_label_map = {
+        row["Experiment_ID"]: (
+            f"{row['Label']}  ·  "
+            f"{row['Date'].strftime('%d/%m/%y') if hasattr(row['Date'], 'strftime') else str(row['Date'])[:10]}  "
+            f"[{row['SLAM_Config']}]"
+        )
+        for _, row in _all_exp.drop_duplicates("Experiment_ID").iterrows()
+    }
+    _exp_id_list = sorted(_exp_label_map.keys())
+
+    col_bl, col_cmp = st.columns(2)
+    with col_bl:
+        cmp_baseline = st.selectbox(
+            "Baseline experiment",
+            options=_exp_id_list,
+            format_func=lambda x: _exp_label_map.get(x, x),
+            key="cmp_baseline",
+        )
+    with col_cmp:
+        cmp_compare = st.multiselect(
+            "Compare against",
+            options=[x for x in _exp_id_list if x != cmp_baseline],
+            format_func=lambda x: _exp_label_map.get(x, x),
+            key="cmp_compare",
+        )
+
+    if not cmp_compare:
+        st.info("Select at least one experiment to compare.")
+    else:
+        _cmp_all_ids = [cmp_baseline] + cmp_compare
+        _cmp_df     = _all_exp[_all_exp["Experiment_ID"].isin(_cmp_all_ids)].copy()
+        _cmp_scene  = (
+            st.session_state["df_scene"][
+                st.session_state["df_scene"]["Experiment_ID"].isin(_cmp_all_ids)
+            ].copy()
+            if "df_scene" in st.session_state and not st.session_state["df_scene"].empty
+            else pd.DataFrame()
+        )
+
+        # ── Summary table ────────────────────────────────────────────────────
+        st.subheader("Summary")
+        _sum_metrics = ["mIoU", "mAcc", "AP_agnostic", "AP_agnostic_50",
+                        "Num_Instances", "Fusion_Accept_Rate"]
+        _sum_cols = ["Experiment_ID", "Label", "SLAM_Config"] + [
+            m for m in _sum_metrics if m in _cmp_df.columns
+        ]
+        _sum_table = _cmp_df[_sum_cols].set_index("Experiment_ID")
+
+        _baseline_row = _sum_table.loc[cmp_baseline] if cmp_baseline in _sum_table.index else None
+        _numeric_metrics = [m for m in _sum_metrics if m in _sum_table.columns]
+
+        if _baseline_row is not None:
+            delta_rows = {}
+            for exp_id in cmp_compare:
+                if exp_id not in _sum_table.index:
+                    continue
+                row = _sum_table.loc[exp_id]
+                deltas = {}
+                for m in _numeric_metrics:
+                    try:
+                        d = float(row[m]) - float(_baseline_row[m])
+                        arrow = "↑" if d > 0 else ("↓" if d < 0 else "=")
+                        deltas[f"Δ {m}"] = f"{arrow} {d:+.4f}"
+                    except (TypeError, ValueError):
+                        deltas[f"Δ {m}"] = "—"
+                delta_rows[exp_id] = deltas
+            _delta_df = pd.DataFrame(delta_rows).T
+            _display = pd.concat([_sum_table, _delta_df], axis=1).fillna("—")
+            with st.expander("📋 Summary table", expanded=True):
+                st.dataframe(_display, use_container_width=True)
+
+        # ── Radar chart ──────────────────────────────────────────────────────
+        st.subheader("Radar Chart")
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            _radar_metrics_opts = [m for m in
+                ["mIoU", "mAcc", "AP_agnostic", "Num_Instances", "Fusion_Accept_Rate"]
+                if m in _cmp_df.columns]
+            _radar_sel = st.multiselect(
+                "Radar axes",
+                options=_radar_metrics_opts,
+                default=_radar_metrics_opts,
+                key="cmp_radar_axes",
+            )
+        with col2:
+            if _radar_sel:
+                fig = plot_radar_chart(_cmp_df, _cmp_all_ids, metrics=_radar_sel)
+                st.pyplot(fig, width='stretch')
+                _save_expander(fig, "compare_radar.png", "cmp_radar_save")
+
+        # ── Scene-by-scene bars ──────────────────────────────────────────────
+        st.subheader("Scene-by-Scene")
+        if _cmp_scene.empty:
+            st.info("No per-scene data available for selected experiments.")
+        else:
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                _scene_metric_opts = [m for m in
+                    ["mIoU", "mAcc", "AP_agnostic", "Num_Instances"]
+                    if m in _cmp_scene.columns]
+                _scene_metric_sel = st.multiselect(
+                    "Metrics",
+                    options=_scene_metric_opts,
+                    default=_scene_metric_opts[:3],
+                    key="cmp_scene_metrics",
+                )
+            with col2:
+                if _scene_metric_sel:
+                    fig = plot_compare_scene_bars(
+                        _cmp_scene, _cmp_all_ids, metrics=_scene_metric_sel
+                    )
+                    st.pyplot(fig, width='stretch')
+                    _save_expander(fig, "compare_scene_bars.png", "cmp_scene_save")
+
+        # ── Delta heatmap ────────────────────────────────────────────────────
+        st.subheader("Delta Heatmap (vs Baseline)")
+        if _cmp_scene.empty:
+            st.info("No per-scene data available.")
+        else:
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                _delta_metric_opts = [m for m in
+                    ["mIoU", "mAcc", "AP_agnostic", "AP_agnostic_50", "AP_agnostic_25"]
+                    if m in _cmp_scene.columns]
+                _delta_metric_sel = st.multiselect(
+                    "Metrics",
+                    options=_delta_metric_opts,
+                    default=_delta_metric_opts[:3],
+                    key="cmp_delta_metrics",
+                )
+            with col2:
+                if _delta_metric_sel and cmp_compare:
+                    fig = plot_delta_heatmap(
+                        _cmp_scene, cmp_baseline, cmp_compare,
+                        metrics=_delta_metric_sel,
+                    )
+                    st.pyplot(fig, width='stretch')
+                    _save_expander(fig, "compare_delta.png", "cmp_delta_save")
+
+        # ── Scene summary table ──────────────────────────────────────────────
+        st.subheader("Scene Summary")
+        if not _cmp_scene.empty:
+            _sc_sum_metrics = [m for m in
+                ["mIoU", "mAcc", "AP_agnostic", "AP_agnostic_50", "Num_Instances", "Fusion_Accept_Rate"]
+                if m in _cmp_scene.columns]
+            _sc_base = _cmp_scene[_cmp_scene["Experiment_ID"] == cmp_baseline].set_index("Scene")
+            _sc_table_rows = []
+            for _, row in _cmp_scene.sort_values(["Scene", "Experiment_ID"]).iterrows():
+                r = {"Scene": row["Scene"], "Experiment": row["Label"]}
+                for m in _sc_sum_metrics:
+                    r[m] = round(float(row[m]), 4) if pd.notna(row.get(m)) else float("nan")
+                    if row["Experiment_ID"] != cmp_baseline and row["Scene"] in _sc_base.index:
+                        try:
+                            d = float(row[m]) - float(_sc_base.loc[row["Scene"], m])
+                            arrow = "↑" if d > 0 else ("↓" if d < 0 else "=")
+                            r[f"Δ {m}"] = f"{arrow}{d:+.4f}"
+                        except (TypeError, ValueError, KeyError):
+                            r[f"Δ {m}"] = "—"
+                _sc_table_rows.append(r)
+            _sc_display = pd.DataFrame(_sc_table_rows)
+            with st.expander("📋 Scene table (all experiments)", expanded=False):
+                st.dataframe(_sc_display, use_container_width=True)
+
+        # ── Fusion behaviour ─────────────────────────────────────────────────
+        st.subheader("Fusion Behaviour")
+        if _cmp_scene.empty:
+            st.info("No per-scene data available.")
+        elif "Fusion_Accept_Rate" not in _cmp_scene.columns or _cmp_scene["Fusion_Total"].sum() == 0:
+            st.info("No fusion decision data found for selected experiments.")
+        else:
+            fig = plot_fusion_compare(_cmp_scene, _cmp_all_ids)
+            st.pyplot(fig, width='stretch')
+            _save_expander(fig, "compare_fusion.png", "cmp_fusion_save")
+
+        # ── Scene deep-dive ──────────────────────────────────────────────────
+        st.subheader("Scene Deep-Dive")
+        if _cmp_scene.empty:
+            st.info("No per-scene data available.")
+        else:
+            _cmp_scene_class = (
+                st.session_state["df_scene_class"][
+                    st.session_state["df_scene_class"]["Experiment_ID"].isin(_cmp_all_ids)
+                ].copy()
+                if "df_scene_class" in st.session_state
+                and not st.session_state["df_scene_class"].empty
+                else pd.DataFrame()
+            )
+            _dive_scenes = sorted(_cmp_scene["Scene"].dropna().unique().tolist())
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                dive_scene = st.selectbox(
+                    "Scene", options=_dive_scenes, key="cmp_dive_scene"
+                )
+                dive_cls_value = st.radio(
+                    "Value", ["IoU", "Acc"], key="cmp_dive_cls_value"
+                )
+            with col2:
+                _dive_sc_row = _cmp_scene[_cmp_scene["Scene"] == dive_scene]
+                if not _dive_sc_row.empty:
+                    _dive_cols = ["Experiment_ID", "Label"] + [
+                        m for m in _sc_sum_metrics if m in _dive_sc_row.columns
+                    ]
+                    _dive_metric_table = _dive_sc_row[_dive_cols].set_index("Experiment_ID")
+                    st.dataframe(_dive_metric_table, use_container_width=True)
+
+            if not _cmp_scene_class.empty:
+                _dive_cls = _cmp_scene_class[_cmp_scene_class["Scene"] == dive_scene]
+                if _dive_cls.empty:
+                    st.info(f"No per-class data for scene **{dive_scene}**.")
+                else:
+                    st.markdown(f"**Per-class {dive_cls_value} — {dive_scene}**")
+                    fig = plot_class_heatmap(_dive_cls, value=dive_cls_value)
+                    st.pyplot(fig, width='stretch')
+                    _save_expander(fig, f"compare_cls_{dive_scene}.png", "cmp_dive_cls_save")
+
+            # Fusion breakdown for this scene only
+            _dive_fusion = _cmp_scene[_cmp_scene["Scene"] == dive_scene]
+            if (
+                not _dive_fusion.empty
+                and "Fusion_Total" in _dive_fusion.columns
+                and _dive_fusion["Fusion_Total"].sum() > 0
+            ):
+                st.markdown(f"**Fusion decisions — {dive_scene}**")
+                fig = plot_fusion_compare(_dive_fusion, _cmp_all_ids)
+                st.pyplot(fig, width='stretch')
+                _save_expander(fig, f"compare_fusion_{dive_scene}.png", "cmp_dive_fusion_save")
