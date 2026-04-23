@@ -1,15 +1,24 @@
 # OVO Experiments Manifest — Full coverage
 #
 # Dimensions covered:
-#   - fusion_method : clip | pe-core | pe-spatial | sam3
-#   - slam_module   : groundtruth | orbslam3
-#   - noise         : none | t=0.001 | t=0.005 | t=0.01 | t=0.05 (r=0.01 fixed)
-#                     + rotation-only (t=0, r=0.05)
-#                     + translation-only (t=0.01, r=0)
-#   - close_loops   : True | False
-#   - scenes        : single scene | list of scenes | scenes_list file | (all from dataset config)
-#   - dataset       : Replica | ScanNet
-#   - stages        : all | run-only | segment+eval | eval-only
+#   - fusion_method      : clip | pe-core | pe-spatial | sam3
+#   - slam_module        : groundtruth | orbslam3
+#   - noise              : none | t=0.001 | t=0.005 | t=0.01 | t=0.05 (r=0.01 fixed)
+#                          + rotation-only (t=0, r=0.05)
+#                          + translation-only (t=0.01, r=0)
+#   - close_loops        : True | False
+#   - scenes             : single scene | list of scenes | scenes_list file | (all from dataset config)
+#   - dataset            : Replica | ScanNet
+#   - stages             : all | run-only | segment+eval | eval-only
+#   - rerun_visual_mode  : off | spawn | serve
+#                          off   → no live visualization
+#                          spawn → launches a local Rerun viewer (default when show_stream=true)
+#                          serve → OVO serves on port 9877; connect with rerun viewer from your machine
+#
+# vis block example (under ovo_config):
+#   ovo_config:
+#     vis:
+#       rerun_visual_mode: serve    # or off / spawn
 #
 # Use: python scripts/run_experiments_batch.py --preview
 
@@ -576,3 +585,33 @@ experiments:
         close_loops: True
       semantic:
         fusion_method: clip
+
+  # ===========================================================================
+  # SECTION 10 — Visualization mode variants
+  # ===========================================================================
+
+  # No visualization (batch/headless runs)
+  - label: vis-off
+    scenes_id: office0
+    stages: [run]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+      vis:
+        rerun_visual_mode: off
+
+  # Serve mode — OVO listens on port 9877; open rerun viewer and connect to it
+  - label: vis-serve
+    scenes_id: office0
+    stages: [run]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: True
+      semantic:
+        fusion_method: clip
+      vis:
+        rerun_visual_mode: serve

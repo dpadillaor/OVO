@@ -84,7 +84,7 @@ class TestParseExperimentName:
         assert result["SLAM_Config"] == "GTNoise-T0p001-R0p01"
         assert result["Fusion"] == "CLIP"
         assert result["Label"] == "Original"
-        assert result["Method"] == "CLIP_Original"
+        assert result["Method"] == "GTNoise-T0p001-R0p01_CLIP_Original"
 
     def test_label_with_underscores(self):
         """Labels spanning multiple underscore-separated parts must be joined."""
@@ -94,7 +94,7 @@ class TestParseExperimentName:
         assert result is not None
         assert result["Fusion"] == "PE"
         assert result["Label"] == "PE-Spatial-Fusion_Rerun"
-        assert result["Method"] == "PE_PE-Spatial-Fusion_Rerun"
+        assert result["Method"] == "GTNoise-T0p001-R0p01_PE_PE-Spatial-Fusion_Rerun"
 
     def test_noise_extraction_small(self):
         result = parse_experiment_name("20260101_GTNoise-T0p001-R0p01_CLIP_Test")
@@ -278,9 +278,9 @@ class TestLoadExperiments:
                 ["wall, 0.5, 0.4, \n"],
                 10,
             )
-        df_exp, _ = load_experiments(tmp_path, method_filter=["CLIP_TestA"])
+        df_exp, _ = load_experiments(tmp_path, method_filter=["GTNoise-T0p01-R0p01_CLIP_TestA"])
         assert len(df_exp) == 1
-        assert df_exp.iloc[0]["Method"] == "CLIP_TestA"
+        assert df_exp.iloc[0]["Method"] == "GTNoise-T0p01-R0p01_CLIP_TestA"
 
     def test_empty_dir_returns_empty_dataframes(self, tmp_path):
         df_exp, df_class = load_experiments(tmp_path)

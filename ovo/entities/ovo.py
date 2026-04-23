@@ -70,6 +70,7 @@ class OVO:
         self.keyframes_queue = deque([])
         self.objects=dict()
         self._time_cache = []
+        self._last_visual_snapshot = None
         
         self.next_ins_id = 0
         self.kf_id = 0
@@ -199,6 +200,7 @@ class OVO:
             - points_ins_ids (torch.Tensor): updated ids of 3D instances associated to each 3d point after current keyframe segmentation.
         """
         frame_id, image = frame_data[:2]
+        self._last_visual_snapshot = None
 
         seg_maps, binary_maps = self._get_masks(image, frame_id)
         if len(seg_maps) == 0:
@@ -207,6 +209,19 @@ class OVO:
 
         last_id = self.next_ins_id
         matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids = self._match_and_track_instances(frame_data[1:], map_data, c2w, seg_maps, binary_maps)
+
+        # Keep lightweight visual data aligned with the current segmented frame.
+        ins_map = np.full(seg_maps.shape, -1, dtype=np.int32)
+        for idx, ins_id in enumerate(matched_ins_ids):
+            mask_np = binary_maps[idx].detach().cpu().numpy().astype(bool, copy=False)
+            ins_map[mask_np] = int(ins_id)
+
+        self._last_visual_snapshot = {
+            "frame_id": int(frame_id),
+            "rgb": np.asarray(image).copy(),
+            "ins_map": ins_map,
+            "sam_map": seg_maps.cpu().numpy().astype(np.int16),
+        }
             
         # Save keyframe information
         self.keyframes_queue.append([matched_ins_ids, binary_maps, image, self.kf_id])
@@ -227,6 +242,10 @@ class OVO:
             self._time_cache = []
 
         return updated_ponts_ins_ids
+
+    def get_last_visual_snapshot(self) -> Dict[str, Any] | None:
+        """Return latest segmented frame visual data for external stream consumers."""
+        return self._last_visual_snapshot
     
     @profil
     def _get_masks(self, image: np.ndarray, frame_id: int):
@@ -487,13 +506,13 @@ class OVO:
         objects_to_del = []
         self._remove_missing_instances(points_ins_ids, objects_list, objects_to_del)
 
-        # 2. Fuse 3D instances that fulfill a condition. 
-        new_objects, fused_objects, points_ins_ids = self._fuse_overlapping_instances(
+        # 2. Fuse 3D instances that fulfill a condition.
+        new_objects, fused_objects, points_ins_ids, fusion_decisions = self._fuse_overlapping_instances(
             objects_list, points_3d, map_data
         )
 
         print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
-        
+
         # 3. Updated saved info
         self._update_descriptors_after_fusion(fused_objects)
 
@@ -507,7 +526,7 @@ class OVO:
         if self.pe_generator is not None and self.fusion_encoder is None:
             self.update_objects_pe()
 
-        return  points_ins_ids 
+        return points_ins_ids, fusion_decisions
 
     def _fuse_overlapping_instances(
         self,
@@ -544,8 +563,9 @@ class OVO:
                     instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, map_data)
                     fused_objects[instance2.id] = instance1.id
             objects[instance1.id] = instance1
-            
-        return objects, fused_objects, points_ins_ids
+
+        decisions = self.fusion_strategy.pop_decisions()
+        return objects, fused_objects, points_ins_ids, decisions
 
     def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> None:
         """

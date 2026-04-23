@@ -145,7 +145,7 @@ def main(args):
     else:
         scenes = args.scenes
 
-    if len(scenes) == 0 or args.segment or args.eval:
+    if len(scenes) == 0 or args.segment or args.eval or args.eval_instances:
         path = Path("data/working/configs/") / args.dataset_name / args.dataset_info_file
         with open(path, 'r') as f:
             dataset_info = yaml.full_load(f)
@@ -174,6 +174,10 @@ def main(args):
         else:
             gt_path = Path(input_path).parent / "semantic_gt"
         eval_utils.eval_semantics(experiment_path / dataset_info["dataset"], gt_path, scenes, dataset_info, ignore_background=args.ignore_background)
+
+    if args.eval_instances:
+        instance_gt_path = Path(input_path).parent / "instance_gt"
+        eval_utils.eval_instance_ap(experiment_path, scenes, args.dataset_name, instance_gt_path, output_path=experiment_path / dataset_info["dataset"])
         
 
 if __name__ == "__main__":
@@ -188,5 +192,6 @@ if __name__ == "__main__":
     parser.add_argument('--segment', action='store_true', help="If set, use the reconstructed scene to segment the gt point-cloud, after running OVO.")
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--ignore_background', action='store_true',help="If set, does not use background ids from eval_info to compute metrics.")
+    parser.add_argument('--eval_instances', action='store_true', help="If set, compute instance AP (class-aware and class-agnostic) using masks from the segment step.")
     args = parser.parse_args()
     main(args)

@@ -7,8 +7,10 @@ import matplotlib.pyplot as plt
 import seaborn as sn # seaborn is changing matplotlib configuration to automatically open graphs without calling plt.imshow()
 import pandas as pd
 import numpy as np
-import torch 
+import torch
 import sys
+
+from ovo.utils import io_utils
 
 def match_labels_to_vtx(points_3d_labels: torch.Tensor, points_3d: torch.Tensor, mesh_vtx: torch.Tensor, filter_unasigned: bool = True, tree: str ="kd", verbose=False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # assume points_3d and mesh_vtx in the same reference frame
@@ -242,6 +244,64 @@ def eval_semantics(output_path: str, gt_path: str, scenes: List[str], dataset_in
         return metrics, confusion
     return np.mean(iou_values[iou_valid_mask]), confusion
      
+
+def eval_instance_ap(experiment_path: str, scenes: List[str], dataset_name: str, gt_path: str, output_path: str = None, verbose: bool = True) -> Dict[str, Any]:
+    if dataset_name.lower() == "replica":
+        from ovo.utils import replica_ins as dataset_module
+    elif dataset_name.lower() in ("scannet", "scannet200"):
+        from ovo.utils import scannet200_ins as dataset_module
+    else:
+        raise NotImplementedError(f"Instance eval not implemented for dataset: {dataset_name}")
+
+    from ovo.utils import ins_eval_utils
+
+    predictions = {}
+    for scene in scenes:
+        predictions[scene] = io_utils.load_instance_preds(experiment_path, scene)
+
+    metrics_aware = ins_eval_utils.evaluate(predictions, dataset_module, gt_path=gt_path, class_agnostic=False)
+    metrics_agnostic = ins_eval_utils.evaluate(predictions, dataset_module, gt_path=gt_path, class_agnostic=True)
+
+    metrics = {
+        "AP": round(metrics_aware.get("AP", float("nan")), 3),
+        "AP_50": round(metrics_aware.get("AP_50", float("nan")), 3),
+        "AP_25": round(metrics_aware.get("AP_25", float("nan")), 3),
+        "AP_agnostic": round(metrics_agnostic.get("AP", float("nan")), 3),
+        "AP_agnostic_50": round(metrics_agnostic.get("AP_50", float("nan")), 3),
+        "AP_agnostic_25": round(metrics_agnostic.get("AP_25", float("nan")), 3),
+    }
+
+    if verbose:
+        print(f"\nInstance AP (class-aware):    AP={metrics['AP']:.3f}  AP50={metrics['AP_50']:.3f}  AP25={metrics['AP_25']:.3f}")
+        print(f"Instance AP (class-agnostic): AP={metrics['AP_agnostic']:.3f}  AP50={metrics['AP_agnostic_50']:.3f}  AP25={metrics['AP_agnostic_25']:.3f}\n")
+
+    if output_path is not None:
+        out = Path(output_path)
+        out.mkdir(parents=True, exist_ok=True)
+        with open(out / "instance_ap.txt", "w") as f:
+            f.write("metric, value\n")
+            for k, v in metrics.items():
+                f.write(f"{k}, {v}\n")
+
+        for scene in scenes:
+            scene_pred = {scene: predictions[scene]}
+            s_aware = ins_eval_utils.evaluate(scene_pred, dataset_module, gt_path=gt_path, class_agnostic=False)
+            s_agnostic = ins_eval_utils.evaluate(scene_pred, dataset_module, gt_path=gt_path, class_agnostic=True)
+            scene_metrics = {
+                "AP": round(s_aware.get("AP", float("nan")), 3),
+                "AP_50": round(s_aware.get("AP_50", float("nan")), 3),
+                "AP_25": round(s_aware.get("AP_25", float("nan")), 3),
+                "AP_agnostic": round(s_agnostic.get("AP", float("nan")), 3),
+                "AP_agnostic_50": round(s_agnostic.get("AP_50", float("nan")), 3),
+                "AP_agnostic_25": round(s_agnostic.get("AP_25", float("nan")), 3),
+            }
+            with open(out / f"instance_ap_{scene}.txt", "w") as f:
+                f.write("metric, value\n")
+                for k, v in scene_metrics.items():
+                    f.write(f"{k}, {v}\n")
+
+    return metrics
+
 
 def eval_scannetpp_semantic(cfg: Dict[str, Any], top_k: List[int] = [1], verbose: bool =True):
     # Import ScanNet++ path
