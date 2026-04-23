@@ -76,9 +76,17 @@ class ExperimentRunner:
         """
         match self.slam_module:
             case "groundtruth":
+                if self.experiment.slam_config.noise.get("jump_drift_enabled", False):
+                    jumps = self.experiment.slam_config.noise.get("jumps", [])
+                    n_jumps = len(jumps)
+                    first = jumps[0] if jumps else {}
+                    t_mag = first.get("translation_magnitude", 0.0)
+                    r_mag = first.get("rotation_magnitude", 0.0)
+                    t_str = str(t_mag).replace('.', 'p')
+                    r_str = str(r_mag).replace('.', 'p')
+                    return f"GTJump-J{n_jumps}-T{t_str}-R{r_str}"
                 t_std = self.experiment.slam_config.noise.get("translation_noise_std", 0.0)
                 r_std = self.experiment.slam_config.noise.get("rotation_noise_std", 0.0)
-                
                 if t_std > 0.0 or r_std > 0.0:
                     t_str = str(t_std).replace('.', 'p')
                     r_str = str(r_std).replace('.', 'p')
@@ -157,10 +165,12 @@ class ExperimentRunner:
         # Noise goes to ovo.yaml root (not to the slam config file).
         # GroundTruthSLAM reads noise from config["noise"] which comes from ovo.yaml.
         if self.experiment.slam_config.noise:
+            noise_cfg = self.experiment.slam_config.noise
+            is_jump_drift = noise_cfg.get("jump_drift_enabled", False)
             _update_recursive(ovo_data, {
                 "noise": {
-                    "noise_enabled": True,
-                    **self.experiment.slam_config.noise,
+                    **({"noise_enabled": True} if not is_jump_drift else {}),
+                    **noise_cfg,
                 }
             })
 

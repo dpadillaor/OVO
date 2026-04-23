@@ -372,6 +372,12 @@ class OVOSemMap():
 
         updated_points_ins_ids, fusion_decisions = self.ovo.update_map(map_data, kfs)
 
+        if fusion_decisions:
+            with open(self._fusion_log_path, "a", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist"])
+                for d in fusion_decisions:
+                    writer.writerow({"frame_id": frame_id, **d})
+
         if updated_points_ins_ids is not None:
             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
             # Send "after fusion" snapshot to stream visualizer
