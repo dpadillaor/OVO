@@ -1,0 +1,182 @@
+@startuml component-overview
+' OVO Component Overview — system layers and data flow between modules
+' Arrows show primary data/control dependencies; bidirectional = read + write
+
+skinparam componentStyle rectangle
+skinparam defaultFontSize 12
+skinparam packageFontSize 13
+skinparam arrowThickness 1.5
+
+' ─────────────────────────────────────────────
+'  ENTRY POINT
+' ─────────────────────────────────────────────
+package "Entry Points" #EEEEEE {
+  [run_eval.py] as RunEval
+  note right of RunEval
+    load_config → OVOSemMap.run()
+    or load_representation → OVO.classify_instances()
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  ORCHESTRATION LAYER
+' ─────────────────────────────────────────────
+package "Orchestration  (ovo/entities/ovomapping.py)" #DDEEFF {
+  [OVOSemMap] as Orchestrator
+  note right of Orchestrator
+    Main loop: track → map → segment
+    → fuse → classify → log
+    Owns frame scheduling (map_every,
+    segment_every, track_every)
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  SLAM LAYER
+' ─────────────────────────────────────────────
+package "SLAM Backends  (ovo/slam/)" #F5F5DC {
+  [VanillaMapper\n(GT + depth unprojection)] as Vanilla
+  [GroundTruthSLAM\n(noise + loop closure)] as GT
+  [WrapperORBSLAM2\n(ORB-SLAM2 bindings)] as ORBSLAM
+  [WrapperGaussianSLAM\n(Gaussian-SLAM)] as GaussianSLAM
+
+  GT -u-|> Vanilla
+  ORBSLAM -u-|> Vanilla
+  note bottom of GaussianSLAM
+    Duck-type compatible with VanillaMapper;
+    uses SemGaussianModel for point storage
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  SEMANTIC LAYER
+' ─────────────────────────────────────────────
+package "Semantic Pipeline  (ovo/entities/ovo.py)" #DDFFD4 {
+  [OVO] as Semantic
+  note right of Semantic
+    Instance lifecycle:
+    segment → track → fuse → classify
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  SEGMENTATION
+' ─────────────────────────────────────────────
+package "Segmentation  (ovo/entities/mask_generator.py)" #FFF8E8 {
+  [MaskGenerator\n(SAM-based)] as Segmentation
+  note bottom of Segmentation
+    Can precompute masks to disk
+    or generate on-the-fly
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  FEATURE ENCODERS
+' ─────────────────────────────────────────────
+package "Feature Encoders  (ovo/entities/)" #F0E6FF {
+  [CLIPGenerator\n(CLIP / SigLIP)] as CLIP
+  [PEGenerator\n(Meta PE-Core)] as PE
+  [SAM3Generator\n(SAM3 ViT)] as SAM3
+  note bottom of CLIP
+    Supports vanilla + learned ensemble
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  FUSION LAYER
+' ─────────────────────────────────────────────
+package "Fusion  (ovo/entities/fusion.py + fusion_encoders.py)" #FFF3CD {
+  [FusionStrategy\n(SemanticGeometric / GeometricOnly)] as FusionStrat
+  [FusionEncoderAdapter\n(PE / SAM3 / DINO)] as FusionEnc
+  note bottom of FusionStrat
+    Decides instance merge via
+    centroid + cosine-sim + overlap
+  end note
+  note bottom of FusionEnc
+    Computes + stores per-instance
+    descriptors across keyframes
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  INSTANCE STORAGE
+' ─────────────────────────────────────────────
+package "Instance Storage  (ovo/entities/instance3d.py)" #E8F4E8 {
+  [Instance3D\n(per-instance state)] as Instance
+  note right of Instance
+    Holds: point IDs, keyframe refs,
+    CLIP/PE/SAM3/DINO feature tensors,
+    top-view priority queue
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  DATASETS
+' ─────────────────────────────────────────────
+package "Datasets  (ovo/entities/datasets.py)" #E8F4E8 {
+  [BaseDataset\n(Replica / ScanNet / ScanNetPP / Matterport)] as Datasets
+}
+
+' ─────────────────────────────────────────────
+'  UTILITIES
+' ─────────────────────────────────────────────
+package "Utilities  (ovo/utils/)" #F5F5F5 {
+  [geometry_utils\n(3D projection, frustum)] as GeoUtils
+  [instance_utils\n(centroid, overlap)] as InstUtils
+  [io_utils\n(config, ckpt, RLE)] as IOUtils
+  [eval_utils\n(mIoU, AP)] as EvalUtils
+}
+
+' ─────────────────────────────────────────────
+'  LOGGING
+' ─────────────────────────────────────────────
+package "Logging  (ovo/entities/logger.py)" #EEEEEE {
+  [Logger\n(stats + wandb)] as Log
+}
+
+' ─────────────────────────────────────────────
+'  VISUALIZATION
+' ─────────────────────────────────────────────
+package "Visualization  (ovo/entities/visualizers/)" #FDEBD0 {
+  [Rerun Visualizer\n(stream / fusion modes)] as Vis
+  note right of Vis
+    Runs in a separate process;
+    communicates via multiprocessing.Queue
+  end note
+}
+
+' ─────────────────────────────────────────────
+'  DATA FLOW
+' ─────────────────────────────────────────────
+
+RunEval --> Orchestrator : instantiates, calls run()
+
+Orchestrator --> Datasets       : iterates frames
+Orchestrator --> Vanilla        : track_camera / map
+Orchestrator --> Semantic       : detect_and_track / update_map
+Orchestrator --> Log            : timing + memory stats
+Orchestrator --> Vis            : frames + events via Queue
+Orchestrator --> IOUtils        : save / restore checkpoint
+
+Vanilla --> GeoUtils            : depth unprojection, 3D matching
+GaussianSLAM --> Vanilla        : duck-typed interface
+
+Semantic --> Segmentation       : get_masks per frame
+Semantic --> CLIP               : extract_clip per instance
+Semantic --> FusionEnc          : compute_and_update descriptors
+Semantic --> FusionStrat        : same_instance? per pair
+Semantic --> Instance           : CRUD on objects dict
+Semantic --> GeoUtils           : frustum & 3D matching
+Semantic --> InstUtils          : centroid distance, overlap
+
+FusionEnc --> PE                : extract_pe
+FusionEnc --> SAM3              : extract_sam3
+FusionEnc --> Instance          : update_pe / update_sam3
+
+FusionStrat --> InstUtils       : compute_centroid_distance, compute_pcd_overlap
+FusionStrat --> Instance        : reads clip/pe/sam3 feature
+
+Semantic --> EvalUtils          : classify_instances (post-run)
+EvalUtils --> IOUtils           : load GT labels, write predictions
+
+@enduml

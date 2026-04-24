@@ -1,0 +1,96 @@
+@startuml class-semantic-core
+' Semantic pipeline: instance lifecycle — segment → track → fuse → classify
+' Feature generators and fusion internals: see class-fusion
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam groupInheritance 2
+hide empty members
+
+' ─────────────────────────────────────────────
+'  SEMANTIC PIPELINE
+' ─────────────────────────────────────────────
+package "Semantic Pipeline  (ovo/entities/ovo.py)" #DDFFD4 {
+
+  class OVO {
+    + config : Dict
+    + device : str
+    + cam_intrinsics : Tensor
+    + fusion_method : str
+    + n_top_views : int
+    + objects : Dict[int, Instance3D]
+    + keyframes : Dict[str, Any]
+    + next_ins_id : int
+    + clip_generator : CLIPGenerator
+    + pe_generator : PEGenerator
+    + mask_generator : MaskGenerator
+    + sam3_generator : SAM3Generator
+    + fusion_strategy : FusionStrategy
+    + fusion_encoder : FusionEncoderAdapter
+    + th_centroid : float
+    + th_cossim : float
+    + th_points : float
+    --
+    + detect_and_track_objects(frame_data, map_data, c2w) : Tensor
+    + update_map(map_data, kfs) : None
+    + compute_semantic_info() : None
+    + complete_semantic_info() : None
+    + classify_instances(classes, template, th) : None
+    + query(queries, templates, ensemble) : Tensor
+    + get_objs_clips() : Tensor
+    + capture_dict(debug_info) : Dict
+    + restore_dict(scene_dict, debug_info) : None
+    + to(device) : None
+  }
+
+  class Instance3D {
+    + id : int
+    + clip_feature : Tensor
+    + pe_feature : Tensor
+    + sam3_feature : Tensor
+    + dino_feature : Tensor
+    + kfs_ids : list
+    + points_ids : list
+    + top_kf : list
+    + to_update : bool
+    + to_update_pe : bool
+    + to_update_sam3 : bool
+    --
+    + update(points_ids, kf_id, area) : None
+    + add_points_ids(points_ids) : None
+    + add_keyframes(kf_id) : None
+    + add_top_kf(kf_id, area) : None
+    + is_top_kf(kf_id) : bool
+    + update_clip(keyframes_clips, force_update) : None
+    + update_pe(keyframes_pe, force_update) : None
+    + update_sam3(keyframes_sam3, force_update) : None
+    + export(debug_info) : Dict
+    + restore(obj_dict, debug_info) : None
+    + purge_points_ids(purge_ids) : None
+  }
+}
+
+' ─────────────────────────────────────────────
+'  STUBS — see class-fusion for detail
+' ─────────────────────────────────────────────
+class FusionStrategy <<fusion>>
+class FusionEncoderAdapter <<fusion>>
+class CLIPGenerator <<fusion>>
+class PEGenerator <<fusion>>
+class MaskGenerator <<fusion>>
+class SAM3Generator <<fusion>>
+
+' ─────────────────────────────────────────────
+'  RELATIONSHIPS
+' ─────────────────────────────────────────────
+OVO "1" *-- "0..*" Instance3D    : objects
+
+OVO *-- FusionStrategy           : fusion_strategy
+OVO o-- FusionEncoderAdapter     : fusion_encoder
+OVO *-- CLIPGenerator            : clip_generator
+OVO o-- PEGenerator              : pe_generator
+OVO o-- MaskGenerator            : mask_generator
+OVO o-- SAM3Generator            : sam3_generator
+
+@enduml

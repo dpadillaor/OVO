@@ -1,0 +1,147 @@
+@startuml class-fusion
+' Fusion layer: strategies (merge decision) + encoder adapters (descriptor management)
+' Feature generators owned here — adapters compose them
+' Add new encoder: new Generator + new FusionEncoderAdapter subclass
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam groupInheritance 2
+hide empty members
+
+' ─────────────────────────────────────────────
+'  FUSION STRATEGIES
+' ─────────────────────────────────────────────
+package "Fusion Strategies  (ovo/entities/fusion.py)" #FFF3CD {
+
+  abstract class FusionStrategy {
+    {abstract} + same_instance(instance1, instance2, points_centroid1, points_centroid2) : bool
+    + pop_decisions() : list
+  }
+
+  class SemanticGeometricFusion {
+    + th_centroid : float
+    + th_cossim : float
+    + th_points : float
+    + feature_attr : str
+    --
+    + same_instance(...) : bool
+  }
+
+  class GeometricOnlyFusion {
+    + th_centroid : float
+    + th_points : float
+    --
+    + same_instance(...) : bool
+  }
+
+  FusionStrategy <|-- SemanticGeometricFusion
+  FusionStrategy <|-- GeometricOnlyFusion
+}
+
+' ─────────────────────────────────────────────
+'  FUSION ENCODER ADAPTERS
+' ─────────────────────────────────────────────
+package "Fusion Encoder Adapters  (ovo/entities/fusion_encoders.py)" #FFE8D6 {
+
+  abstract class FusionEncoderAdapter {
+    {abstract} + compute_and_update(image, binary_maps, matched_ins_ids, kf_id, keyframes, objects) : None
+    {abstract} + update_objects(objects, keyframes) : None
+    {abstract} + transfer_on_merge(source_ids, target_id, keyframes) : None
+    {abstract} + cleanup_keyframe(kf_id, keyframes) : None
+  }
+
+  class PEFusionAdapter {
+    + storage_key : str
+    --
+    + compute_and_update(...) : None
+    + update_objects(...) : None
+    + transfer_on_merge(...) : None
+    + cleanup_keyframe(...) : None
+  }
+
+  class SAM3FusionAdapter {
+    + storage_key : str
+    --
+    + compute_and_update(...) : None
+    + update_objects(...) : None
+    + transfer_on_merge(...) : None
+    + cleanup_keyframe(...) : None
+  }
+
+  FusionEncoderAdapter <|-- PEFusionAdapter
+  FusionEncoderAdapter <|-- SAM3FusionAdapter
+}
+
+' ─────────────────────────────────────────────
+'  FEATURE GENERATORS
+' ─────────────────────────────────────────────
+package "Feature Generators  (ovo/entities/)" #F0E6FF {
+
+  abstract class AbstractFeatureGenerator {
+    + config : Dict
+    + device : str
+    + embed_dim : int
+    --
+    {abstract} + encode_image(input) : Tensor
+    + to(device) : None
+    + cpu() : None
+    + cuda() : None
+  }
+
+  class CLIPGenerator {
+    + embed_type : str
+    + model_card : str
+    + clip_dim : int
+    --
+    + extract_clip(image, binary_maps, return_all) : Tensor
+    + get_txt_embedding(text_list) : Tensor
+    + get_embed_txt_similarity(ins_descriptors, txt_queries, templates) : Tensor
+    + encode_image(input) : Tensor
+  }
+
+  class PEGenerator {
+    + model_card : str
+    + is_vision_only : bool
+    --
+    + extract_pe(image, binary_maps) : Tensor
+    + get_txt_embedding(text_list) : Tensor
+    + get_embed_txt_similarity(ins_descriptors, txt_queries, templates) : Tensor
+    + encode_image(input) : Tensor
+  }
+
+  class SAM3Generator {
+    + components : str
+    --
+    + extract_sam3(image, binary_maps) : Tensor
+    + encode_image(input) : Tensor
+  }
+
+  class MaskGenerator {
+    + precomputed : bool
+    + nms_iou_th : float
+    + nms_score_th : float
+    --
+    + get_masks(image, frame_id) : Tuple[Tensor, Tensor]
+    + precompute(dataset, segment_every) : None
+    + segment(image) : Tuple[ndarray, ndarray]
+  }
+
+  AbstractFeatureGenerator <|-- CLIPGenerator
+  AbstractFeatureGenerator <|-- PEGenerator
+  AbstractFeatureGenerator <|-- SAM3Generator
+  AbstractFeatureGenerator <|-- MaskGenerator
+}
+
+' ─────────────────────────────────────────────
+'  RELATIONSHIPS
+' ─────────────────────────────────────────────
+PEFusionAdapter *-- PEGenerator       : generator
+SAM3FusionAdapter *-- SAM3Generator   : generator
+
+SemanticGeometricFusion ..> Instance3D : reads feature_attr
+
+' Stub
+class Instance3D <<semantic-core>>
+
+@enduml

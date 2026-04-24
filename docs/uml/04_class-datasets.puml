@@ -1,0 +1,63 @@
+@startuml class-datasets
+' Dataset adapters: BaseDataset defines the frame-iteration interface
+' Add new dataset: subclass BaseDataset, implement __getitem__
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam groupInheritance 2
+hide empty members
+
+package "Datasets  (ovo/entities/datasets.py)" #E8F4E8 {
+
+  abstract class BaseDataset {
+    + dataset_path : Path
+    + frame_limit : int
+    + height / width : int
+    + fx / fy / cx / cy : float
+    + fovx / fovy : float
+    + intrinsics : ndarray
+    + color_paths / depth_paths : list
+    + depth_scale : float
+    + distortion : ndarray
+    --
+    + __len__() : int
+    {abstract} + __getitem__(index)
+  }
+
+  class Replica {
+    + poses : list
+    --
+    + load_poses(path)
+    + __getitem__(index)
+  }
+
+  class ScanNet {
+    + depth_th : float
+    --
+    + load_poses(path)
+    + __getitem__(index)
+  }
+
+  class ScanNetPP {
+    + use_train_split : bool
+    + image_names : list
+    + poses : list
+    --
+    + load_data()
+    + __getitem__(index)
+  }
+
+  class Matterport {
+    --
+    + load_poses(path)
+    + __getitem__(index)
+  }
+
+  BaseDataset <|-- Replica
+  BaseDataset <|-- ScanNet
+  BaseDataset <|-- ScanNetPP
+  BaseDataset <|-- Matterport
+}
+
+@enduml

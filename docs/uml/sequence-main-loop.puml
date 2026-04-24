@@ -1,0 +1,153 @@
+@startuml sequence-main-loop
+' OVO Main Processing Loop — one frame through the full pipeline
+' Source: OVOSemMap.run() → _run_mapping_and_fusion_step() → _run_semantic_step()
+' Simplified: visualization queue calls omitted for clarity
+
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceGroupFontSize 11
+skinparam sequenceParticipantFontSize 12
+skinparam sequenceMessageAlignment left
+skinparam maxMessageSize 200
+
+actor "run_eval.py" as Runner
+participant "OVOSemMap\n(ovomapping.py)" as Orch
+participant "BaseDataset\n(datasets.py)" as DS
+participant "VanillaMapper\n(slam/)" as SLAM
+participant "OVO\n(ovo.py)" as Semantic
+participant "MaskGenerator\n(mask_generator.py)" as SAM
+participant "CLIPGenerator\n(clip_generator.py)" as CLIP
+participant "FusionEncoderAdapter\n(fusion_encoders.py)" as FusEnc
+participant "FusionStrategy\n(fusion.py)" as FusStrat
+participant "Instance3D\n(instance3d.py)" as Inst
+participant "Logger\n(logger.py)" as Log
+
+' ─── Startup ───────────────────────────────────────────────
+Runner -> Orch : OVOSemMap(config, output_path)
+activate Orch
+Orch -> DS      : get_dataset(dataset_name)(dataset_config)
+Orch -> SLAM    : get_slam_backbone(config, dataset, intrinsics)
+Orch -> Semantic: OVO(config, logger, scene_name, intrinsics)
+activate Semantic
+Semantic -> SAM  : MaskGenerator(config, scene_name)
+Semantic -> CLIP : CLIPGenerator(config)
+Semantic -> FusEnc : PEFusionAdapter / SAM3FusionAdapter (optional)
+Semantic -> FusStrat : create_fusion_strategy(config)
+deactivate Semantic
+
+' ─── Frame loop ────────────────────────────────────────────
+Runner -> Orch : run()
+
+loop for each frame_id in dataset
+  Orch -> DS   : __getitem__(frame_id)
+  DS --> Orch  : (frame_id, color, depth, pose)
+
+  ' Skip frames not in scheduling window
+  Orch -> Orch : _should_process_frame(frame_id)
+
+  ' ── SLAM tracking step ──────────────────────────────────
+  Orch -> SLAM : track_camera(frame_data)
+  note right : Registers estimated pose;\n GT/ORBSLAM2/Gaussian-SLAM\n variants override this
+
+  ' ── Mapping step (every map_every frames) ───────────────
+  opt frame_id % map_every == 0
+    Orch -> SLAM : map(frame_data, c2w)
+    note right : Depth-unprojects new points;\n updates pcd, pcd_ids
+  end
+
+  ' ── Mapping + fusion step ───────────────────────────────
+  Orch -> Orch : _run_mapping_and_fusion_step(frame_state, queue)
+  activate Orch #LightBlue
+
+    Orch -> SLAM    : get_map()
+    SLAM --> Orch   : (pcd, pcd_ids, pcd_obj_ids)
+
+    Orch -> Semantic: detect_and_track_objects(frame_data, map_data, c2w)
+    activate Semantic #LightGreen
+
+      ' Segmentation
+      opt frame_id % segment_every == 0
+        Semantic -> SAM : get_masks(image, frame_id)
+        SAM --> Semantic: (seg_map, binary_maps)
+      end
+
+      ' 3D–2D matching and instance tracking
+      Semantic -> Semantic : _match_and_track_instances(...)
+      note right : Projects 3D points → 2D;\n matches to SAM segments;\n creates or updates Instance3D
+
+      Semantic -> Inst : update(points_ids, kf_id, area)
+
+      ' Local fusion of masks with same instance ID
+      Semantic -> Semantic : _fuse_masks_with_same_ins_id(binary_maps, matched_ins_info, kf_id)
+
+      ' Feature extraction via fusion encoder (PE or SAM3 if configured)
+      opt fusion_encoder is not None
+        Semantic -> FusEnc : compute_and_update(image, binary_maps, matched_ins_ids, kf_id, keyframes, objects)
+        FusEnc --> Semantic : (updates Instance3D.pe_feature / sam3_feature)
+      end
+
+    deactivate Semantic
+
+    ' Global map update after loop closure or GBA
+    opt slam_backbone.map_updated
+      Orch -> Semantic: update_map(map_data, kfs)
+      activate Semantic #LightGreen
+
+        Semantic -> Semantic : _fuse_overlapping_instances(objects_list, points_3d, map_data)
+        note right : Pairwise comparison of all instances;\n candidate pairs selected by point-cloud overlap
+
+        loop for each candidate pair (inst1, inst2)
+          Semantic -> FusStrat : same_instance(inst1, inst2, points_centroid1, points_centroid2)
+          activate FusStrat
+          FusStrat -> FusStrat : compute_centroid_distance(c1, c2)
+          FusStrat -> FusStrat : compute_pcd_overlap(pts1, pts2, th_points)
+          FusStrat --> Semantic : True / False + decision record
+          deactivate FusStrat
+
+          opt same_instance == True
+            Semantic -> Inst : add_points_ids / add_keyframes (merge into surviving instance)
+            Semantic -> FusEnc : transfer_on_merge(source_ids, target_id, keyframes)
+          end
+        end
+
+        Semantic -> Semantic : _update_descriptors_after_fusion(fused_objects)
+      deactivate Semantic
+
+      ' Write fusion decisions to CSV log
+      Orch -> FusStrat : pop_decisions()
+      FusStrat --> Orch : list of decision records
+      Orch -> Orch : _write_fusion_decisions(frame_id, decisions)
+    end
+
+  deactivate Orch
+
+  ' ── Semantic step (CLIP update + optional query) ────────
+  Orch -> Orch : _run_semantic_step(frame_state, queue, query_flag, query_pipe)
+  activate Orch #LightYellow
+
+    Orch -> Semantic: compute_semantic_info()
+    activate Semantic
+      Semantic -> Semantic : _compute_semantic_info()
+      ' Dispatches to update_objects_clip / update_objects_pe
+      Semantic -> CLIP : extract_clip(image, binary_maps)
+      CLIP --> Semantic : clip_embeds
+      Semantic -> Inst  : update_clip(keyframes_clips, force_update)
+    deactivate Semantic
+
+    Orch -> Semantic: complete_semantic_info()
+    note right : Finalises all pending descriptor\n updates for this keyframe
+
+  deactivate Orch
+
+  ' ── Logging ─────────────────────────────────────────────
+  Orch -> Log : log_ovo_stats(stats)
+  Orch -> Log : log_memory_usage(frame_id)
+
+end ' frame loop
+
+' ─── End of sequence ───────────────────────────────────────
+Orch -> Semantic: cpu()        ' free GPU memory
+Orch -> Log     : write_stats()
+Orch -> Log     : print_final_stats()
+Runner <-- Orch : done
+
+@enduml

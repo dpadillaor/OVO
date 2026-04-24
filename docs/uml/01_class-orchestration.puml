@@ -1,0 +1,71 @@
+@startuml class-orchestration
+' Orchestration layer: OVOSemMap owns and wires all subsystems
+' Cross-module refs shown as stubs — see class-semantic-core, class-slam, class-datasets
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam groupInheritance 2
+hide empty members
+
+' ─────────────────────────────────────────────
+'  ORCHESTRATION
+' ─────────────────────────────────────────────
+package "Orchestration  (ovo/entities/ovomapping.py)" #DDEEFF {
+
+  class OVOSemMap {
+    + config : Dict
+    + device : str
+    + dataset_name : str
+    + output_path : Path
+    + map_every : int
+    + segment_every : int
+    + track_every : int
+    + stream : bool
+    + logger : Logger
+    + dataset : BaseDataset
+    + ovo : OVO
+    + slam_backbone : VanillaMapper
+    + _fusion_log_path : Path
+    --
+    + run() : None
+    + save_representation() : None
+    + restore_representation() : None
+  }
+
+  class FrameState <<dataclass>> {
+    + frame_id : int
+    + frame_data : Any
+    + estimated_c2w : Tensor
+  }
+
+  class Logger {
+    + output_path : Path
+    + stats : Dict[str, list]
+    + use_wandb : bool
+    --
+    + log_ovo_stats(stats, print_output) : None
+    + log_fps(avg_fps) : None
+    + log_memory_usage(frame_id) : None
+    + write_stats() : None
+    + print_final_stats() : None
+  }
+}
+
+' ─────────────────────────────────────────────
+'  STUBS — see respective diagrams for detail
+' ─────────────────────────────────────────────
+class OVO <<semantic-core>>
+class VanillaMapper <<slam>>
+class BaseDataset <<datasets>>
+
+' ─────────────────────────────────────────────
+'  RELATIONSHIPS
+' ─────────────────────────────────────────────
+OVOSemMap *-- OVO            : ovo
+OVOSemMap *-- Logger         : logger
+OVOSemMap o-- BaseDataset    : dataset
+OVOSemMap o-- VanillaMapper  : slam_backbone
+OVOSemMap ..> FrameState     : creates
+
+@enduml

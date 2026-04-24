@@ -1,0 +1,101 @@
+@startuml class-slam
+' SLAM backends: VanillaMapper defines implicit interface; subclasses extend or duck-type
+' Add new backend: subclass VanillaMapper (or duck-type if external like GaussianSLAM)
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam groupInheritance 2
+hide empty members
+
+package "SLAM Backends  (ovo/slam/)" #F5F5DC {
+
+  class VanillaMapper {
+    + cam_intrinsics : Tensor
+    + config : Dict
+    + device : str
+    + pcd : Tensor
+    + pcd_ids : Tensor
+    + pcd_obj_ids : Tensor
+    + pcd_colors : Tensor
+    + estimated_c2ws : Dict[int, Tensor]
+    + kfs : Dict
+    + map_updated : bool
+    + max_frame_points : float
+    + match_distance_th : float
+    --
+    + track_camera(frame_data) : None
+    + map(frame_data, c2w) : None
+    + get_c2w(frame_id) : Tensor
+    + get_map() : Tuple[Tensor, Tensor, Tensor]
+    + get_kfs() : Dict
+    + get_map_dict() : Dict
+    + set_map_dict(d) : None
+    + get_cam_dict() : Dict
+    + set_cam_dict(d) : None
+    + update_pcd_obj_ids(ids) : None
+    + get_pcd_colors() : ndarray
+  }
+
+  class GroundTruthSLAM {
+    + trajectory : list
+    + noise_enabled : bool
+    + jump_drift_enabled : bool
+    + close_loops : bool
+    + jump_configs : list
+    --
+    + track_camera(frame_data) : None
+    + map(frame_data, c2w) : None
+    + correct_map_globally() : None
+  }
+
+  class WrapperORBSLAM2 {
+    + close_loops : bool
+    + last_big_change_id : int
+    + world_ref : Tensor
+    --
+    + track_camera(frame_data) : None
+    + map(frame_data, c2w) : None
+    + update_map() : None
+  }
+
+  class WrapperGaussianSLAM {
+    ' Duck-type compatible with VanillaMapper — does NOT inherit
+    + device : str
+    + config : Dict
+    + map_updated : bool
+    --
+    + track_camera(frame_data) : None
+    + map(frame_data, estimated_c2w) : None
+    + get_map() : Tuple[Tensor, Tensor, Tensor]
+    + get_map_dict() : Dict
+    + get_cam_dict() : Dict
+    + update_pcd_obj_ids(ids) : None
+    + get_pcd_colors() : ndarray
+  }
+
+  class SemGaussianModel {
+    ' GaussianModel + per-point instance & unique IDs
+    + _obj_ids : Tensor
+    + ids : Tensor
+    + max_id : int
+    --
+    + get_ids() : Tensor
+    + get_obj_ids() : Tensor
+    + set_objs_ids(obj_ids) : None
+    + prune_points(mask) : None
+    + save_ply(path) : None
+    + load_ply(path) : None
+  }
+
+  class GaussianModel <<external>> {
+    ' From thirdParty/gaussian_slam
+  }
+
+  VanillaMapper <|-- GroundTruthSLAM
+  VanillaMapper <|-- WrapperORBSLAM2
+  GaussianModel <|-- SemGaussianModel
+  WrapperGaussianSLAM *-- SemGaussianModel : gaussian_model
+}
+
+@enduml
