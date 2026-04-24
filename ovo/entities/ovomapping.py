@@ -25,6 +25,69 @@ class FrameState:
     frame_data: Any
     estimated_c2w: torch.Tensor
 
+@dataclass
+class VisConfig:
+    stream: bool
+    show_stream: bool
+    vis_type: str = "open3d"
+    rerun_mode: str = "stream"
+    rerun_visual_mode: Any = None
+    save_rrd: bool = False
+
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> "VisConfig":
+        vis = config["vis"]
+        show_stream = vis["show_stream"]
+        return cls(
+            stream=vis["stream"],
+            show_stream=show_stream,
+            vis_type=vis.get("type", "open3d"),
+            rerun_mode=vis.get("rerun_mode", "stream"),
+            rerun_visual_mode=resolve_rerun_visual_mode(vis.get("rerun_visual_mode", None), show_stream),
+            save_rrd=vis.get("save_rrd", False),
+        )
+
+@dataclass
+class SchedulingConfig:
+    map_every: int = 10
+    segment_every: int = 10
+    track_every: int = 1
+
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> "SchedulingConfig":
+        tracking_cfg = config.get("tracking", None)
+        return cls(
+            map_every=config["mapping"].get("map_every", 10),
+            segment_every=config["semantic"].get("segment_every", 10),
+            track_every=1 if tracking_cfg is None else tracking_cfg.get("track_every", 1),
+        )
+
+@dataclass
+class RunConfig:
+    device: str = "cuda"
+    dataset_name: str = ""
+    scene_name: str = ""
+    use_wandb: bool = False
+    restore_map: bool = False
+    debug: bool = False
+    debug_info: bool = False
+    slam_module: str = "vanilla"
+    save_estimated_cam: bool = False
+
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> "RunConfig":
+        return cls(
+            device=config.get("device", "cuda"),
+            dataset_name=config["dataset_name"],
+            scene_name=config["data"]["scene_name"],
+            use_wandb=config["use_wandb"],
+            restore_map=config.get("restore_map", False),
+            debug=config.get("debug", False),
+            debug_info=config.get("debug_info", False),
+            slam_module=config["slam"].get("slam_module", "vanilla"),
+            save_estimated_cam=config["slam"].get("save_estimated_cam", False),
+        )
+
 def _queue_put_dropping(queue, item) -> None:
     """Put item in queue, dropping oldest item if full. Never blocks."""
     while True:
@@ -85,35 +148,32 @@ class OVOSemMap():
 
         # Store global runtime/config handles.
         self.config = config
-        self.device = config.get("device", "cuda")
-        self.dataset_name = config["dataset_name"]
-
+        self._init_run_config(config)
         self._init_vis_config(config)
         self._init_scheduling(config)
 
         # Core services: logger and dataset.
-        self.logger = Logger(self.output_path, os.getpid(), config["use_wandb"])
-        self.dataset = get_dataset(config["dataset_name"])({**config["data"], **config["cam"]})
+        self.logger = Logger(self.output_path, os.getpid(), self.run.use_wandb)
+        self.dataset = get_dataset(self.run.dataset_name)({**config["data"], **config["cam"]})
 
-        # Camera intrinsics and semantic defaults.
-        cam_intrinsics = torch.tensor(self.dataset.intrinsics.astype(np.float32), device=self.device)
-        config["semantic"]["debug_info"] = self.config.get("debug_info", False)
-        config["semantic"]["fusion_method"] = config["semantic"].get("fusion_method", "CLIP")
+        # Camera intrinsics and semantic module.
+        cam_intrinsics = torch.tensor(self.dataset.intrinsics.astype(np.float32), device=self.run.device)
+        semantic_config = {**config["semantic"], "debug_info": self.run.debug_info}
 
         # Semantic module and SLAM backend.
-        self.ovo = OVO(config["semantic"], self.logger, config["data"]["scene_name"], cam_intrinsics, device=self.device)
+        self.ovo = OVO(semantic_config, self.logger, self.run.scene_name, cam_intrinsics, device=self.run.device)
         self.slam_backbone = get_slam_backbone(config, self.dataset, cam_intrinsics)
 
         # Optional preprocessing for SAM masks.
         if config["semantic"]["sam"].get("precomputed", False) or config["semantic"]["sam"].get("precompute", False):
-            self.ovo.mask_generator.precompute(self.dataset, self.segment_every)
+            self.ovo.mask_generator.precompute(self.dataset, self.scheduling.segment_every)
 
         # Optional map restoration state.
         self._init_fusion_log()
 
         self.first_frame = 0
-        if self.config.get("restore_map", False):
-            assert config["slam"].get("slam_module", "vanilla") == "vanilla", "Restoring representation only implemented for 'vanilla' configuration!"
+        if self.run.restore_map:
+            assert self.run.slam_module == "vanilla", "Restoring representation only implemented for 'vanilla' configuration!"
             self.restore_representation()
             self.first_frame = list(self.slam_backbone.estimated_c2ws.keys())[-1] + 1
 
@@ -126,22 +186,20 @@ class OVOSemMap():
         self.output_path = Path(output_path)
         self.output_path.mkdir(exist_ok=True, parents=True)
 
+    def _init_run_config(self, config: Dict[str, Any]) -> None:
+        self.run = RunConfig.from_config(config)
+
     def _init_vis_config(self, config: Dict[str, Any]) -> None:
-        self.stream = config["vis"]["stream"]
-        self.show_stream = config["vis"]["show_stream"]
-        self.vis_type = config["vis"].get("type", "open3d")
-        self.rerun_mode = config["vis"].get("rerun_mode", "stream")  # "stream" or "fusion"
-        self.rerun_visual_mode = resolve_rerun_visual_mode(config["vis"].get("rerun_visual_mode", None), self.show_stream)
-        self.save_rrd = config["vis"].get("save_rrd", False)
+        self.vis = VisConfig.from_config(config)
 
     def _init_scheduling(self, config: Dict[str, Any]) -> None:
-        self.map_every = config["mapping"].get("map_every", 10)
-        self.segment_every = config["semantic"].get("segment_every", 10)
-        tracking_cfg = config.get("tracking", None)
-        self.track_every = 1 if tracking_cfg is None else tracking_cfg.get("track_every", 1)
+        self.scheduling = SchedulingConfig.from_config(config)
+
+    @property
+    def _fusion_log_path(self) -> Path:
+        return self.output_path / "fusion_decisions.csv"
 
     def _init_fusion_log(self) -> None:
-        self._fusion_log_path = self.output_path / "fusion_decisions.csv"
         with open(self._fusion_log_path, "w", newline="") as f:
             csv.DictWriter(f, fieldnames=_FUSION_LOG_FIELDS).writeheader()
 
@@ -160,14 +218,14 @@ class OVOSemMap():
         output path.
         """
         map_params = self.slam_backbone.get_map_dict()
-        ovo_map_params = self.ovo.capture_dict(debug_info=self.config.get("debug", False))
+        ovo_map_params = self.ovo.capture_dict(debug_info=self.run.debug)
         submap_ckpt = {
             "map_params": map_params,
             "ovo_map_params" : ovo_map_params,
         }
         io_utils.save_dict_to_ckpt(
-            submap_ckpt, "ovo_map.ckpt", directory=self.output_path)    
-        if self.config["slam"].get("save_estimated_cam", False):
+            submap_ckpt, "ovo_map.ckpt", directory=self.output_path)
+        if self.run.save_estimated_cam:
             c2w = self.slam_backbone.get_cam_dict()
             with open(self.output_path / "estimated_c2w.npy", "wb") as f:
                 torch.save(c2w, f)
@@ -179,9 +237,9 @@ class OVOSemMap():
 
         ckpt_path = self.output_path / "ovo_map.ckpt"
         assert ckpt_path.exists(), f"Missing required checkpoint to restore: {ckpt_path}"
-        ckpt = torch.load(ckpt_path, map_location=self.device, weights_only=False)
+        ckpt = torch.load(ckpt_path, map_location=self.run.device, weights_only=False)
 
-        self.ovo.restore_dict(ckpt["ovo_map_params"], debug_info=self.config.get("debug", False))
+        self.ovo.restore_dict(ckpt["ovo_map_params"], debug_info=self.run.debug)
         self.slam_backbone.set_map_dict(ckpt["map_params"])
         
         c2w_path = self.output_path / "estimated_c2w.npy"
@@ -204,7 +262,7 @@ class OVOSemMap():
 
             If streaming is disabled, returns (None, None, None, None).
         """
-        if not self.stream:
+        if not self.vis.stream:
             return None, None, None, None
 
         cam_data = {
@@ -215,19 +273,19 @@ class OVOSemMap():
         mpqueue = mp.Queue(maxsize=8)
         query_flag = mp.Value('i', 0)  # 0 idle, 1 requested, 2 completed
         query_pipe, vis_pipe = mp.Pipe()
-        target_func, proc_name = select_visualizer_target(self.vis_type, self.rerun_mode)
+        target_func, proc_name = select_visualizer_target(self.vis.vis_type, self.vis.rerun_mode)
 
-        if self.vis_type == "rerun":
-            query_payload = [query_flag, vis_pipe, self.rerun_visual_mode]
+        if self.vis.vis_type == "rerun":
+            query_payload = [query_flag, vis_pipe, self.vis.rerun_visual_mode]
             proc_args = (
                 self.ovo,
                 mpqueue,
                 query_payload,
                 cam_data,
-                self.config["data"]["scene_name"],
+                self.run.scene_name,
                 self.logger.output_path,
-                self.show_stream,
-                self.save_rrd,
+                self.vis.show_stream,
+                self.vis.save_rrd,
             )
         else:
             query_payload = [query_flag, vis_pipe]
@@ -236,9 +294,9 @@ class OVOSemMap():
                 mpqueue,
                 query_payload,
                 cam_data,
-                self.config["data"]["scene_name"],
+                self.run.scene_name,
                 self.logger.output_path,
-                self.show_stream,
+                self.vis.show_stream,
             )
 
         p = mp.Process(target=target_func, args=proc_args, name=proc_name)
@@ -312,7 +370,7 @@ class OVOSemMap():
 
         # Caputure current map points and instance ids for semantic processing and visualization.
         t_sem_i = time.time()
-        with torch.inference_mode() and torch.autocast(device_type=self.device, dtype=torch.bfloat16):
+        with torch.inference_mode() and torch.autocast(device_type=self.run.device, dtype=torch.bfloat16):
             if len(frame_state.frame_data) == 5:
                 image = frame_state.frame_data[-1]
             else:
@@ -345,8 +403,8 @@ class OVOSemMap():
         t_sem = time.time() - t_sem_i
 
         # Send updated stream frame to visualizer if in streaming mode, after semantic update.
-        if self.stream:
-            if self.rerun_mode == "stream":
+        if self.vis.stream:
+            if self.vis.rerun_mode == "stream":
                 self._send_stream_frame(frame_state.frame_id, mpqueue)
             if query_flag.value == 1:
                 self._handle_semantic_query(query_pipe, query_flag)
@@ -364,7 +422,7 @@ class OVOSemMap():
             query_flag.value = 2
 
     def _send_loop_closure_event(self, frame_id: int, mpqueue) -> None:
-        if not (self.stream and self.rerun_mode in ("loop_closure", "fusion") and getattr(self.slam_backbone, '_lc_pcd_before', None) is not None):
+        if not (self.vis.stream and self.vis.rerun_mode in ("loop_closure", "fusion") and getattr(self.slam_backbone, '_lc_pcd_before', None) is not None):
             return
         pcd_after, ids = self._capture_points_and_ids(self.slam_backbone.get_map(), points_dtype=np.float32, ids_dtype=np.int32)
         traj_after = {
@@ -421,7 +479,7 @@ class OVOSemMap():
             self._send_stream_frame(frame_state.frame_id, mpqueue)
 
         # Send update_map event to stream visualizer
-        if self.stream and self.rerun_mode == "stream":
+        if self.vis.stream and self.vis.rerun_mode == "stream":
             c2w = self.slam_backbone.get_c2w(frame_state.frame_id)
             if c2w is not None:
                 _queue_put_dropping(mpqueue, {
@@ -443,14 +501,14 @@ class OVOSemMap():
 
     def _should_run_segmentation(self, frame_id: int) -> bool:
         """Check if segmentation/semantic update should run for current frame."""
-        return frame_id % self.segment_every == 0
+        return frame_id % self.scheduling.segment_every == 0
 
     def _should_process_frame(self, frame_id: int) -> bool:
         """Check if frame needs tracking, mapping or segmentation."""
-        return (self.track_every == 1 or 
-                frame_id % self.track_every == 0 or 
-                frame_id % self.map_every == 0 or 
-                frame_id % self.segment_every == 0)
+        return (self.scheduling.track_every == 1 or
+                frame_id % self.scheduling.track_every == 0 or
+                frame_id % self.scheduling.map_every == 0 or
+                frame_id % self.scheduling.segment_every == 0)
 
     def _log_final_stats(self, spf: list, fps: float, duration: float) -> None:
         """Centralized final logging and stats reporting."""
@@ -499,10 +557,10 @@ class OVOSemMap():
             # If streaming, wait for visualizer to process remaining messages and handle outstanding queries before shutdown
             torch.cuda.synchronize()
             t_end = time.time()
-            fps = len(self.dataset)/self.segment_every/(t_end-t_start)
+            fps = len(self.dataset)/self.scheduling.segment_every/(t_end-t_start)
 
             # If streaming is enabled, wait for visualizer to process remaining messages and handle outstanding queries before shutdown
-            if self.stream and p.is_alive():
+            if self.vis.stream and p.is_alive():
                 while mpqueue.qsize()>0 and p.is_alive():
                     if query_flag.value == 1:
                         query = query_pipe.recv()
@@ -515,7 +573,7 @@ class OVOSemMap():
 
         # Clean up visualizer process on exit, ensuring it is terminated gracefully.
         finally:
-            if self.stream and p.is_alive():
+            if self.vis.stream and p.is_alive():
                 mpqueue.put(None)  # Signal the visualizer to exit gracefully
                 p.join(timeout=5)
                 if p.is_alive():

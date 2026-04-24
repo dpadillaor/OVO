@@ -2,7 +2,7 @@
 ' Orchestration layer: OVOSemMap owns and wires all subsystems
 ' Cross-module refs shown as stubs — see class-semantic-core, class-slam, class-datasets
 
-skinparam classAttributeIconSize 0
+skinparam classAttributeIconSize 10
 skinparam classFontSize 12
 skinparam packageFontSize 13
 skinparam groupInheritance 2
@@ -11,32 +11,82 @@ hide empty members
 ' ─────────────────────────────────────────────
 '  ORCHESTRATION
 ' ─────────────────────────────────────────────
-package "Orchestration  (ovo/entities/ovomapping.py)" #DDEEFF {
+package "Orchestration (ovo/entities/ovomapping.py)" as OrchestrationPkg #DDEEFF {
 
   class OVOSemMap {
     + config : Dict
-    + device : str
-    + dataset_name : str
     + output_path : Path
-    + map_every : int
-    + segment_every : int
-    + track_every : int
-    + stream : bool
+    + run : RunConfig
+    + vis : VisConfig
+    + scheduling : SchedulingConfig
     + logger : Logger
     + dataset : BaseDataset
     + ovo : OVO
     + slam_backbone : VanillaMapper
-    + _fusion_log_path : Path
+    + first_frame : int
     --
     + run() : None
     + save_representation() : None
     + restore_representation() : None
+    - _setup_output_path(output_path) : None
+    - _run_semantic_step(...) : float
+    - _run_mapping_and_fusion_step(...) : float
+    - _start_visualization_process() : tuple
+    - _send_stream_frame(frame_id, mpqueue) : None
+    - _handle_semantic_query(pipe, flag) : None
+    - _should_run_segmentation(frame_id) : bool
+    - _should_process_frame(frame_id) : bool
   }
 
-  class FrameState <<dataclass>> {
+  note right of OVOSemMap
+    **Omitted Internal Methods:**
+    - __init__
+    - _init_run_config / _vis_config / _scheduling
+    - _init_fusion_log / _write_fusion_decisions
+    - _capture_points_and_ids
+    - _send_loop_closure_event
+    - _log_final_stats
+    - _fusion_log_path (property)
+    - _get_frame_state (retrieval logic)
+  end note
+
+  dataclass FrameState {
     + frame_id : int
     + frame_data : Any
     + estimated_c2w : Tensor
+  }
+
+  dataclass VisConfig {
+    + stream : bool
+    + show_stream : bool
+    + vis_type : str
+    + rerun_mode : str
+    + rerun_visual_mode : Any
+    + save_rrd : bool
+    --
+    + {static} from_config(config) : VisConfig
+  }
+
+  dataclass SchedulingConfig {
+    + map_every : int
+    + segment_every : int
+    + track_every : int
+    --
+    + {static} from_config(config) : SchedulingConfig
+  }
+
+  dataclass RunConfig {
+    + device : str
+    + dataset_name : str
+    + scene_name : str
+    + use_wandb : bool
+    + restore_map : bool
+    + debug : bool
+    + debug_info : bool
+    + slam_module : str
+    + save_estimated_cam : bool
+    --
+    + {static} from_config(config) : RunConfig
   }
 
   class Logger {
@@ -53,6 +103,17 @@ package "Orchestration  (ovo/entities/ovomapping.py)" #DDEEFF {
 }
 
 ' ─────────────────────────────────────────────
+'  EXTERNAL PROCESSES / UTILS
+' ─────────────────────────────────────────────
+package "Visualization Process" #FFF2CC {
+  class "Visualizer (Process)" as VisProc <<external>> {
+    + target: select_visualizer_target()
+    + mpqueue: mp.Queue
+    + query_pipe: mp.Pipe
+  }
+}
+
+' ─────────────────────────────────────────────
 '  STUBS — see respective diagrams for detail
 ' ─────────────────────────────────────────────
 class OVO <<semantic-core>>
@@ -62,10 +123,15 @@ class BaseDataset <<datasets>>
 ' ─────────────────────────────────────────────
 '  RELATIONSHIPS
 ' ─────────────────────────────────────────────
-OVOSemMap *-- OVO            : ovo
-OVOSemMap *-- Logger         : logger
-OVOSemMap o-- BaseDataset    : dataset
-OVOSemMap o-- VanillaMapper  : slam_backbone
-OVOSemMap ..> FrameState     : creates
+OVOSemMap *-- OVO              : ovo
+OVOSemMap *-- Logger           : logger
+OVOSemMap *-- RunConfig        : run
+OVOSemMap *-- VisConfig        : vis
+OVOSemMap *-- SchedulingConfig : scheduling
+OVOSemMap o-- BaseDataset      : dataset
+OVOSemMap o-- VanillaMapper    : slam_backbone
+OVOSemMap ..> FrameState       : creates
 
+' Visualization connection
+OVOSemMap ..> VisProc : spawns & streams data >
 @enduml
