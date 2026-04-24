@@ -16,39 +16,33 @@ package "Orchestration (ovo/entities/ovomapping.py)" as OrchestrationPkg #DDEEFF
   class OVOSemMap {
     + config : Dict
     + output_path : Path
-    + run : RunConfig
+    + run_config : RunConfig
     + vis : VisConfig
     + scheduling : SchedulingConfig
     + logger : Logger
     + dataset : BaseDataset
     + ovo : OVO
     + slam_backbone : VanillaMapper
+    + vis_manager : VisualizationManager
     + first_frame : int
     --
     + run() : None
     + save_representation() : None
     + restore_representation() : None
     - _setup_output_path(output_path) : None
-    - _run_semantic_step(...) : float
-    - _run_mapping_and_fusion_step(...) : float
-    - _start_visualization_process() : tuple
-    - _send_stream_frame(frame_id, mpqueue) : None
-    - _handle_semantic_query(pipe, flag) : None
+    - _run_semantic_step(frame_state: FrameState) : float
+    - _run_mapping_and_fusion_step(frame_state: FrameState) : float
     - _should_run_segmentation(frame_id) : bool
+    - _should_run_mapping(frame_id) : bool
     - _should_process_frame(frame_id) : bool
-  }
+    - _get_frame_state(frame_id) : FrameState
+    }
 
-  note right of OVOSemMap
-    **Omitted Internal Methods:**
-    - __init__
-    - _init_run_config / _vis_config / _scheduling
-    - _init_fusion_log / _write_fusion_decisions
-    - _capture_points_and_ids
-    - _send_loop_closure_event
-    - _log_final_stats
-    - _fusion_log_path (property)
-    - _get_frame_state (retrieval logic)
-  end note
+    note right of OVOSemMap
+      **Omitted Internal Methods:**
+      - __init__
+      - _init_run_config / _vis_config / _scheduling
+    end note
 
   dataclass FrameState {
     + frame_id : int
@@ -60,7 +54,6 @@ package "Orchestration (ovo/entities/ovomapping.py)" as OrchestrationPkg #DDEEFF
     + stream : bool
     + show_stream : bool
     + vis_type : str
-    + rerun_mode : str
     + rerun_visual_mode : Any
     + save_rrd : bool
     --
@@ -91,25 +84,52 @@ package "Orchestration (ovo/entities/ovomapping.py)" as OrchestrationPkg #DDEEFF
 
   class Logger {
     + output_path : Path
+    + pid : int | None
     + stats : Dict[str, list]
     + use_wandb : bool
+    + start_time : float
     --
-    + log_ovo_stats(stats, print_output) : None
-    + log_fps(avg_fps) : None
-    + log_memory_usage(frame_id) : None
+    + start_session() : None
+    + record_step(duration: float) : None
+    + record_frame_end(frame_id: int, duration: float) : None
+    + finalize(total_items: int) : None
+    + log_fusion_decisions(frame_id: int, decisions: list) : None
+    + log_ovo_stats(stats: Dict, print_output: bool) : None
+    + log_fps(avg_fps: float) : None
+    + log_spf(spf: float) : None
+    + log_total_time(total_time: float) : None
+    + log_memory_usage(frame_id: int) : None
+    + log_max_memory_usage() : None
     + write_stats() : None
     + print_final_stats() : None
+    - _fusion_log_path() : Path
+    - _init_fusion_log() : None
   }
 }
 
 ' ─────────────────────────────────────────────
-'  EXTERNAL PROCESSES / UTILS
+'  VISUALIZATION MANAGEMENT
 ' ─────────────────────────────────────────────
+package "Visualization (ovo/entities/visualizers/manager.py)" as VisPkg #E1F5FE {
+  class VisualizationManager {
+    + vis : VisConfig
+    + cam_data : Dict
+    + process : mp.Process
+    + mpqueue : mp.Queue
+    + query_flag : mp.Value
+    + query_pipe : mp.Pipe
+    --
+    + start(ovo, output_path, scene_name, show_stream) : None
+    + stop(drain) : None
+    + send_stream_frame(frame_id, slam_backbone, ovo) : None
+    + send_update_map(frame_id, slam_backbone, n_fused, decisions) : None
+    + handle_semantic_queries(ovo) : None
+  }
+}
+
 package "Visualization Process" #FFF2CC {
   class "Visualizer (Process)" as VisProc <<external>> {
-    + target: select_visualizer_target()
-    + mpqueue: mp.Queue
-    + query_pipe: mp.Pipe
+    + target: select_visualizer_target(vis_type)
   }
 }
 
@@ -123,15 +143,16 @@ class BaseDataset <<datasets>>
 ' ─────────────────────────────────────────────
 '  RELATIONSHIPS
 ' ─────────────────────────────────────────────
-OVOSemMap *-- OVO              : ovo
-OVOSemMap *-- Logger           : logger
-OVOSemMap *-- RunConfig        : run
-OVOSemMap *-- VisConfig        : vis
-OVOSemMap *-- SchedulingConfig : scheduling
-OVOSemMap o-- BaseDataset      : dataset
-OVOSemMap o-- VanillaMapper    : slam_backbone
-OVOSemMap ..> FrameState       : creates
+OVOSemMap *-- OVO                  : ovo
+OVOSemMap *-- Logger               : logger
+OVOSemMap *-- RunConfig            : run_config
+OVOSemMap *-- VisConfig            : vis
+OVOSemMap *-- SchedulingConfig     : scheduling
+OVOSemMap *-- VisualizationManager : vis_manager
+OVOSemMap o-- BaseDataset          : dataset
+OVOSemMap o-- VanillaMapper        : slam_backbone
+OVOSemMap ..> FrameState           : creates
 
 ' Visualization connection
-OVOSemMap ..> VisProc : spawns & streams data >
+VisualizationManager ..> VisProc : spawns & streams data >
 @enduml

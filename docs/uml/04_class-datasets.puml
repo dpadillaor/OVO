@@ -2,13 +2,16 @@
 ' Dataset adapters: BaseDataset defines the frame-iteration interface
 ' Add new dataset: subclass BaseDataset, implement __getitem__
 
-skinparam classAttributeIconSize 0
+skinparam classAttributeIconSize 10
 skinparam classFontSize 12
 skinparam packageFontSize 13
 skinparam groupInheritance 2
 hide empty members
 
-package "Datasets  (ovo/entities/datasets.py)" #E8F4E8 {
+' ─────────────────────────────────────────────
+'  DATASETS
+' ─────────────────────────────────────────────
+package "Datasets (ovo/entities/datasets.py)" as DatasetsPkg #E8F4E8 {
 
   abstract class BaseDataset {
     + dataset_path : Path

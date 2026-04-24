@@ -2,7 +2,7 @@
 ' Semantic pipeline: instance lifecycle — segment → track → fuse → classify
 ' Feature generators and fusion internals: see class-fusion
 
-skinparam classAttributeIconSize 0
+skinparam classAttributeIconSize 10
 skinparam classFontSize 12
 skinparam packageFontSize 13
 skinparam groupInheritance 2
@@ -11,7 +11,7 @@ hide empty members
 ' ─────────────────────────────────────────────
 '  SEMANTIC PIPELINE
 ' ─────────────────────────────────────────────
-package "Semantic Pipeline  (ovo/entities/ovo.py)" #DDFFD4 {
+package "Semantic Pipeline (ovo/entities/ovo.py)" as SemanticPkg #DDFFD4 {
 
   class OVO {
     + config : Dict

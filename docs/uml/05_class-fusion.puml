@@ -3,7 +3,7 @@
 ' Feature generators owned here — adapters compose them
 ' Add new encoder: new Generator + new FusionEncoderAdapter subclass
 
-skinparam classAttributeIconSize 0
+skinparam classAttributeIconSize 10
 skinparam classFontSize 12
 skinparam packageFontSize 13
 skinparam groupInheritance 2
@@ -12,7 +12,7 @@ hide empty members
 ' ─────────────────────────────────────────────
 '  FUSION STRATEGIES
 ' ─────────────────────────────────────────────
-package "Fusion Strategies  (ovo/entities/fusion.py)" #FFF3CD {
+package "Fusion Strategies (ovo/entities/fusion.py)" as FusionStrPkg #FFF3CD {
 
   abstract class FusionStrategy {
     {abstract} + same_instance(instance1, instance2, points_centroid1, points_centroid2) : bool
@@ -42,7 +42,7 @@ package "Fusion Strategies  (ovo/entities/fusion.py)" #FFF3CD {
 ' ─────────────────────────────────────────────
 '  FUSION ENCODER ADAPTERS
 ' ─────────────────────────────────────────────
-package "Fusion Encoder Adapters  (ovo/entities/fusion_encoders.py)" #FFE8D6 {
+package "Fusion Encoder Adapters (ovo/entities/fusion_encoders.py)" as FusionEncPkg #FFE8D6 {
 
   abstract class FusionEncoderAdapter {
     {abstract} + compute_and_update(image, binary_maps, matched_ins_ids, kf_id, keyframes, objects) : None
@@ -76,7 +76,7 @@ package "Fusion Encoder Adapters  (ovo/entities/fusion_encoders.py)" #FFE8D6 {
 ' ─────────────────────────────────────────────
 '  FEATURE GENERATORS
 ' ─────────────────────────────────────────────
-package "Feature Generators  (ovo/entities/)" #F0E6FF {
+package "Feature Generators (ovo/entities/)" as FeatureGenPkg #F0E6FF {
 
   abstract class AbstractFeatureGenerator {
     + config : Dict

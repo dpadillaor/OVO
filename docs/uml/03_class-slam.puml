@@ -2,13 +2,16 @@
 ' SLAM backends: VanillaMapper defines implicit interface; subclasses extend or duck-type
 ' Add new backend: subclass VanillaMapper (or duck-type if external like GaussianSLAM)
 
-skinparam classAttributeIconSize 0
+skinparam classAttributeIconSize 10
 skinparam classFontSize 12
 skinparam packageFontSize 13
 skinparam groupInheritance 2
 hide empty members
 
-package "SLAM Backends  (ovo/slam/)" #F5F5DC {
+' ─────────────────────────────────────────────
+'  SLAM BACKENDS
+' ─────────────────────────────────────────────
+package "SLAM Backends (ovo/slam/)" as SlamPkg #F5F5DC {
 
   class VanillaMapper {
     + cam_intrinsics : Tensor
