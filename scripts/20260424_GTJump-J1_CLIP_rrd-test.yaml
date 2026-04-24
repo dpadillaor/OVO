@@ -1,0 +1,26 @@
+default_dataset: Replica
+
+experiments:
+  - label: rrd-test
+    scenes_id: office0
+    stages: [run]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: true
+      semantic:
+        fusion_method: clip
+      vis:
+        stream: true
+        type: "rerun"
+        rerun_mode: loop_closure
+        rerun_visual_mode: "off"
+        save_rrd: true
+    slam_config:
+      noise:
+        jump_drift_enabled: true
+        jump_seed: 42
+        jumps:
+          - kf_index: 10
+            translation_magnitude: 0.2
+            rotation_magnitude: 0.2
