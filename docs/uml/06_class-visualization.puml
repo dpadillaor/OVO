@@ -1,0 +1,93 @@
+@startuml class-visualization
+' Visualization layer: Manager, Renderers, and IPC Contracts
+
+skinparam classAttributeIconSize 10
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam groupInheritance 2
+hide empty members
+
+package "Visualization Management (ovo/entities/visualizers/)" #E1F5FE {
+
+  class VisualizationManager {
+    + vis : VisConfig
+    + cam_data : Dict
+    + process : mp.Process
+    + mpqueue : mp.Queue
+    + query_flag : mp.Value
+    + query_pipe : mp.Pipe
+    --
+    + start(ovo, output_path, scene_name, show_stream) : None
+    + stop(drain) : None
+    + send_stream_frame(frame_id, slam_backbone, ovo) : None
+    + send_update_map(frame_id, slam_backbone, n_fused, decisions) : None
+    + handle_semantic_queries(ovo) : None
+    - _queue_put_dropping(queue, item) : None
+  }
+
+  class QueueRendererOrchestrator {
+    + renderer : RendererProtocol
+    + mpqueue : mp.Queue
+    --
+    + run() : None
+  }
+
+  package "Rerun Integration" #D1F2EB {
+    class BaseRerunRenderer <<abstract>> {
+      + cam_intrinsic : Dict
+      + visual_mode : str
+      + live_rec : RecordingStream
+      + file_rec : RecordingStream
+      --
+      + setup() : None
+      + handle_message(data) : None
+      # build_blueprint() : Blueprint
+      # _log(path, entity) : None
+    }
+
+    class StreamRenderer {
+      + cmap : np.ndarray
+      + trajectory : list
+      --
+      + handle_message(data) : None
+      + _handle_update_map(data) : None
+      - _log_instances_3d(...) : None
+    }
+  }
+
+  package "Contracts" #FCF3CF {
+    interface StreamFrameMessage <<TypedDict>> {
+      + type : "stream_frame"
+      + frame_id : int
+      + points : ndarray
+      + obj_ids : ndarray
+      + c2w : ndarray
+      + rgb : ndarray
+      + ins_map : ndarray
+      + sam_map : ndarray
+    }
+
+    interface UpdateMapMessage <<TypedDict>> {
+      + type : "update_map"
+      + frame_id : int
+      + n_fused : int
+      + decisions : list
+    }
+  }
+}
+
+' ─────────────────────────────────────────────
+'  RELATIONSHIPS
+' ─────────────────────────────────────────────
+
+VisualizationManager ..> StreamFrameMessage : serializes >
+VisualizationManager ..> UpdateMapMessage    : serializes >
+
+QueueRendererOrchestrator o-- BaseRerunRenderer : drives >
+
+BaseRerunRenderer <|-- StreamRenderer
+
+StreamRenderer ..> StreamFrameMessage : consumes >
+StreamRenderer ..> UpdateMapMessage    : consumes >
+
+@enduml

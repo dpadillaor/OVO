@@ -1,10 +1,6 @@
 import pytest
 
-from ovo.entities.visualizers.rerun import (
-    stream_rerun,
-    stream_rerun_fusion,
-    stream_rerun_loopclosure,
-)
+from ovo.entities.visualizers.rerun import stream_rerun
 from ovo.entities.visualizers.selection import resolve_rerun_visual_mode, select_visualizer_target
 from ovo.entities.visualizer import stream_pcd
 
@@ -12,22 +8,18 @@ from ovo.entities.visualizer import stream_pcd
 class TestSelectVisualizerTarget:
 
     def test_selects_rerun_stream_mode_by_default(self):
-        func, name = select_visualizer_target("rerun", "stream")
+        func, name = select_visualizer_target("rerun")
         assert func is stream_rerun
         assert name == "RerunVisualizer"
 
-    def test_selects_rerun_fusion_mode(self):
-        func, name = select_visualizer_target("rerun", "fusion")
-        assert func is stream_rerun_fusion
-        assert name == "RerunFusionVis"
-
-    def test_selects_rerun_loop_closure_mode(self):
-        func, name = select_visualizer_target("rerun", "loop_closure")
-        assert func is stream_rerun_loopclosure
-        assert name == "RerunLCVis"
+    def test_selects_rerun_mode_even_if_mode_string_differs(self):
+        # Now it always returns stream_rerun for "rerun" type
+        func, name = select_visualizer_target("rerun")
+        assert func is stream_rerun
+        assert name == "RerunVisualizer"
 
     def test_selects_open3d_for_non_rerun_type(self):
-        func, name = select_visualizer_target("open3d", "fusion")
+        func, name = select_visualizer_target("open3d")
         assert func is stream_pcd
         assert name == "O3DVisualizer"
 

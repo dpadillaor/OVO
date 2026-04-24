@@ -1,7 +1,10 @@
-from .rerun import stream_rerun, stream_rerun_fusion, stream_rerun_loopclosure
+from .rerun import stream_rerun
+from .selection import select_visualizer_target, resolve_rerun_visual_mode
+from .manager import VisualizationManager
 
 __all__ = [
     "stream_rerun",
-    "stream_rerun_fusion",
-    "stream_rerun_loopclosure",
+    "select_visualizer_target",
+    "resolve_rerun_visual_mode",
+    "VisualizationManager",
 ]
