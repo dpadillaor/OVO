@@ -5,6 +5,8 @@ Fixtures for fusion strategy tests
 import pytest
 import torch
 from unittest.mock import MagicMock
+from ovo.entities.run_config import RunConfig
+from ovo.entities.semantic_config import SemanticConfig
 
 
 @pytest.fixture
@@ -24,12 +26,12 @@ def mock_instance():
 
 @pytest.fixture
 def sample_points_centroid():
-    """Create sample points and centroid data."""
+    """Create sample InstanceGeometry data."""
+    from ovo.entities.fusion import InstanceGeometry
     def _create_data(center=(0, 0, 0), num_points=100, spread=0.5):
         center = torch.tensor(center, dtype=torch.float32)
         points = center + torch.randn(num_points, 3) * spread
-        centroid = points.mean(axis=0)
-        return (points, centroid)
+        return InstanceGeometry(points=points, centroid=points.mean(axis=0))
     return _create_data
 
 
@@ -43,7 +45,7 @@ def mock_fusion_strategy():
 
 @pytest.fixture
 def fusion_config():
-    """Base fusion configuration."""
+    """Base fusion configuration dict (for direct fusion strategy tests)."""
     return {
         "th_centroid": 1.5,
         "th_cossim": 0.81,
@@ -53,14 +55,20 @@ def fusion_config():
 
 
 @pytest.fixture
+def minimal_run_config():
+    """Minimal RunConfig for OVO tests (eval mode, cpu)."""
+    return RunConfig(eval=True, device="cpu")
+
+
+@pytest.fixture
 def minimal_ovo_config():
-    """Minimal configuration for OVO initialization tests."""
-    return {
-        "fusion_method": "clip",
-        "th_centroid": 1.5,
-        "th_cossim": 0.81,
-        "th_points": 0.1,
-        "verbose": False,
-        "sam": {"multi_crop": False},
-        "clip": {"embed_type": "vanilla"},
-    }
+    """Minimal SemanticConfig for OVO initialization tests."""
+    return SemanticConfig(
+        fusion_method="clip",
+        th_centroid=1.5,
+        th_cossim=0.81,
+        th_points=0.1,
+        verbose=False,
+        clip_config={"embed_type": "vanilla"},
+        sam_config={"multi_crop": False},
+    )

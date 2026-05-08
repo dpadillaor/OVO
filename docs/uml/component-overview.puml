@@ -87,7 +87,7 @@ package "Feature Encoders  (ovo/entities/)" #F0E6FF {
 ' ─────────────────────────────────────────────
 package "Fusion  (ovo/entities/fusion.py + fusion_encoders.py)" #FFF3CD {
   [FusionStrategy\n(SemanticGeometric / GeometricOnly)] as FusionStrat
-  [FusionEncoderAdapter\n(PE / SAM3 / DINO)] as FusionEnc
+  [FusionEncoderAdapter\n(PE / SAM3)] as FusionEnc
   note bottom of FusionStrat
     Decides instance merge via
     centroid + cosine-sim + overlap
@@ -105,7 +105,7 @@ package "Instance Storage  (ovo/entities/instance3d.py)" #E8F4E8 {
   [Instance3D\n(per-instance state)] as Instance
   note right of Instance
     Holds: point IDs, keyframe refs,
-    CLIP/PE/SAM3/DINO feature tensors,
+    CLIP/PE/SAM3 feature tensors,
     top-view priority queue
   end note
 }

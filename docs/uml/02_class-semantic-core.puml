@@ -9,34 +9,73 @@ skinparam groupInheritance 2
 hide empty members
 
 ' ─────────────────────────────────────────────
+'  SEMANTIC CONFIG
+' ─────────────────────────────────────────────
+package "Semantic Config (ovo/entities/semantic_config.py)" as SemanticCfgPkg #FFF3CD {
+
+  dataclass SemanticConfig {
+    + match_distance_th : float
+    + track_th : float
+    + fusion_method : str
+    + th_centroid : float
+    + th_cossim : float
+    + th_points : float
+    + n_top_views : int
+    + log : bool
+    + debug_info : bool
+    + depth_filter : bool
+    + kf_queue_delay : int
+    + return_all_clips : bool
+    + verbose : bool
+    + clip_config : Dict
+    + sam_config : Dict
+    + pe_config : Dict
+    + sam3_config : Dict
+    --
+    + {static} from_config(config) : SemanticConfig
+  }
+}
+
+' ─────────────────────────────────────────────
 '  SEMANTIC PIPELINE
 ' ─────────────────────────────────────────────
 package "Semantic Pipeline (ovo/entities/ovo.py)" as SemanticPkg #DDFFD4 {
 
+  dataclass FusionResult {
+    + objects : Dict[int, Instance3D]
+    + fused_objects : Dict[int, int]
+    + points_ins_ids : Tensor
+    + decisions : list
+  }
+
+  dataclass MapData {
+    + points_3d : Tensor
+    + points_ids : Tensor
+    + points_ins_ids : Tensor
+    --
+    + {static} from_tuple(t) : MapData
+  }
+
   class OVO {
-    + config : Dict
+    + semantic_config : SemanticConfig
+    + run_config : RunConfig
     + device : str
     + cam_intrinsics : Tensor
-    + fusion_method : str
-    + n_top_views : int
     + objects : Dict[int, Instance3D]
-    + keyframes : Dict[str, Any]
+    + kf_store : KeyframeStore
+    + keyframes_queue : deque
     + next_ins_id : int
-    + clip_generator : CLIPGenerator
-    + pe_generator : PEGenerator
-    + mask_generator : MaskGenerator
-    + sam3_generator : SAM3Generator
+    + kf_id : int
+    + generators : GeneratorPipeline
     + fusion_strategy : FusionStrategy
     + fusion_encoder : FusionEncoderAdapter
-    + th_centroid : float
-    + th_cossim : float
-    + th_points : float
     --
-    + detect_and_track_objects(frame_data, map_data, c2w) : Tensor
-    + update_map(map_data, kfs) : None
+    + __init__(semantic_config, run_config, logger, cam_intrinsics) : None
+    + detect_and_track_objects(frame_data, map_data: MapData, c2w) : Tensor
+    + update_map(map_data: MapData, kfs: Dict) : Tuple[Tensor, list]
     + compute_semantic_info() : None
     + complete_semantic_info() : None
-    + classify_instances(classes, template, th) : None
+    + classify_instances(classes, template, th) : Dict
     + query(queries, templates, ensemble) : Tensor
     + get_objs_clips() : Tensor
     + capture_dict(debug_info) : Dict
@@ -44,12 +83,15 @@ package "Semantic Pipeline (ovo/entities/ovo.py)" as SemanticPkg #DDFFD4 {
     + to(device) : None
   }
 
+}
+
+package "Instance (ovo/entities/instance3d.py)" as InstancePkg #D4F0FF {
+
   class Instance3D {
     + id : int
     + clip_feature : Tensor
     + pe_feature : Tensor
     + sam3_feature : Tensor
-    + dino_feature : Tensor
     + kfs_ids : list
     + points_ids : list
     + top_kf : list
@@ -76,21 +118,21 @@ package "Semantic Pipeline (ovo/entities/ovo.py)" as SemanticPkg #DDFFD4 {
 ' ─────────────────────────────────────────────
 class FusionStrategy <<fusion>>
 class FusionEncoderAdapter <<fusion>>
-class CLIPGenerator <<fusion>>
-class PEGenerator <<fusion>>
-class MaskGenerator <<fusion>>
-class SAM3Generator <<fusion>>
+class GeneratorPipeline <<fusion>>
+class KeyframeStore <<keyframe_store>>
+class RunConfig <<orchestration>>
 
 ' ─────────────────────────────────────────────
 '  RELATIONSHIPS
 ' ─────────────────────────────────────────────
 OVO "1" *-- "0..*" Instance3D    : objects
+OVO *-- SemanticConfig           : semantic_config
+OVO o-- RunConfig                : run_config
+OVO ..> FusionResult             : creates
+OVO ..> MapData                  : creates/receives
 
 OVO *-- FusionStrategy           : fusion_strategy
 OVO o-- FusionEncoderAdapter     : fusion_encoder
-OVO *-- CLIPGenerator            : clip_generator
-OVO o-- PEGenerator              : pe_generator
-OVO o-- MaskGenerator            : mask_generator
-OVO o-- SAM3Generator            : sam3_generator
-
+OVO *-- GeneratorPipeline        : generators
+OVO *-- KeyframeStore            : kf_store
 @enduml

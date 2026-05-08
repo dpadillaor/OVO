@@ -8,7 +8,9 @@ import time
 import os
 import gc
 from .logger import Logger
-from .ovo import OVO
+from .ovo import OVO, MapData
+from .run_config import RunConfig
+from .semantic_config import SemanticConfig
 from .datasets import get_dataset
 from .visualizers import resolve_rerun_visual_mode, select_visualizer_target, VisualizationManager
 from ..slam.vanilla_mapper import VanillaMapper
@@ -53,32 +55,6 @@ class SchedulingConfig:
             map_every=config["mapping"].get("map_every", 10),
             segment_every=config["semantic"].get("segment_every", 10),
             track_every=1 if tracking_cfg is None else tracking_cfg.get("track_every", 1),
-        )
-
-@dataclass
-class RunConfig:
-    device: str = "cuda"
-    dataset_name: str = ""
-    scene_name: str = ""
-    use_wandb: bool = False
-    restore_map: bool = False
-    debug: bool = False
-    debug_info: bool = False
-    slam_module: str = "vanilla"
-    save_estimated_cam: bool = False
-
-    @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> "RunConfig":
-        return cls(
-            device=config.get("device", "cuda"),
-            dataset_name=config["dataset_name"],
-            scene_name=config["data"]["scene_name"],
-            use_wandb=config["use_wandb"],
-            restore_map=config.get("restore_map", False),
-            debug=config.get("debug", False),
-            debug_info=config.get("debug_info", False),
-            slam_module=config["slam"].get("slam_module", "vanilla"),
-            save_estimated_cam=config["slam"].get("save_estimated_cam", False),
         )
 
 
@@ -139,10 +115,10 @@ class OVOSemMap():
 
         # Camera intrinsics and semantic module.
         cam_intrinsics = torch.tensor(self.dataset.intrinsics.astype(np.float32), device=self.run_config.device)
-        semantic_config = {**config["semantic"], "debug_info": self.run_config.debug_info}
+        semantic_config = SemanticConfig.from_config({**config["semantic"], "debug_info": self.run_config.debug_info})
 
         # Semantic module and SLAM backend.
-        self.ovo = OVO(semantic_config, self.logger, self.run_config.scene_name, cam_intrinsics, device=self.run_config.device)
+        self.ovo = OVO(semantic_config, self.run_config, self.logger, cam_intrinsics)
         self.slam_backbone = get_slam_backbone(config, self.dataset, cam_intrinsics)
 
         # Visualization Manager
@@ -155,7 +131,7 @@ class OVOSemMap():
 
         # Optional preprocessing for SAM masks.
         if config["semantic"]["sam"].get("precomputed", False) or config["semantic"]["sam"].get("precompute", False):
-            self.ovo.mask_generator.precompute(self.dataset, self.scheduling.segment_every)
+            self.ovo.generators.mask.precompute(self.dataset, self.scheduling.segment_every)
 
         self.first_frame = 0
         if self.run_config.restore_map:
@@ -264,7 +240,7 @@ class OVOSemMap():
 
             # Run OVO semantic segmentation and association for the current frame.
             scene_data = [frame_state.frame_id, image, frame_state.frame_data[2], rgb_depth_ratio]
-            map_data = self.slam_backbone.get_map()
+            map_data = MapData.from_tuple(self.slam_backbone.get_map())
             updated_points_ins_ids = self.ovo.detect_and_track_objects(scene_data, map_data, frame_state.estimated_c2w)
 
             # If OVO returns updated instance ids for map points, update the SLAM backbone's map representation accordingly.
@@ -301,7 +277,7 @@ class OVOSemMap():
 
         torch.cuda.synchronize()
         t_lc_i = time.time()
-        map_data = self.slam_backbone.get_map()
+        map_data = MapData.from_tuple(self.slam_backbone.get_map())
         kfs = self.slam_backbone.get_kfs()
 
         updated_points_ins_ids, fusion_decisions = self.ovo.update_map(map_data, kfs)

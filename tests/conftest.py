@@ -17,6 +17,7 @@ from tests.fixtures.fixtures_fusion import (
     sample_points_centroid,
     mock_fusion_strategy,
     fusion_config,
+    minimal_run_config,
     minimal_ovo_config,
 )
 
@@ -33,7 +34,6 @@ from tests.fixtures.fixtures_sam3 import (
 
 from tests.fixtures.fixtures_encoders import (
     mock_pe_generator,
-    mock_dino_generator,
     mock_sam3_generator,
     mock_keyframes_data,
     mock_objects_dict,

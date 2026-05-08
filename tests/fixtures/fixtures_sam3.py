@@ -3,6 +3,7 @@
 import pytest
 import torch
 from unittest.mock import MagicMock, patch
+from ovo.entities.semantic_config import SemanticConfig
 
 
 @pytest.fixture
@@ -73,28 +74,28 @@ def mock_instance_sam3():
 
 @pytest.fixture
 def minimal_ovo_config_sam3():
-    """Minimal OVO config with SAM3 enabled."""
-    return {
-        "fusion_method": "sam3",
-        "th_centroid": 1.5,
-        "th_cossim": 0.81,
-        "th_points": 0.1,
-        "verbose": False,
-        "sam": {"multi_crop": False},
-        "clip": {"embed_type": "vanilla"},
-        "sam3": {
+    """Minimal SemanticConfig for OVO initialization tests with SAM3 enabled."""
+    return SemanticConfig(
+        fusion_method="sam3",
+        th_centroid=1.5,
+        th_cossim=0.81,
+        th_points=0.1,
+        verbose=False,
+        clip_config={"embed_type": "vanilla"},
+        sam_config={"multi_crop": False},
+        sam3_config={
             "checkpoint_path": "/mock/path/sam3.pt",
             "components": "vit_only",
             "load_from_hf": False,
         },
-    }
+    )
 
 @pytest.fixture
 def sample_points_centroid_sam3():
-    """Create sample points and centroid data."""
+    """Create sample InstanceGeometry data."""
+    from ovo.entities.fusion import InstanceGeometry
     def _create_data(center=(0, 0, 0), num_points=100, spread=0.5):
         center = torch.tensor(center, dtype=torch.float32)
         points = center + torch.randn(num_points, 3) * spread
-        centroid = points.mean(axis=0)
-        return (points, centroid)
+        return InstanceGeometry(points=points, centroid=points.mean(axis=0))
     return _create_data

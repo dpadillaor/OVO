@@ -32,14 +32,6 @@ class TestFusionFactory:
         assert isinstance(strategy, SemanticGeometricFusion)
         assert strategy.feature_attr == "clip_feature"
 
-    def test_create_dino_fusion_strategy(self):
-        """Factory should return SemanticGeometricFusion for 'dino' config."""
-        config = {"fusion_method": "dino", "th_centroid": 1.5, "th_cossim": 0.81, "th_points": 0.1}
-        strategy = create_fusion_strategy(config)
-
-        assert isinstance(strategy, SemanticGeometricFusion)
-        assert strategy.feature_attr == "dino_feature"
-
     def test_create_pe_fusion_strategy(self):
         """Factory should return SemanticGeometricFusion for 'pe' config."""
         config = {"fusion_method": "pe", "th_centroid": 1.5, "th_cossim": 0.81, "th_points": 0.1}
@@ -164,9 +156,9 @@ class TestSemanticGeometricFusionConfig:
     def test_stores_feature_attribute(self):
         """Strategy should store the feature attribute name."""
         config = {"th_centroid": 1.5, "th_cossim": 0.81, "th_points": 0.1}
-        strategy = SemanticGeometricFusion(config, feature_attr="dino_feature")
+        strategy = SemanticGeometricFusion(config, feature_attr="pe_feature")
 
-        assert strategy.feature_attr == "dino_feature"
+        assert strategy.feature_attr == "pe_feature"
 
 
 class TestGeometricOnlyFusionConfig:
@@ -194,57 +186,55 @@ class TestOVOIntegration:
 
     # Fixture imported from tests/fixtures/fixtures_fusion.py via conftest.py
 
-    def test_ovo_has_fusion_strategy_attribute(self, minimal_ovo_config):
+    def test_ovo_has_fusion_strategy_attribute(self, minimal_ovo_config, minimal_run_config):
         """OVO should have a fusion_strategy attribute after initialization."""
         # We use patch to avoid loading heavy models
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config, minimal_run_config, mock_logger)
 
             assert hasattr(ovo, 'fusion_strategy')
             assert isinstance(ovo.fusion_strategy, FusionStrategy)
 
-    def test_ovo_creates_correct_strategy_from_config(self, minimal_ovo_config):
+    def test_ovo_creates_correct_strategy_from_config(self, minimal_ovo_config, minimal_run_config):
         """OVO should create the correct strategy based on fusion_method config."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-
-            # Test CLIP strategy
-            minimal_ovo_config["fusion_method"] = "clip"
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            from dataclasses import replace
+            ovo = OVO(replace(minimal_ovo_config, fusion_method="clip"), minimal_run_config, mock_logger)
             assert isinstance(ovo.fusion_strategy, SemanticGeometricFusion)
             assert ovo.fusion_strategy.feature_attr == "clip_feature"
 
-    def test_ovo_creates_geometric_strategy(self, minimal_ovo_config):
+    def test_ovo_creates_geometric_strategy(self, minimal_ovo_config, minimal_run_config):
         """OVO should create GeometricOnlyFusion for 'geometric' config."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            minimal_ovo_config["fusion_method"] = "geometric"
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            from dataclasses import replace
+            ovo = OVO(replace(minimal_ovo_config, fusion_method="geometric"), minimal_run_config, mock_logger)
 
             assert isinstance(ovo.fusion_strategy, GeometricOnlyFusion)
 
-    def test_ovo_uses_strategy_for_fusion_decision(self, minimal_ovo_config):
+    def test_ovo_uses_strategy_for_fusion_decision(self, minimal_ovo_config, minimal_run_config):
         """OVO.update_map should use fusion_strategy.same_instance for comparisons."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config, minimal_run_config, mock_logger)
 
             # Inject a mock strategy
             mock_strategy = MagicMock(spec=FusionStrategy)
@@ -268,25 +258,19 @@ class TestOVOIntegration:
 
             # Setup OVO state
             ovo.objects = {1: instance1, 2: instance2}
-            ovo.keyframes = {
-                "ins_descriptors": {},
-                "ins_pe_descriptors": {},
-                "frame_id": [],
-                "ins_maps": [],
-            }
             ovo.keyframes_queue = []
 
             # Create mock map data
+            from ovo.entities.ovo import MapData
             points_3d = torch.randn(200, 3)
             points_ids = torch.arange(200)
             points_ins_ids = torch.cat([torch.ones(100) * 1, torch.ones(100) * 2]).long()
-            map_data = (points_3d, points_ids, points_ins_ids)
+            map_data = MapData(points_3d, points_ids, points_ins_ids)
 
             # Call update_map
             with patch.object(ovo, 'complete_semantic_info'), \
-                 patch.object(ovo, 'update_objects_clip'), \
-                 patch.object(ovo, 'update_objects_pe'):
-                ovo.update_map(map_data, [])
+                 patch.object(ovo, 'update_objects_clip'):
+                ovo.update_map(map_data, {})
 
             # Verify strategy.same_instance was called
             assert mock_strategy.same_instance.called, \

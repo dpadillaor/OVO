@@ -1,13 +1,23 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Optional, Dict, List, Any
 import torch
 
 from ovo.entities.instance3d import Instance3D
 from ovo.entities.pe_generator import PEGenerator
 
+
+@dataclass
+class FusionFrameInput:
+    image: torch.Tensor
+    binary_maps: torch.Tensor
+    matched_ins_ids: List[int]
+    kf_id: int
+
+
 class FusionEncoderAdapter(ABC):
     """
-    Adapter for optional fusion encoders (PE, DINO, etc.)
+    Adapter for optional fusion encoders (PE, SAM3, etc.)
 
     Encapsulates all encoder-specific logic for:
     - Descriptor extraction
@@ -17,7 +27,7 @@ class FusionEncoderAdapter(ABC):
     """
 
     @abstractmethod
-    def compute_and_update(self, image: torch.Tensor, binary_maps: torch.Tensor, matched_ins_ids: List[int], kf_id: int, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
+    def compute_and_update(self, frame: FusionFrameInput, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
         """Extract embeddings and update instances."""
         pass
 
@@ -44,38 +54,19 @@ class PEFusionAdapter(FusionEncoderAdapter):
         self.generator = pe_generator
         self.storage_key = storage_key
 
-    def compute_and_update(self, image: torch.Tensor, binary_maps: torch.Tensor, matched_ins_ids: List[int], kf_id: int, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
-        """
-        Extract PE embeddings and store in keyframes + update instances.
-        
-        Args:
-            image: RGB image tensor/array.
-            binary_maps: Binary masks for instances.
-            matched_ins_ids: List of instance IDs matched to masks.
-            kf_id: Current keyframe ID.
-            keyframes: Global keyframes dictionary.
-            objects: Global objects dictionary.
-        """
-        # Handle empty input
-        if image is None or binary_maps is None or len(matched_ins_ids) == 0:
+    def compute_and_update(self, frame: FusionFrameInput, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
+        if frame.image is None or frame.binary_maps is None or len(frame.matched_ins_ids) == 0:
             return
 
-        # Extract embeddings
-        pe_embeds = self.generator.extract_pe(image, binary_maps).cpu()
+        pe_embeds = self.generator.extract_pe(frame.image, frame.binary_maps).cpu()
 
-        # Initialize storage for keyframe if needed
-        if kf_id not in keyframes[self.storage_key]:
-            keyframes[self.storage_key][kf_id] = {}
+        if frame.kf_id not in keyframes[self.storage_key]:
+            keyframes[self.storage_key][frame.kf_id] = {}
 
-        # Store embeddings and update instances
-        for idx, ins_id in enumerate(matched_ins_ids):
+        for idx, ins_id in enumerate(frame.matched_ins_ids):
             if ins_id == -1:
                 continue
-                
-            # Store in keyframes
-            keyframes[self.storage_key][kf_id][ins_id] = pe_embeds[idx:idx+1]
-            
-            # Update object if it exists
+            keyframes[self.storage_key][frame.kf_id][ins_id] = pe_embeds[idx:idx+1]
             if ins_id in objects:
                 objects[ins_id].update_pe(keyframes[self.storage_key])
 
@@ -123,30 +114,6 @@ class PEFusionAdapter(FusionEncoderAdapter):
             del keyframes[self.storage_key][kf_id]
 
 
-class DINOFusionAdapter(FusionEncoderAdapter):
-    """Adapter for DINO fusion (placeholder for future integration)."""
-
-    def __init__(self, dino_generator: Any, storage_key: str = "ins_dino_descriptors"):
-        self.generator = dino_generator
-        self.storage_key = storage_key
-
-    def compute_and_update(self, image: torch.Tensor, binary_maps: torch.Tensor, matched_ins_ids: List[int], kf_id: int, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
-        # Placeholder implementation
-        pass
-
-    def update_objects(self, objects: Dict[int, Instance3D], keyframes: Dict[str, Any]) -> None:
-        # Placeholder implementation
-        pass
-
-    def transfer_on_merge(self, source_ids: List[int], target_id: int, keyframes: Dict[str, Any]) -> None:
-        # Placeholder implementation
-        pass
-
-    def cleanup_keyframe(self, kf_id: int, keyframes: Dict[str, Any]) -> None:
-        # Placeholder implementation
-        pass
-
-
 class SAM3FusionAdapter(FusionEncoderAdapter):
     """Adapter for SAM3 fusion."""
 
@@ -154,38 +121,19 @@ class SAM3FusionAdapter(FusionEncoderAdapter):
         self.generator = sam3_generator
         self.storage_key = storage_key
 
-    def compute_and_update(self, image: torch.Tensor, binary_maps: torch.Tensor, matched_ins_ids: List[int], kf_id: int, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
-        """
-        Extract SAM3 embeddings and store in keyframes + update instances.
-
-        Args:
-            image: RGB image tensor/array.
-            binary_maps: Binary masks for instances.
-            matched_ins_ids: List of instance IDs matched to masks.
-            kf_id: Current keyframe ID.
-            keyframes: Global keyframes dictionary.
-            objects: Global objects dictionary.
-        """
-        # Handle empty input
-        if image is None or binary_maps is None or len(matched_ins_ids) == 0:
+    def compute_and_update(self, frame: FusionFrameInput, keyframes: Dict[str, Any], objects: Dict[int, Instance3D]) -> None:
+        if frame.image is None or frame.binary_maps is None or len(frame.matched_ins_ids) == 0:
             return
 
-        # Extract embeddings
-        sam3_embeds = self.generator.extract_sam3(image, binary_maps).cpu()
+        sam3_embeds = self.generator.extract_sam3(frame.image, frame.binary_maps).cpu()
 
-        # Initialize storage for keyframe if needed
-        if kf_id not in keyframes[self.storage_key]:
-            keyframes[self.storage_key][kf_id] = {}
+        if frame.kf_id not in keyframes[self.storage_key]:
+            keyframes[self.storage_key][frame.kf_id] = {}
 
-        # Store embeddings and update instances
-        for idx, ins_id in enumerate(matched_ins_ids):
+        for idx, ins_id in enumerate(frame.matched_ins_ids):
             if ins_id == -1:
                 continue
-
-            # Store in keyframes
-            keyframes[self.storage_key][kf_id][ins_id] = sam3_embeds[idx:idx+1]
-
-            # Update object if it exists
+            keyframes[self.storage_key][frame.kf_id][ins_id] = sam3_embeds[idx:idx+1]
             if ins_id in objects:
                 objects[ins_id].update_sam3(keyframes[self.storage_key])
 

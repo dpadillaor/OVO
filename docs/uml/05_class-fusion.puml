@@ -14,8 +14,13 @@ hide empty members
 ' ─────────────────────────────────────────────
 package "Fusion Strategies (ovo/entities/fusion.py)" as FusionStrPkg #FFF3CD {
 
+  dataclass InstanceGeometry {
+    + points : Tensor
+    + centroid : Tensor
+  }
+
   abstract class FusionStrategy {
-    {abstract} + same_instance(instance1, instance2, points_centroid1, points_centroid2) : bool
+    {abstract} + same_instance(instance1, instance2, geom1: InstanceGeometry, geom2: InstanceGeometry) : bool
     + pop_decisions() : list
   }
 
@@ -44,11 +49,18 @@ package "Fusion Strategies (ovo/entities/fusion.py)" as FusionStrPkg #FFF3CD {
 ' ─────────────────────────────────────────────
 package "Fusion Encoder Adapters (ovo/entities/fusion_encoders.py)" as FusionEncPkg #FFE8D6 {
 
+  dataclass FusionFrameInput {
+    + image : Tensor
+    + binary_maps : Tensor
+    + matched_ins_ids : List[int]
+    + kf_id : int
+  }
+
   abstract class FusionEncoderAdapter {
-    {abstract} + compute_and_update(image, binary_maps, matched_ins_ids, kf_id, keyframes, objects) : None
-    {abstract} + update_objects(objects, keyframes) : None
-    {abstract} + transfer_on_merge(source_ids, target_id, keyframes) : None
-    {abstract} + cleanup_keyframe(kf_id, keyframes) : None
+    {abstract} + compute_and_update(frame: FusionFrameInput, kf_store: KeyframeStore, objects) : None
+    {abstract} + update_objects(objects, kf_store: KeyframeStore) : None
+    {abstract} + transfer_on_merge(source_ids, target_id, kf_store: KeyframeStore) : None
+    {abstract} + cleanup_keyframe(kf_id, kf_store: KeyframeStore) : None
   }
 
   class PEFusionAdapter {
@@ -76,7 +88,20 @@ package "Fusion Encoder Adapters (ovo/entities/fusion_encoders.py)" as FusionEnc
 ' ─────────────────────────────────────────────
 '  FEATURE GENERATORS
 ' ─────────────────────────────────────────────
-package "Feature Generators (ovo/entities/)" as FeatureGenPkg #F0E6FF {
+package "Feature Generators (ovo/entities/generator_pipeline.py + generators)" as FeatureGenPkg #F0E6FF {
+
+  class GeneratorPipeline {
+    + clip : CLIPGenerator
+    + pe : PEGenerator
+    + mask : MaskGenerator
+    + sam3 : SAM3Generator
+    --
+    + cpu() : None
+    + cuda() : None
+    + to(device) : None
+  }
+
+
 
   abstract class AbstractFeatureGenerator {
     + config : Dict
@@ -138,6 +163,11 @@ package "Feature Generators (ovo/entities/)" as FeatureGenPkg #F0E6FF {
 ' ─────────────────────────────────────────────
 PEFusionAdapter *-- PEGenerator       : generator
 SAM3FusionAdapter *-- SAM3Generator   : generator
+
+GeneratorPipeline *-- CLIPGenerator   : clip
+GeneratorPipeline o-- PEGenerator     : pe
+GeneratorPipeline o-- MaskGenerator   : mask
+GeneratorPipeline o-- SAM3Generator   : sam3
 
 SemanticGeometricFusion ..> Instance3D : reads feature_attr
 

@@ -14,40 +14,40 @@ from ovo.entities.ovo import OVO
 class TestOVOSAM3Initialization:
     """Test OVO initializes SAM3Generator and adapter correctly."""
 
-    def test_ovo_initializes_sam3_generator_when_config_present(self, minimal_ovo_config_sam3):
+    def test_ovo_initializes_sam3_generator_when_config_present(self, minimal_ovo_config_sam3, minimal_run_config):
         """OVO should create SAM3Generator when 'sam3' key is in config."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             MockSAM3Gen.assert_called_once()
-            assert ovo.sam3_generator is not None
+            assert ovo.generators.sam3 is not None
 
-    def test_ovo_sam3_generator_none_when_no_config(self, minimal_ovo_config):
-        """OVO should have sam3_generator=None when 'sam3' not in config."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+    def test_ovo_sam3_generator_none_when_no_config(self, minimal_ovo_config, minimal_run_config):
+        """OVO should have generators.sam3=None when 'sam3' not in config."""
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config, minimal_run_config, mock_logger)
 
-            assert ovo.sam3_generator is None
+            assert ovo.generators.sam3 is None
 
-    def test_ovo_creates_sam3_fusion_strategy(self, minimal_ovo_config_sam3):
+    def test_ovo_creates_sam3_fusion_strategy(self, minimal_ovo_config_sam3, minimal_run_config):
         """OVO should create SAM3 fusion strategy when fusion_method='sam3'."""
         with patch('ovo.entities.sam3_generator.SAM3Generator'), \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
             from ovo.entities.fusion import SemanticGeometricFusion
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             assert isinstance(ovo.fusion_strategy, SemanticGeometricFusion)
             assert ovo.fusion_strategy.feature_attr == "sam3_feature"
@@ -56,11 +56,11 @@ class TestOVOSAM3Initialization:
 class TestOVOSAM3FusionAdapter:
     """Test OVO uses SAM3FusionAdapter correctly."""
 
-    def test_get_fusion_encoder_returns_sam3_adapter(self, minimal_ovo_config_sam3):
+    def test_get_fusion_encoder_returns_sam3_adapter(self, minimal_ovo_config_sam3, minimal_run_config):
         """_get_fusion_encoder should return SAM3FusionAdapter when method is 'sam3'."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
             from ovo.entities.fusion_encoders import SAM3FusionAdapter
 
@@ -68,18 +68,18 @@ class TestOVOSAM3FusionAdapter:
             MockSAM3Gen.return_value = mock_sam3_gen
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             # Verify adapter is SAM3FusionAdapter
             assert isinstance(ovo.fusion_encoder, SAM3FusionAdapter)
             assert ovo.fusion_encoder.generator == mock_sam3_gen
             assert ovo.fusion_encoder.storage_key == "ins_sam3_descriptors"
 
-    def test_validate_fusion_config_raises_on_missing_generator(self, minimal_ovo_config_sam3):
+    def test_validate_fusion_config_raises_on_missing_generator(self, minimal_ovo_config_sam3, minimal_run_config):
         """Should raise ValueError if fusion_method='sam3' but generator missing."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             # Make SAM3Generator return None
@@ -89,17 +89,17 @@ class TestOVOSAM3FusionAdapter:
 
             # This should raise during OVO init when it calls _validate_fusion_config
             with pytest.raises(ValueError, match="requires SAM3 generator"):
-                ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+                ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
 
 class TestOVOSAM3DelegationToAdapter:
     """Test OVO delegates SAM3 operations to adapter."""
 
-    def test_compute_semantic_info_delegates_to_sam3_adapter(self, minimal_ovo_config_sam3):
+    def test_compute_semantic_info_delegates_to_sam3_adapter(self, minimal_ovo_config_sam3, minimal_run_config):
         """_compute_semantic_info should call SAM3 adapter.compute_and_update."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             # Setup mocks
@@ -107,7 +107,7 @@ class TestOVOSAM3DelegationToAdapter:
             MockSAM3Gen.return_value = mock_sam3_gen
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             # Mock adapter
             mock_adapter = MagicMock()
@@ -131,22 +131,24 @@ class TestOVOSAM3DelegationToAdapter:
 
             # Assertions
             ovo._extract_clip.assert_called() # CLIP always runs
+            from ovo.entities.fusion_encoders import FusionFrameInput
             mock_adapter.compute_and_update.assert_called_with(
-                image, binary_maps, matched_ids, kf_id, ovo.keyframes, ovo.objects
+                FusionFrameInput(image=image, binary_maps=binary_maps, matched_ins_ids=matched_ids, kf_id=kf_id),
+                ovo.kf_store, ovo.objects
             )
 
-    def test_update_map_delegates_update_to_sam3_adapter(self, minimal_ovo_config_sam3):
+    def test_update_map_delegates_update_to_sam3_adapter(self, minimal_ovo_config_sam3, minimal_run_config):
         """update_map should call SAM3 adapter.update_objects."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_sam3_gen = MagicMock()
             MockSAM3Gen.return_value = mock_sam3_gen
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             # Mock adapter
             mock_adapter = MagicMock()
@@ -157,30 +159,31 @@ class TestOVOSAM3DelegationToAdapter:
             ovo.update_objects_clip = MagicMock()
 
             # Create map data
+            from ovo.entities.ovo import MapData
             points_3d = torch.randn(10, 3)
             points_ids = torch.arange(10)
             points_ins_ids = torch.zeros(10, dtype=torch.long)
-            map_data = (points_3d, points_ids, points_ins_ids)
+            map_data = MapData(points_3d, points_ids, points_ins_ids)
 
             ovo.objects = {}
 
-            ovo.update_map(map_data, kfs=[])
+            ovo.update_map(map_data, kfs={})
 
             # Verify adapter.update_objects was called
-            mock_adapter.update_objects.assert_called_with(ovo.objects, ovo.keyframes)
+            mock_adapter.update_objects.assert_called_with(ovo.objects, ovo.kf_store)
 
-    def test_update_map_delegates_cleanup_to_sam3_adapter(self, minimal_ovo_config_sam3):
+    def test_update_map_delegates_cleanup_to_sam3_adapter(self, minimal_ovo_config_sam3, minimal_run_config):
         """update_map should call SAM3 adapter.cleanup_keyframe for deleted KFs."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_sam3_gen = MagicMock()
             MockSAM3Gen.return_value = mock_sam3_gen
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             # Mock adapter
             mock_adapter = MagicMock()
@@ -189,30 +192,32 @@ class TestOVOSAM3DelegationToAdapter:
             ovo.complete_semantic_info = MagicMock()
             ovo.update_objects_clip = MagicMock()
 
-            # Keyframes state: KF 1 and 2 exist
-            ovo.keyframes["frame_id"] = [1, 2]
-            ovo.keyframes["ins_descriptors"] = {1: {}, 2: {}}
+            # Keyframes state: kf_id=0→frame_id=1, kf_id=1→frame_id=2
+            ovo.kf_store.frame_ids = [1, 2]
+            ovo.kf_store.clip[0] = {}
+            ovo.kf_store.clip[1] = {}
 
             ovo.objects = {}
 
-            # Update with only KF 2 remaining (KF 1 deleted)
-            ovo.update_map((torch.zeros(1, 3), torch.zeros(1, dtype=torch.long), torch.zeros(1, dtype=torch.long)), kfs=[2])
+            from ovo.entities.ovo import MapData
+            # Update with only frame_id=2 remaining (frame_id=1 at kf_id=0 deleted)
+            ovo.update_map(MapData(torch.zeros(1, 3), torch.zeros(1, dtype=torch.long), torch.zeros(1, dtype=torch.long)), kfs={2: {}})
 
-            # Adapter cleanup should be called for KF 1
-            mock_adapter.cleanup_keyframe.assert_called_with(1, ovo.keyframes)
+            # Adapter cleanup should be called for kf_id=0 (which mapped to frame_id=1)
+            mock_adapter.cleanup_keyframe.assert_called_with(0, ovo.kf_store)
 
-    def test_update_map_delegates_transfer_on_merge(self, minimal_ovo_config_sam3):
+    def test_update_map_delegates_transfer_on_merge(self, minimal_ovo_config_sam3, minimal_run_config):
         """update_map should call SAM3 adapter.transfer_on_merge when instances merge."""
         with patch('ovo.entities.sam3_generator.SAM3Generator') as MockSAM3Gen, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+             patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_sam3_gen = MagicMock()
             MockSAM3Gen.return_value = mock_sam3_gen
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config_sam3, minimal_run_config, mock_logger)
 
             # Mock adapter
             mock_adapter = MagicMock()
@@ -224,10 +229,11 @@ class TestOVOSAM3DelegationToAdapter:
 
             # Create map data — points_ins_ids must contain both obj IDs so they
             # survive _remove_missing_instances and reach the merge check
+            from ovo.entities.ovo import MapData
             points_3d = torch.randn(10, 3)
             points_ids = torch.arange(10)
             points_ins_ids = torch.tensor([1]*5 + [2]*5, dtype=torch.long)
-            map_data = (points_3d, points_ids, points_ins_ids)
+            map_data = MapData(points_3d, points_ids, points_ins_ids)
 
             # Mock fusion strategy to FORCE a merge
             obj1 = MagicMock()
@@ -237,42 +243,42 @@ class TestOVOSAM3DelegationToAdapter:
             obj2.id = 2
             obj2.kfs_ids = [0]
             ovo.objects = {1: obj1, 2: obj2}
-            ovo.keyframes["ins_descriptors"] = {0: {}}
+            ovo.kf_store.clip[0] = {}
 
             ovo.fusion_strategy.same_instance = MagicMock(return_value=True)
 
             # Mock instance_utils.fuse_instances to actually perform merge logic
             with patch('ovo.utils.instance_utils.fuse_instances', return_value=(obj1, points_ins_ids)):
-                ovo.update_map(map_data, kfs=[])
+                ovo.update_map(map_data, kfs={})
 
                 # Verify transfer called (obj2 merged into obj1)
-                mock_adapter.transfer_on_merge.assert_called_with([2], 1, ovo.keyframes)
+                mock_adapter.transfer_on_merge.assert_called_with([2], 1, ovo.kf_store)
 
 
 class TestOVOSAM3BackwardCompatibility:
     """Test OVO still works without SAM3 (backward compatibility)."""
 
-    def test_ovo_works_without_sam3_config(self, minimal_ovo_config):
+    def test_ovo_works_without_sam3_config(self, minimal_ovo_config, minimal_run_config):
         """OVO should work normally when 'sam3' not in config."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config, minimal_run_config, mock_logger)
 
-            assert ovo.sam3_generator is None
+            assert ovo.generators.sam3 is None
             # fusion_encoder should be None for CLIP-only mode
             assert ovo.fusion_encoder is None
 
-    def test_ovo_no_sam3_methods_called_when_disabled(self, minimal_ovo_config):
-        """OVO should not attempt SAM3 operations when sam3_generator is None."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+    def test_ovo_no_sam3_methods_called_when_disabled(self, minimal_ovo_config, minimal_run_config):
+        """OVO should not attempt SAM3 operations when generators.sam3 is None."""
+        with patch('ovo.entities.generator_pipeline.CLIPGenerator'), \
+             patch('ovo.entities.generator_pipeline.PEGenerator'):
             from ovo.entities.logger import Logger
 
             mock_logger = MagicMock(spec=Logger)
-            ovo = OVO(minimal_ovo_config, mock_logger, eval=True)
+            ovo = OVO(minimal_ovo_config, minimal_run_config, mock_logger)
 
             # Mock queue return (replace deque with a mock to allow popleft override)
             mock_queue = MagicMock()

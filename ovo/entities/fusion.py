@@ -2,10 +2,11 @@
 Fusion Strategy Pattern for Instance Comparison
 
 This module implements the Strategy pattern for instance fusion logic,
-allowing dynamic selection of different fusion algorithms (CLIP, DINO, PE, geometric).
+allowing dynamic selection of different fusion algorithms (CLIP, PE, SAM3, geometric).
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Tuple, Dict, Any
 from ..utils.instance_utils import compute_pcd_overlap, compute_centroid_distance
 
@@ -15,6 +16,12 @@ import numpy as np
 import open3d as o3d
 
 logger = logging.getLogger("ovo.fusion")
+
+
+@dataclass
+class InstanceGeometry:
+    points: torch.Tensor
+    centroid: torch.Tensor
 
 class FusionStrategy(ABC):
     """Abstract base class for fusion strategies."""
@@ -27,21 +34,9 @@ class FusionStrategy(ABC):
         self,
         instance1,
         instance2,
-        points_centroid1: Tuple[torch.Tensor, torch.Tensor],
-        points_centroid2: Tuple[torch.Tensor, torch.Tensor]
+        geom1: InstanceGeometry,
+        geom2: InstanceGeometry,
     ) -> bool:
-        """
-        Determine if two instances represent the same object.
-
-        Args:
-            instance1: First Instance3D object
-            instance2: Second Instance3D object
-            points_centroid1: Tuple of (points, centroid) for instance1
-            points_centroid2: Tuple of (points, centroid) for instance2
-
-        Returns:
-            bool: True if instances should be fused, False otherwise
-        """
         pass
 
     def pop_decisions(self) -> list:
@@ -54,7 +49,7 @@ class SemanticGeometricFusion(FusionStrategy):
     """
     Semantic + Geometric fusion strategy.
 
-    Uses both semantic features (CLIP, DINO, PE) and geometric proximity
+    Uses both semantic features (CLIP, PE, SAM3) and geometric proximity
     to determine if instances should be fused.
     """
 
@@ -69,12 +64,12 @@ class SemanticGeometricFusion(FusionStrategy):
         self,
         instance1,
         instance2,
-        points_centroid1: Tuple[torch.Tensor, torch.Tensor],
-        points_centroid2: Tuple[torch.Tensor, torch.Tensor]
+        geom1: InstanceGeometry,
+        geom2: InstanceGeometry,
     ) -> bool:
         """Determine if instances are the same using semantic + geometric criteria."""
-        points1, centroid1 = points_centroid1
-        points2, centroid2 = points_centroid2
+        points1, centroid1 = geom1.points, geom1.centroid
+        points2, centroid2 = geom2.points, geom2.centroid
         i1, i2 = instance1.id, instance2.id
 
         centroid_dist = compute_centroid_distance(centroid1, centroid2)
@@ -119,12 +114,12 @@ class GeometricOnlyFusion(FusionStrategy):
         self,
         instance1,
         instance2,
-        points_centroid1: Tuple[torch.Tensor, torch.Tensor],
-        points_centroid2: Tuple[torch.Tensor, torch.Tensor]
+        geom1: InstanceGeometry,
+        geom2: InstanceGeometry,
     ) -> bool:
         """Determine if instances are the same using only geometric criteria."""
-        points1, centroid1 = points_centroid1
-        points2, centroid2 = points_centroid2
+        points1, centroid1 = geom1.points, geom1.centroid
+        points2, centroid2 = geom2.points, geom2.centroid
         i1, i2 = instance1.id, instance2.id
 
         centroid_dist = compute_centroid_distance(centroid1, centroid2)
@@ -160,7 +155,6 @@ def create_fusion_strategy(config: Dict[str, Any]) -> FusionStrategy:
 
     strategy_map = {
         "clip": ("clip_feature", SemanticGeometricFusion),
-        "dino": ("dino_feature", SemanticGeometricFusion),
         "pe": ("pe_feature", SemanticGeometricFusion),
         "sam3": ("sam3_feature", SemanticGeometricFusion),
         "geometric": (None, GeometricOnlyFusion),

@@ -111,8 +111,6 @@ class ExperimentRunner:
         match method_safe:
             case "clip" | None:
                 return "CLIP"
-            case "dino":
-                return "DINO"
             case "pe":
                 model_card = self.experiment.ovo_config.semantic.get("pe", {}).get("model_card", "")
                 if "Spatial" in model_card:

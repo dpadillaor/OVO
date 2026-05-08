@@ -11,7 +11,7 @@ These tests verify the adapter pattern for fusion encoders:
 import pytest
 import torch
 from unittest.mock import MagicMock, call
-from ovo.entities.fusion_encoders import PEFusionAdapter, DINOFusionAdapter, SAM3FusionAdapter
+from ovo.entities.fusion_encoders import PEFusionAdapter, SAM3FusionAdapter, FusionFrameInput
 
 class TestPEFusionAdapter:
     """Tests for PEFusionAdapter logic."""
@@ -43,7 +43,7 @@ class TestPEFusionAdapter:
         # Provide a valid keyframes structure for compute_and_update to avoid KeyError
         keyframes_with_storage = {adapter.storage_key: {}}
         with pytest.raises(AttributeError, match="object has no attribute 'extract_pe'"):
-            adapter.compute_and_update(torch.randn(3, 100, 100), torch.ones(1, 100, 100), [0], 1, keyframes_with_storage, {0: MagicMock()})
+            adapter.compute_and_update(FusionFrameInput(image=torch.randn(3, 100, 100), binary_maps=torch.ones(1, 100, 100), matched_ins_ids=[0], kf_id=1), keyframes_with_storage, {0: MagicMock()})
 
 
     # --- Compute and Update Tests ---
@@ -61,8 +61,8 @@ class TestPEFusionAdapter:
         # Mock generator output
         mock_pe_generator.extract_pe.return_value = torch.randn(3, 768)
         
-        adapter.compute_and_update(image, binary_maps, matched_ins_ids, kf_id, mock_keyframes_data, mock_objects_dict)
-        
+        adapter.compute_and_update(FusionFrameInput(image=image, binary_maps=binary_maps, matched_ins_ids=matched_ins_ids, kf_id=kf_id), mock_keyframes_data, mock_objects_dict)
+
         # 1. Verify Generator called
         mock_pe_generator.extract_pe.assert_called_once()
         
@@ -87,8 +87,8 @@ class TestPEFusionAdapter:
         mock_pe_generator.extract_pe.return_value = torch.randn(3, 768)
         
         dummy_image = torch.randn(3, 100, 100)
-        adapter.compute_and_update(dummy_image, binary_maps, matched_ins_ids, kf_id, mock_keyframes_data, mock_objects_dict)
-        
+        adapter.compute_and_update(FusionFrameInput(image=dummy_image, binary_maps=binary_maps, matched_ins_ids=matched_ins_ids, kf_id=kf_id), mock_keyframes_data, mock_objects_dict)
+
         storage = mock_keyframes_data["ins_pe_descriptors"][kf_id]
         assert 0 in storage
         assert 1 in storage
@@ -99,8 +99,8 @@ class TestPEFusionAdapter:
         """Should handle empty inputs gracefully."""
         adapter = PEFusionAdapter(mock_pe_generator)
         
-        adapter.compute_and_update(None, None, [], 5, mock_keyframes_data, mock_objects_dict)
-        
+        adapter.compute_and_update(FusionFrameInput(image=None, binary_maps=None, matched_ins_ids=[], kf_id=5), mock_keyframes_data, mock_objects_dict)
+
         mock_pe_generator.extract_pe.assert_not_called()
         assert 5 not in mock_keyframes_data["ins_pe_descriptors"]
 
@@ -115,8 +115,8 @@ class TestPEFusionAdapter:
         mock_pe_generator.extract_pe.return_value = torch.randn(1, 768)
         
         dummy_image = torch.randn(3, 100, 100)
-        adapter.compute_and_update(dummy_image, binary_maps, matched_ins_ids, kf_id, mock_keyframes_data, mock_objects_dict)
-        
+        adapter.compute_and_update(FusionFrameInput(image=dummy_image, binary_maps=binary_maps, matched_ins_ids=matched_ins_ids, kf_id=kf_id), mock_keyframes_data, mock_objects_dict)
+
         # Should be in keyframes
         assert 99 in mock_keyframes_data["ins_pe_descriptors"][kf_id]
         # Should not crash trying to access objects[99]
@@ -209,24 +209,6 @@ class TestPEFusionAdapter:
         # No error raised
 
 
-class TestDINOFusionAdapter:
-    """Tests for DINOFusionAdapter configuration."""
-
-    def test_init_sets_correct_defaults(self, mock_dino_generator):
-        """Should initialize with DINO-specific storage key."""
-        adapter = DINOFusionAdapter(mock_dino_generator)
-        assert adapter.generator == mock_dino_generator
-        assert adapter.storage_key == "ins_dino_descriptors"
-
-    def test_methods_exist(self, mock_dino_generator):
-        """Verify placeholder methods exist and follow interface."""
-        adapter = DINOFusionAdapter(mock_dino_generator)
-        assert hasattr(adapter, 'compute_and_update')
-        assert hasattr(adapter, 'update_objects')
-        assert hasattr(adapter, 'transfer_on_merge')
-        assert hasattr(adapter, 'cleanup_keyframe')
-
-
 class TestSAM3FusionAdapter:
     """Tests for SAM3FusionAdapter logic."""
 
@@ -256,7 +238,7 @@ class TestSAM3FusionAdapter:
         # Mock generator output
         mock_sam3_generator.extract_sam3.return_value = torch.randn(3, 1024)
 
-        adapter.compute_and_update(image, binary_maps, matched_ins_ids, kf_id, mock_keyframes_data, mock_objects_dict)
+        adapter.compute_and_update(FusionFrameInput(image=image, binary_maps=binary_maps, matched_ins_ids=matched_ins_ids, kf_id=kf_id), mock_keyframes_data, mock_objects_dict)
 
         # 1. Verify Generator called
         mock_sam3_generator.extract_sam3.assert_called_once()
@@ -282,7 +264,7 @@ class TestSAM3FusionAdapter:
         mock_sam3_generator.extract_sam3.return_value = torch.randn(3, 1024)
 
         dummy_image = torch.randn(3, 100, 100)
-        adapter.compute_and_update(dummy_image, binary_maps, matched_ins_ids, kf_id, mock_keyframes_data, mock_objects_dict)
+        adapter.compute_and_update(FusionFrameInput(image=dummy_image, binary_maps=binary_maps, matched_ins_ids=matched_ins_ids, kf_id=kf_id), mock_keyframes_data, mock_objects_dict)
 
         storage = mock_keyframes_data["ins_sam3_descriptors"][kf_id]
         assert 0 in storage
@@ -294,7 +276,7 @@ class TestSAM3FusionAdapter:
         """Should handle empty inputs gracefully."""
         adapter = SAM3FusionAdapter(mock_sam3_generator)
 
-        adapter.compute_and_update(None, None, [], 5, mock_keyframes_data, mock_objects_dict)
+        adapter.compute_and_update(FusionFrameInput(image=None, binary_maps=None, matched_ins_ids=[], kf_id=5), mock_keyframes_data, mock_objects_dict)
 
         mock_sam3_generator.extract_sam3.assert_not_called()
         assert 5 not in mock_keyframes_data["ins_sam3_descriptors"]
@@ -310,7 +292,7 @@ class TestSAM3FusionAdapter:
         mock_sam3_generator.extract_sam3.return_value = torch.randn(1, 1024)
 
         dummy_image = torch.randn(3, 100, 100)
-        adapter.compute_and_update(dummy_image, binary_maps, matched_ins_ids, kf_id, mock_keyframes_data, mock_objects_dict)
+        adapter.compute_and_update(FusionFrameInput(image=dummy_image, binary_maps=binary_maps, matched_ins_ids=matched_ins_ids, kf_id=kf_id), mock_keyframes_data, mock_objects_dict)
 
         # Should be in keyframes
         assert 99 in mock_keyframes_data["ins_sam3_descriptors"][kf_id]

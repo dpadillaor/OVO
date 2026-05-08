@@ -14,14 +14,6 @@ def mock_pe_generator():
     return generator
 
 @pytest.fixture
-def mock_dino_generator():
-    """Mock DINOGenerator."""
-    generator = MagicMock()
-    # Simulate extraction returning random embeddings
-    generator.extract_dino.side_effect = lambda img, masks: torch.randn(len(masks), 384)
-    return generator
-
-@pytest.fixture
 def mock_sam3_generator():
     """Mock SAM3Generator."""
     generator = MagicMock()
@@ -35,7 +27,6 @@ def mock_keyframes_data():
     """Mock keyframes dictionary structure."""
     return {
         "ins_pe_descriptors": {},
-        "ins_dino_descriptors": {},
         "ins_sam3_descriptors": {}
     }
 

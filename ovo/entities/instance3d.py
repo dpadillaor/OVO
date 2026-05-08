@@ -34,8 +34,6 @@ class Instance3D:
         self.pe_feature_kf = None
         self.sam3_feature = None
         self.sam3_feature_kf = None
-        self.dino_feature = None
-        self.dino_feature_kf = None
         self.kfs_ids = []
         self.points_ids = []
         self.top_kf = []

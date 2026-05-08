@@ -1,0 +1,187 @@
+@startuml CovisibilityModule
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package "covisibility" {
+
+  ' ─────────────────────────────────────────
+  ' DATACLASSES
+  ' ─────────────────────────────────────────
+
+  class KeyFrameData <<dataclass>> {
+    ' Wrapper mínimo sobre lo que ya viaja en OVO.
+    ' Se construye en detect_and_track_objects()
+    ' justo antes de llamar a add_keyframe().
+    + kf_id: int
+    + frame_id: int
+    + c2w: torch.Tensor
+    + depth: torch.Tensor
+    + cam_intrinsics: torch.Tensor
+  }
+
+  class CovisibilityEdge <<dataclass>> {
+    + kf_id_a: int
+    + kf_id_b: int
+    + overlap_ratio: float
+  }
+
+  class CovisiblePair <<dataclass>> {
+    ' Reemplaza el doble bucle de _fuse_overlapping_instances.
+    ' Solo se generan pares de instancias cuyos KFs
+    ' tienen overlap_ratio >= min_overlap.
+    + instance_id_a: int
+    + instance_id_b: int
+    + kf_id_a: int
+    + kf_id_b: int
+    + overlap_ratio: float
+  }
+
+  ' ─────────────────────────────────────────
+  ' INTERFACES
+  ' ─────────────────────────────────────────
+
+  interface IVisibilityEstimator {
+    + estimate_pair(kf_a: KeyFrameData, kf_b: KeyFrameData) : float
+    + estimate_candidates(query: KeyFrameData, candidates: list[KeyFrameData]) : list[CovisibilityEdge]
+  }
+
+  interface ICovisibilityGraph {
+    + add_keyframe(kf: KeyFrameData) : None
+    + remove_keyframe(kf_id: int) : None
+    + get_covisible(kf_id: int, top_n: int) : list[CovisibilityEdge]
+    + get_covisible_pairs_for_instances(instances: list[Instance3D], min_overlap: float) : list[CovisiblePair]
+  }
+
+  ' ─────────────────────────────────────────
+  ' ESTIMATOR (estimator.py)
+  ' Única responsabilidad: decidir si dos KFs
+  ' se ven usando frustum overlap.
+  ' NO reimplementa nada: delega en geometry_utils.
+  ' ─────────────────────────────────────────
+
+  class FrustumOverlapEstimator {
+    - _min_overlap_ratio: float
+    - _max_distance: float
+    --
+    + estimate_pair(kf_a: KeyFrameData, kf_b: KeyFrameData) : float
+    + estimate_candidates(query: KeyFrameData, candidates: list[KeyFrameData]) : list[CovisibilityEdge]
+    --
+    ' Llama a geometry_utils.compute_camera_frustum_corners()
+    - _get_frustum_corners(kf: KeyFrameData) : torch.Tensor
+    ' Llama a geometry_utils.compute_frustum_point_ids()
+    ' proyectando corners de kf_b en el frustum de kf_a
+    - _compute_overlap(kf_a: KeyFrameData, kf_b: KeyFrameData) : float
+    ' Filtro rápido antes de calcular overlap
+    - _is_within_distance(kf_a: KeyFrameData, kf_b: KeyFrameData) : bool
+  }
+
+  ' ─────────────────────────────────────────
+  ' GRAPH (graph.py)
+  ' Única responsabilidad: mantener y consultar
+  ' el grafo NetworkX de covisibilidad.
+  ' ─────────────────────────────────────────
+
+  class CovisibilityGraph {
+    - _graph: nx.Graph
+    - _keyframes: dict[int, KeyFrameData]
+    - _estimator: IVisibilityEstimator
+    - _event_bus: CovisibilityEventBus
+    --
+    + add_keyframe(kf: KeyFrameData) : None
+    + remove_keyframe(kf_id: int) : None
+    + get_covisible(kf_id: int, top_n: int) : list[CovisibilityEdge]
+    ' Punto de integración clave con _fuse_overlapping_instances:
+    ' cruza instance.kfs_ids con arcos del grafo
+    + get_covisible_pairs_for_instances(instances: list[Instance3D], min_overlap: float) : list[CovisiblePair]
+    + save(path: Path) : None
+    + load(path: Path) : None
+    --
+    ' Al añadir un KF, recalcula arcos contra todos
+    ' los KFs existentes usando el estimador
+    - _recompute_edges(kf: KeyFrameData) : None
+    - _build_edge(kf_a: KeyFrameData, kf_b: KeyFrameData) : CovisibilityEdge
+    ' Cruza instance.kfs_ids con arcos del grafo
+    ' para producir solo los pares válidos
+    - _resolve_instance_pairs(instances: list[Instance3D], min_overlap: float) : list[CovisiblePair]
+    - _serialize() : dict
+    - _deserialize(data: dict) : None
+  }
+
+  ' ─────────────────────────────────────────
+  ' EVENT BUS (graph.py)
+  ' Única responsabilidad: notificar cambios
+  ' al exterior sin acoplar el grafo a OVO.
+  ' ─────────────────────────────────────────
+
+  class CovisibilityEventBus {
+    - _handlers: dict[str, list[Callable]]
+    --
+    + on_keyframe_added(handler: Callable[[KeyFrameData], None]) : None
+    + on_keyframe_removed(handler: Callable[[int], None]) : None
+    + on_edge_updated(handler: Callable[[CovisibilityEdge], None]) : None
+    + emit(event: str, payload: Any) : None
+    --
+    - _register(event: str, handler: Callable) : None
+  }
+
+  ' ─────────────────────────────────────────
+  ' RELACIONES INTERNAS
+  ' ─────────────────────────────────────────
+
+  CovisibilityGraph ..|> ICovisibilityGraph
+  FrustumOverlapEstimator ..|> IVisibilityEstimator
+  CovisibilityGraph o-- IVisibilityEstimator : _estimator
+  CovisibilityGraph o-- CovisibilityEventBus : _event_bus
+  CovisibilityEdge ..> KeyFrameData : references
+  CovisiblePair ..> KeyFrameData : references
+
+}
+
+' ─────────────────────────────────────────
+' ACTORES EXTERNOS (OVO)
+' ─────────────────────────────────────────
+
+class OVO <<external>> {
+  + kf_id: int
+  + objects: Dict[int, Instance3D]
+  + kf_store: KeyframeStore
+  --
+  ' Integración 1: al final de detect_and_track_objects()
+  + detect_and_track_objects()
+  ' Integración 2: sustituye TODO del doble bucle
+  + _fuse_overlapping_instances()
+}
+
+class Instance3D <<external>> {
+  + id: int
+  + kfs_ids: list[int]
+  + top_kf: list
+  + clip_feature: torch.Tensor
+  + pe_feature: torch.Tensor
+  + sam3_feature: torch.Tensor
+}
+
+class geometry_utils <<external>> {
+  ' Funciones ya existentes y probadas en OVO.
+  ' El estimador delega aquí directamente,
+  ' sin reimplementar nada.
+  + compute_camera_frustum_corners(depth, pose, intrinsics) : torch.Tensor
+  + compute_frustum_point_ids(pts, frustum_corners, device) : torch.Tensor
+  + compute_camera_frustum_planes(corners) : torch.Tensor
+  + compute_frustum_aabb(corners) : Tuple
+}
+
+' ─────────────────────────────────────────
+' INTEGRACIONES CON OVO
+' ─────────────────────────────────────────
+
+OVO ..> CovisibilityGraph : add_keyframe(KeyFrameData)\n[detect_and_track_objects()]
+
+OVO ..> ICovisibilityGraph : get_covisible_pairs_for_instances()\n[_fuse_overlapping_instances()]
+
+FrustumOverlapEstimator ..> geometry_utils : delega sin reimplementar
+
+Instance3D ..> CovisiblePair : kfs_ids → pares válidos
+
+@enduml

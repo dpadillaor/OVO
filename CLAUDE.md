@@ -8,7 +8,7 @@ OVO is a research project for 3D instance-aware semantic mapping. It integrates 
 ├── ovo/                    # Core OVO system
 │   ├── entities/           # Instance management, generators, orchestrator, semantic classes
 │   │   ├── visualizers/    # Rerun and Open3D visualization handlers
-│   │   ├── clip_generator.py, pe_generator.py, sam3_generator.py, dino_generator.py
+│   │   ├── clip_generator.py, pe_generator.py, sam3_generator.py
 │   │   ├── fusion.py, clips_merging.py, fusion_encoders.py
 │   │   ├── instance3d.py, logger.py, mask_generator.py
 │   │   ├── ovo.py, ovomapping.py, visualizer.py
@@ -34,7 +34,7 @@ OVO is a research project for 3D instance-aware semantic mapping. It integrates 
 *   **`ovo.py`**: Manages the semantic workflow, including instance creation, feature extraction, and the fusion/merging process.
 *   **SLAM Integration**: All SLAM-specific logic is contained within `ovo/slam/`.
 *   **Semantic Classes**: Management of dataset-specific semantic classes, label mappings, and category definitions is handled within `ovo/entities/` (specifically in `datasets.py`).
-*   **Semantic Fusion**: The core logic for merging instances and handling descriptors (CLIP/DINO) resides in `ovo/entities/fusion.py` and `ovo/utils/instance_utils.py`.
+*   **Semantic Fusion**: The core logic for merging instances and handling descriptors (CLIP/PE/SAM3) resides in `ovo/entities/fusion.py` and `ovo/utils/instance_utils.py`.
 
 ## Arquitectura
 
@@ -78,7 +78,7 @@ grep -n "def function_name" path/to/file.py
 # Read(file, offset=<line>, limit=<estimated_size>)
 ```
 
-- `__init__` is intentionally omitted from diagrams but is valid to grep+read when you need to understand how a class instance is constructed.
+- `__init__` appears in diagrams when its signature is non-trivial or relevant to understand how a class is constructed. Always include it for classes with multiple config parameters.
 - If function body is cut short, re-read with a larger limit. Never assume incomplete output is enough.
 - Never load a full file unless the user explicitly instructs it.
 - Never grep for method lists or class structure — that's what diagrams are for.
