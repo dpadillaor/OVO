@@ -1,0 +1,49 @@
+default_dataset: Replica
+
+experiments:
+  - label: cov-off
+    scenes_id: office0
+    stages: [segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: true
+      semantic:
+        fusion_method: clip
+    slam_config:
+      noise:
+        jump_drift_enabled: true
+        jump_seed: 42
+        jumps:
+          - kf_index: 10
+            translation_magnitude: 0.02
+            rotation_magnitude: 0.01
+          - kf_index: 30
+            translation_magnitude: 0.02
+            rotation_magnitude: 0.01
+
+  - label: cov-on
+    scenes_id: office0
+    stages: [segment, eval]
+    ovo_config:
+      slam:
+        slam_module: groundtruth
+        close_loops: true
+      semantic:
+        fusion_method: clip
+        covisibility:
+          enabled: true
+          min_overlap_ratio: 0.3
+          max_distance: 5.0
+          min_covisibility_overlap: 0.3
+    slam_config:
+      noise:
+        jump_drift_enabled: true
+        jump_seed: 42
+        jumps:
+          - kf_index: 10
+            translation_magnitude: 0.02
+            rotation_magnitude: 0.01
+          - kf_index: 30
+            translation_magnitude: 0.02
+            rotation_magnitude: 0.01

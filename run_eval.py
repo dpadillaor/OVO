@@ -15,15 +15,23 @@ import shutil
 from ovo.utils import io_utils, gen_utils, eval_utils
 from ovo.entities.ovomapping import OVOSemMap
 from ovo.entities.ovo import OVO
+from ovo.entities.logger import Logger
+from ovo.entities.run_config import RunConfig
+from ovo.entities.semantic_config import SemanticConfig
 
 def load_representation(scene_path: Path, eval: bool=False) -> OVO:
     config = io_utils.load_config(scene_path / "config.yaml", inherit=False)
     submap_ckpt = torch.load(scene_path /"ovo_map.ckpt" )
     map_params = submap_ckpt.get("map_params", None)
     if map_params is None:
-        map_params = submap_ckpt["gaussian_params"]        
-        
-    ovo = OVO(config["semantic"],None, config["data"]["scene_name"], eval=eval, device=config.get("device", "cuda"))
+        map_params = submap_ckpt["gaussian_params"]
+
+    semantic_config = SemanticConfig.from_config(config["semantic"])
+    run_config = RunConfig.from_config(config)
+    run_config.eval = eval
+    logger = Logger(scene_path, os.getpid(), use_wandb=False)
+
+    ovo = OVO(semantic_config, run_config, logger)
     ovo.restore_dict(submap_ckpt["ovo_map_params"])
     return ovo, map_params
 

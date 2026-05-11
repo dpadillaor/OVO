@@ -117,6 +117,17 @@ class Logger:
                     "Semantic/total_time": total_time
                 }
             )
+
+    def record_covisibility_time(self, op: str, duration: float) -> None:
+        """Record duration of a covisibility operation (seconds).
+
+        Stored under ``t_cov_{op}`` so each call appends to a list. The final
+        summary in ``print_final_stats`` reports total + mean per operation.
+        """
+        key = f"t_cov_{op}"
+        self.stats.setdefault(key, []).append(float(duration))
+        if self.use_wandb:
+            wandb.log({f"Semantic/{key}": float(duration)})
             
     def log_memory_usage(self, frame_id: int):
         """
@@ -172,3 +183,20 @@ class Logger:
             stats["Max vRAM"] = round(self.stats["max_vram"][0],2)
         print("Final statistics:")
         pprint.pprint(stats, compact=True)
+
+        cov_keys = [k for k in self.stats if k.startswith("t_cov_")]
+        if cov_keys:
+            cov_summary = {}
+            for key in cov_keys:
+                arr = np.asarray(self.stats[key], dtype=float)
+                if arr.size == 0:
+                    continue
+                op = key[len("t_cov_"):]
+                cov_summary[op] = {
+                    "calls": int(arr.size),
+                    "total_s": round(float(arr.sum()), 4),
+                    "mean_ms": round(float(arr.mean() * 1000), 3),
+                }
+            if cov_summary:
+                print("Covisibility timings:")
+                pprint.pprint(cov_summary, compact=True)

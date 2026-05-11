@@ -21,6 +21,11 @@ class SemanticConfig:
     kf_queue_delay: int = 0
     return_all_clips: bool = False
     verbose: bool = True
+    # Covisibility filter for fusion
+    covisibility_enabled: bool = False
+    covisibility_min_overlap_ratio: float = 0.3
+    covisibility_max_distance: float = 5.0
+    min_covisibility_overlap: float = 0.3
     # Generator sub-configs
     clip_config: Dict = field(default_factory=dict)
     sam_config: Dict = field(default_factory=dict)
@@ -38,6 +43,8 @@ class SemanticConfig:
 
         sam_config["multi_crop"] = clip_config.get("embed_type") != "vanilla"
 
+        covis_config = config.get("covisibility", {}) or {}
+
         return cls(
             match_distance_th=config.get("match_distance_th", 0.05),
             track_th=config.get("track_th", 100),
@@ -52,6 +59,10 @@ class SemanticConfig:
             kf_queue_delay=config.get("kf_queue_delay", 0),
             return_all_clips=config.get("return_all_clips", False),
             verbose=config.get("verbose", True),
+            covisibility_enabled=covis_config.get("enabled", False),
+            covisibility_min_overlap_ratio=covis_config.get("min_overlap_ratio", 0.3),
+            covisibility_max_distance=covis_config.get("max_distance", 5.0),
+            min_covisibility_overlap=covis_config.get("min_covisibility_overlap", 0.3),
             clip_config=clip_config,
             sam_config=sam_config,
             pe_config=config.get("pe"),

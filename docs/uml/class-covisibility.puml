@@ -104,6 +104,9 @@ package "covisibility" {
     ' Cruza instance.kfs_ids con arcos del grafo
     ' para producir solo los pares válidos
     - _resolve_instance_pairs(instances: list[Instance3D], min_overlap: float) : list[CovisiblePair]
+    ' Para un par de instancias, busca el arco con mayor overlap
+    ' que conecte un kf de A con un kf de B
+    - _find_best_edge(kfs_a: Iterable[int], kfs_b: Iterable[int], min_overlap: float) : tuple[int, int, float] | None
     - _serialize() : dict
     - _deserialize(data: dict) : None
   }

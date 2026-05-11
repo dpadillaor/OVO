@@ -7,6 +7,11 @@ import torch
 import time
 
 from ..utils import geometry_utils, instance_utils
+from ..covisibility import (
+    CovisibilityGraph,
+    FrustumOverlapEstimator,
+    KeyFrameData,
+)
 from .generator_pipeline import GeneratorPipeline
 from .instance3d import Instance3D
 from .logger import Logger
@@ -90,6 +95,14 @@ class OVO:
         })
         self.fusion_encoder = self._get_fusion_encoder()
         self._validate_fusion_config()
+
+        self.covisibility_graph: CovisibilityGraph | None = None
+        if semantic_config.covisibility_enabled:
+            estimator = FrustumOverlapEstimator(
+                min_overlap_ratio=semantic_config.covisibility_min_overlap_ratio,
+                max_distance=semantic_config.covisibility_max_distance,
+            )
+            self.covisibility_graph = CovisibilityGraph(estimator, logger=self.logger)
 
         if semantic_config.verbose:
             print('Semantic config')
@@ -190,6 +203,17 @@ class OVO:
 
         # Save keyframe information
         self.keyframes_queue.append([matched_ins_ids, binary_maps, image, self.kf_id])
+        if self.covisibility_graph is not None:
+            depth_np = frame_data[2]
+            self.covisibility_graph.add_keyframe(
+                KeyFrameData(
+                    kf_id=self.kf_id,
+                    frame_id=int(frame_id),
+                    c2w=c2w.detach(),
+                    depth=torch.from_numpy(depth_np).to(self.device),
+                    cam_intrinsics=self.cam_intrinsics,
+                )
+            )
         self.kf_id += 1
 
         if self.semantic_config.log:
@@ -491,30 +515,63 @@ class OVO:
             - points_ins_ids: Updated tensor of instance IDs for each 3D point.
             - decisions: List of fusion decision records.
         """
-        # TODO: optimize brute-force approach (compare all instances to each-other)
         points_ins_ids = map_data.points_ins_ids
         obj_pcds = {}
         for instance in objects_list:
             obj_pcd = points_3d[points_ins_ids == instance.id]
             obj_pcds[instance.id] = InstanceGeometry(points=obj_pcd, centroid=obj_pcd.mean(axis=0))
 
-        objects = {}
-        fused_objects = {}
-        for i, instance1 in enumerate(objects_list):
-            if instance1.id in fused_objects:
-                continue
-            for instance2 in objects_list[i+1:]:
-                if instance2.id in fused_objects:
+        objects: Dict[int, Instance3D] = {}
+        fused_objects: Dict[int, int] = {}
+        instances_by_id: Dict[int, Instance3D] = {ins.id: ins for ins in objects_list}
+
+        if self.covisibility_graph is not None:
+            covisible_pairs = self.covisibility_graph.get_covisible_pairs_for_instances(
+                objects_list, min_overlap=self.semantic_config.min_covisibility_overlap
+            )
+            for pair in covisible_pairs:
+                a_id = self._resolve_survivor(pair.instance_id_a, fused_objects)
+                b_id = self._resolve_survivor(pair.instance_id_b, fused_objects)
+                if a_id == b_id:
                     continue
-                elif self.fusion_strategy.same_instance(
+                instance1 = instances_by_id[a_id]
+                instance2 = instances_by_id[b_id]
+                if self.fusion_strategy.same_instance(
                     instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id]
                 ):
-                    instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, (map_data.points_3d, map_data.points_ids, points_ins_ids))
+                    instance1, points_ins_ids = instance_utils.fuse_instances(
+                        instance1, instance2,
+                        (map_data.points_3d, map_data.points_ids, points_ins_ids),
+                    )
+                    instances_by_id[instance1.id] = instance1
                     fused_objects[instance2.id] = instance1.id
-            objects[instance1.id] = instance1
+            for instance in objects_list:
+                if instance.id in fused_objects:
+                    continue
+                objects[instance.id] = instances_by_id[instance.id]
+        else:
+            for i, instance1 in enumerate(objects_list):
+                if instance1.id in fused_objects:
+                    continue
+                for instance2 in objects_list[i + 1:]:
+                    if instance2.id in fused_objects:
+                        continue
+                    elif self.fusion_strategy.same_instance(
+                        instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id]
+                    ):
+                        instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, (map_data.points_3d, map_data.points_ids, points_ins_ids))
+                        fused_objects[instance2.id] = instance1.id
+                objects[instance1.id] = instance1
 
         decisions = self.fusion_strategy.pop_decisions()
         return FusionResult(objects=objects, fused_objects=fused_objects, points_ins_ids=points_ins_ids, decisions=decisions)
+
+    def _resolve_survivor(self, instance_id: int, fused_objects: Dict[int, int]) -> int:
+        """Walk the fusion chain and return the surviving instance id."""
+        current = instance_id
+        while current in fused_objects:
+            current = fused_objects[current]
+        return current
 
     def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> None:
         """
