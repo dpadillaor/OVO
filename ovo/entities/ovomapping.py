@@ -113,7 +113,7 @@ class OVOSemMap():
         # Optional map restoration state.
         self._fusion_log_path = self.output_path / "fusion_decisions.csv"
         with open(self._fusion_log_path, "w", newline="") as f:
-            csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist"]).writeheader()
+            csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist", "shared_kfs"]).writeheader()
 
         self.first_frame = 0
         if self.config.get("restore_map", False):
@@ -374,7 +374,7 @@ class OVOSemMap():
 
         if fusion_decisions:
             with open(self._fusion_log_path, "a", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist"])
+                writer = csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist", "shared_kfs"])
                 for d in fusion_decisions:
                     writer.writerow({"frame_id": frame_id, **d})
 

@@ -207,7 +207,7 @@ def parse_instance_ap_file(file_path: Path) -> dict | None:
 
 
 _FUSION_DECISION_COLS = ['frame_id', 'result', 'i1', 'i2', 'reason',
-                          'centroid_dist', 'cos_sim', 'p_dist']
+                          'centroid_dist', 'cos_sim', 'p_dist', 'shared_kfs']
 _FUSION_DECISION_ZERO = {
     'Fusion_Total': 0, 'Fusion_Accepted': 0, 'Fusion_Accept_Rate': float('nan'),
     'Fusion_Reject_Centroid': 0, 'Fusion_Reject_CosSim': 0, 'Fusion_Reject_Overlap': 0,

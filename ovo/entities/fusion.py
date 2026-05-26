@@ -63,6 +63,7 @@ class SemanticGeometricFusion(FusionStrategy):
         self.th_centroid = config.get("th_centroid", 1.5)
         self.th_cossim = config.get("th_cossim", 0.81)
         self.th_points = config.get("th_points", 0.1)
+        self.cooccurrence_veto_threshold = config.get("cooccurrence_veto_threshold", 5)
         self.feature_attr = feature_attr
 
     def same_instance(
@@ -76,6 +77,12 @@ class SemanticGeometricFusion(FusionStrategy):
         points1, centroid1 = points_centroid1
         points2, centroid2 = points_centroid2
         i1, i2 = instance1.id, instance2.id
+
+        shared_kfs = len(set(instance1.kfs_ids) & set(instance2.kfs_ids))
+        if shared_kfs > self.cooccurrence_veto_threshold:
+            logger.debug("REJECTED i1=%s i2=%s | cooccurrence: shared_kfs=%d > th=%d", i1, i2, shared_kfs, self.cooccurrence_veto_threshold)
+            self._decisions.append({"result": "REJECTED", "i1": i1, "i2": i2, "reason": "cooccurrence", "shared_kfs": shared_kfs})
+            return False
 
         centroid_dist = compute_centroid_distance(centroid1, centroid2)
         if centroid_dist > self.th_centroid:
@@ -113,6 +120,7 @@ class GeometricOnlyFusion(FusionStrategy):
         super().__init__()
         self.th_centroid = config.get("th_centroid", 1.5)
         self.th_points = config.get("th_points", 0.1)
+        self.cooccurrence_veto_threshold = config.get("cooccurrence_veto_threshold", 5)
         self.th_cossim = None
 
     def same_instance(
@@ -126,6 +134,12 @@ class GeometricOnlyFusion(FusionStrategy):
         points1, centroid1 = points_centroid1
         points2, centroid2 = points_centroid2
         i1, i2 = instance1.id, instance2.id
+
+        shared_kfs = len(set(instance1.kfs_ids) & set(instance2.kfs_ids))
+        if shared_kfs > self.cooccurrence_veto_threshold:
+            logger.debug("REJECTED i1=%s i2=%s | cooccurrence: shared_kfs=%d > th=%d", i1, i2, shared_kfs, self.cooccurrence_veto_threshold)
+            self._decisions.append({"result": "REJECTED", "i1": i1, "i2": i2, "reason": "cooccurrence", "shared_kfs": shared_kfs})
+            return False
 
         centroid_dist = compute_centroid_distance(centroid1, centroid2)
         if centroid_dist > self.th_centroid:
