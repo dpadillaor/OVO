@@ -210,8 +210,8 @@ _FUSION_DECISION_COLS = ['frame_id', 'result', 'i1', 'i2', 'reason',
                           'centroid_dist', 'cos_sim', 'p_dist', 'shared_kfs']
 _FUSION_DECISION_ZERO = {
     'Fusion_Total': 0, 'Fusion_Accepted': 0, 'Fusion_Accept_Rate': float('nan'),
-    'Fusion_Reject_Centroid': 0, 'Fusion_Reject_CosSim': 0, 'Fusion_Reject_Overlap': 0,
-    'Fusion_Reject_Cooccurrence': 0,
+    'Fusion_Reject_Centroid': 0, 'Fusion_Reject_AABB': 0, 'Fusion_Reject_CosSim': 0,
+    'Fusion_Reject_Overlap': 0, 'Fusion_Reject_Cooccurrence': 0,
 }
 
 
@@ -219,7 +219,8 @@ def parse_fusion_decisions(file_path: Path) -> dict:
     """Aggregate stats from a fusion_decisions.csv for one scene.
 
     Returns dict with Fusion_Total, Fusion_Accepted, Fusion_Accept_Rate,
-    Fusion_Reject_Centroid, Fusion_Reject_CosSim, Fusion_Reject_Overlap, Fusion_Reject_Cooccurrence.
+    Fusion_Reject_Centroid, Fusion_Reject_AABB, Fusion_Reject_CosSim, Fusion_Reject_Overlap,
+    Fusion_Reject_Cooccurrence.
     Returns zeros (Accept_Rate=nan) if file missing or empty.
     """
     if not file_path.is_file():
@@ -237,6 +238,7 @@ def parse_fusion_decisions(file_path: Path) -> dict:
             'Fusion_Accepted':           accepted,
             'Fusion_Accept_Rate':        accepted / total if total > 0 else float('nan'),
             'Fusion_Reject_Centroid':    int(reason_counts.get('centroid', 0)),
+            'Fusion_Reject_AABB':        int(reason_counts.get('aabb', 0)),
             'Fusion_Reject_CosSim':      int(reason_counts.get('cos_sim', 0)),
             'Fusion_Reject_Overlap':     int(reason_counts.get('overlap', 0)),
             'Fusion_Reject_Cooccurrence': int(reason_counts.get('cooccurrence', 0)),
@@ -254,6 +256,7 @@ def _aggregate_fusion_stats(stats_list: list[dict]) -> dict:
         'Fusion_Accepted':            accepted,
         'Fusion_Accept_Rate':         accepted / total if total > 0 else float('nan'),
         'Fusion_Reject_Centroid':     sum(s['Fusion_Reject_Centroid']     for s in stats_list),
+        'Fusion_Reject_AABB':         sum(s['Fusion_Reject_AABB']         for s in stats_list),
         'Fusion_Reject_CosSim':       sum(s['Fusion_Reject_CosSim']       for s in stats_list),
         'Fusion_Reject_Overlap':      sum(s['Fusion_Reject_Overlap']      for s in stats_list),
         'Fusion_Reject_Cooccurrence': sum(s['Fusion_Reject_Cooccurrence'] for s in stats_list),
@@ -385,7 +388,7 @@ def load_experiments(
         'Num_Instances',
         'AP', 'AP_50', 'AP_25', 'AP_agnostic', 'AP_agnostic_50', 'AP_agnostic_25',
         'Fusion_Total', 'Fusion_Accepted', 'Fusion_Accept_Rate',
-        'Fusion_Reject_Centroid', 'Fusion_Reject_CosSim', 'Fusion_Reject_Overlap', 'Fusion_Reject_Cooccurrence',
+        'Fusion_Reject_Centroid', 'Fusion_Reject_AABB', 'Fusion_Reject_CosSim', 'Fusion_Reject_Overlap', 'Fusion_Reject_Cooccurrence',
         'Experiment_ID',
     ]
     _class_cols = _exp_cols + ['Class', 'IoU', 'Acc']
@@ -565,7 +568,7 @@ def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         'Num_Instances',
         'AP', 'AP_50', 'AP_25', 'AP_agnostic', 'AP_agnostic_50', 'AP_agnostic_25',
         'Fusion_Total', 'Fusion_Accepted', 'Fusion_Accept_Rate',
-        'Fusion_Reject_Centroid', 'Fusion_Reject_CosSim', 'Fusion_Reject_Overlap', 'Fusion_Reject_Cooccurrence',
+        'Fusion_Reject_Centroid', 'Fusion_Reject_AABB', 'Fusion_Reject_CosSim', 'Fusion_Reject_Overlap', 'Fusion_Reject_Cooccurrence',
         'Experiment_ID',
     ]
     _scene_class_cols = _scene_cols + ['Class', 'IoU', 'Acc']
@@ -926,7 +929,7 @@ def plot_fusion_compare(
         ax1.set_title('Fusion accept rate per scene')
         ax1.legend(title='Experiment', bbox_to_anchor=(1.01, 1), loc='upper left', fontsize=7)
 
-    reason_cols = ['Fusion_Reject_Centroid', 'Fusion_Reject_CosSim', 'Fusion_Reject_Overlap', 'Fusion_Reject_Cooccurrence']
+    reason_cols = ['Fusion_Reject_Centroid', 'Fusion_Reject_AABB', 'Fusion_Reject_CosSim', 'Fusion_Reject_Overlap', 'Fusion_Reject_Cooccurrence']
     available_reasons = [c for c in reason_cols if c in df_sel.columns]
     if available_reasons:
         agg = (

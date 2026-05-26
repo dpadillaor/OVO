@@ -33,3 +33,33 @@ Work is organized by tasks tracked in `.agents_mapper/tasks/`.
 *   **Index**: `_index.json` maintains the status (active, completed, pending) of all tasks.
 *   **Active Tasks**: Detailed logs and documentation for currently `IN_PROGRESS` work are found in `active_tasks/`.
 *   **Archive**: Completed or cancelled tasks are moved to `completed_tasks/` for historical reference.
+
+## Worktree Setup (Required After `git worktree add`)
+
+New worktrees ship with empty submodule stubs and no heavy data. Before running experiments in a worktree, symlink `thirdParty/` and `data/` subdirs to the primary repo at `/home/padidavid/repos/OVO/`. This reuses built submodules, model weights, datasets, and centralizes experiment outputs.
+
+```bash
+PRIMARY=/home/padidavid/repos/OVO
+WT=<absolute-path-to-new-worktree>
+
+# thirdParty: replace empty submodule stubs + add ORB_SLAM3
+for sub in perception_models sam3 segment-anything-2; do
+  [ -d "$WT/thirdParty/$sub" ] && [ ! -L "$WT/thirdParty/$sub" ] && rmdir "$WT/thirdParty/$sub"
+  ln -sfn "$PRIMARY/thirdParty/$sub" "$WT/thirdParty/$sub"
+done
+ln -sfn "$PRIMARY/thirdParty/ORB_SLAM3" "$WT/thirdParty/ORB_SLAM3"
+
+# data: heavy + write paths. If targets pre-exist as real dirs in the worktree,
+# `rm -rf` them first (ln -sfn nests inside otherwise).
+mkdir -p "$WT/data/input" "$WT/data/working"
+ln -sfn "$PRIMARY/data/baselines"              "$WT/data/baselines"
+ln -sfn "$PRIMARY/data/output"                 "$WT/data/output"
+ln -sfn "$PRIMARY/data/input/Datasets"         "$WT/data/input/Datasets"
+ln -sfn "$PRIMARY/data/input/sam_ckpts"        "$WT/data/input/sam_ckpts"
+ln -sfn "$PRIMARY/data/working/config_preview" "$WT/data/working/config_preview"
+```
+
+Notes:
+*   Centralized `data/output/` → every branch writes here; folder names (`{DATE}_{SLAM_CONFIG}_{FUSION}_{LABEL}`) must encode branch in `LABEL` to avoid clobbering.
+*   Removing a worktree (`git worktree remove` or `rm -rf <wt>`) does **not** follow symlinks → primary stays intact.
+*   Tracked subdirs (`data/input/{ReadMe.md,replica_semantic_gt,weights_predictor}`, `data/working/configs`) stay local — per-subdir symlinks preserve them.

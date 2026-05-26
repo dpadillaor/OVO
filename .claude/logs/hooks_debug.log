@@ -1,0 +1,862 @@
+[2026-04-07 15:04:58] [SESSION_START] SessionStart fired. session=test-session-123, sections=0, context_chars=0
+[2026-04-07 15:11:33] [SESSION_START] SessionStart fired. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5, sections=0, context_chars=0
+[2026-04-07 15:13:32] [SESSION_END] Failed to spawn worker for session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:16:28] [SESSION_START] SessionStart fired. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5, sections=0, context_chars=0
+[2026-04-07 15:16:35] [SESSION_END] Hook spawned worker. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:16:35] [SESSION_END] Worker started. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:16:35] [SESSION_END] Calling Gemini CLI... (1548 chars)
+[2026-04-07 15:16:35] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_151635_965780.txt (4169 chars)
+[2026-04-07 15:16:35] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 15:19:35] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-07 15:19:35] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_151635_965780.txt
+[2026-04-07 15:19:35] [SESSION_END] Validation result: False
+[2026-04-07 15:19:35] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-07 15:19:35] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-07 15:20:44] [SESSION_START] SessionStart fired. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5, sections=0, context_chars=0
+[2026-04-07 15:20:46] [SESSION_END] Hook spawned worker. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:20:46] [SESSION_END] Worker started. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:20:46] [SESSION_END] Calling Gemini CLI... (1548 chars)
+[2026-04-07 15:20:46] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_152046_179774.txt (4169 chars)
+[2026-04-07 15:20:46] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 15:23:11] [SESSION_START] SessionStart fired. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5, sections=0, context_chars=0
+[2026-04-07 15:23:13] [SESSION_END] Hook spawned worker. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:23:13] [SESSION_END] Worker started. session=694da491-8f2a-4c3f-bf75-ab171a5fc4f5
+[2026-04-07 15:23:13] [SESSION_END] Calling Gemini CLI... (1548 chars)
+[2026-04-07 15:23:13] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_152313_908335.txt (4169 chars)
+[2026-04-07 15:23:13] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 15:23:46] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-07 15:23:46] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_152046_179774.txt
+[2026-04-07 15:23:46] [SESSION_END] Validation result: False
+[2026-04-07 15:23:46] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-07 15:23:46] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-07 15:24:54] [SESSION_END] Gemini rc=0, stdout_len=3064, stderr_len=15540
+[2026-04-07 15:24:54] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_152313_908335.txt
+[2026-04-07 15:24:54] [SESSION_END] Validation result: True
+[2026-04-07 15:24:54] [SESSION_END] Writing to vault...
+[2026-04-07 15:24:54] [SESSION_END] ERROR: Vault not found: /home/padidavid/Documentos/Obsidian Vault$
+[2026-04-07 15:24:54] [SESSION_END] Finished. OK.
+[2026-04-07 16:07:40] [SESSION_START] SessionStart fired. session=853172d1-4090-4190-80b0-b92fcdf46893, sections=0, context_chars=0
+[2026-04-07 16:35:57] [SESSION_END] Hook spawned worker. session=853172d1-4090-4190-80b0-b92fcdf46893
+[2026-04-07 16:35:57] [SESSION_END] Worker started. session=853172d1-4090-4190-80b0-b92fcdf46893
+[2026-04-07 16:35:57] [SESSION_END] Calling Gemini CLI... (13332 chars)
+[2026-04-07 16:35:57] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_163557_538524.txt (15953 chars)
+[2026-04-07 16:35:57] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 16:36:48] [SESSION_START] SessionStart fired. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320, sections=0, context_chars=0
+[2026-04-07 16:38:57] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-07 16:38:57] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_163557_538524.txt
+[2026-04-07 16:38:57] [SESSION_END] Validation result: False
+[2026-04-07 16:38:57] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-07 16:38:57] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-07 16:40:37] [SESSION_END] Hook spawned worker. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320
+[2026-04-07 16:40:37] [SESSION_END] Worker started. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320
+[2026-04-07 16:40:37] [SESSION_END] Calling Gemini CLI... (2152 chars)
+[2026-04-07 16:40:37] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_164037_856235.txt (4773 chars)
+[2026-04-07 16:40:37] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 16:40:45] [SESSION_START] SessionStart fired. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320, sections=0, context_chars=0
+[2026-04-07 16:41:09] [SESSION_END] Hook spawned worker. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320
+[2026-04-07 16:41:09] [SESSION_END] Worker started. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320
+[2026-04-07 16:41:09] [SESSION_END] Calling Gemini CLI... (2579 chars)
+[2026-04-07 16:41:09] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_164109_304647.txt (5200 chars)
+[2026-04-07 16:41:09] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 16:41:25] [SESSION_START] SessionStart fired. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320, sections=0, context_chars=0
+[2026-04-07 16:43:37] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-07 16:43:37] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_164037_856235.txt
+[2026-04-07 16:43:37] [SESSION_END] Validation result: False
+[2026-04-07 16:43:37] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-07 16:43:37] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-07 16:43:58] [SESSION_END] Gemini rc=0, stdout_len=4127, stderr_len=26013
+[2026-04-07 16:43:58] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_164109_304647.txt
+[2026-04-07 16:43:58] [SESSION_END] Validation result: True
+[2026-04-07 16:43:58] [SESSION_END] Writing to vault...
+[2026-04-07 16:43:58] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-07.md
+[2026-04-07 16:43:58] [SESSION_END] Finished. OK.
+[2026-04-07 16:53:34] [SESSION_END] Hook spawned worker. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320
+[2026-04-07 16:53:34] [SESSION_END] Worker started. session=b3c5a03d-5f05-4b3a-a2a8-deef378b6320
+[2026-04-07 16:53:34] [SESSION_END] Calling Gemini CLI... (8183 chars)
+[2026-04-07 16:53:34] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_165334_045525.txt (10804 chars)
+[2026-04-07 16:53:34] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 16:54:26] [SESSION_END] Gemini rc=0, stdout_len=3794, stderr_len=297
+[2026-04-07 16:54:26] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_165334_045525.txt
+[2026-04-07 16:54:26] [SESSION_END] Validation result: True
+[2026-04-07 16:54:26] [SESSION_END] Writing to vault...
+[2026-04-07 16:54:26] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-07.md
+[2026-04-07 16:54:26] [SESSION_END] Finished. OK.
+[2026-04-07 17:17:33] [SESSION_START] SessionStart fired. session=980eb254-33dd-4df1-bf9f-e46ffdfedbb4, sections=0, context_chars=0
+[2026-04-07 17:22:31] [SESSION_END] Hook spawned worker. session=980eb254-33dd-4df1-bf9f-e46ffdfedbb4
+[2026-04-07 17:22:31] [SESSION_END] Worker started. session=980eb254-33dd-4df1-bf9f-e46ffdfedbb4
+[2026-04-07 17:22:31] [SESSION_END] Calling Gemini CLI... (3654 chars)
+[2026-04-07 17:22:31] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_172231_866947.txt (6275 chars)
+[2026-04-07 17:22:31] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 17:22:42] [SESSION_START] SessionStart fired. session=980eb254-33dd-4df1-bf9f-e46ffdfedbb4, sections=0, context_chars=0
+[2026-04-07 17:24:17] [SESSION_END] Gemini rc=0, stdout_len=3235, stderr_len=20621
+[2026-04-07 17:24:17] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_172231_866947.txt
+[2026-04-07 17:24:17] [SESSION_END] Validation result: True
+[2026-04-07 17:24:17] [SESSION_END] Writing to vault...
+[2026-04-07 17:24:17] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-07.md
+[2026-04-07 17:24:17] [SESSION_END] Finished. OK.
+[2026-04-07 17:51:06] [SESSION_END] Hook spawned worker. session=980eb254-33dd-4df1-bf9f-e46ffdfedbb4
+[2026-04-07 17:51:06] [SESSION_END] Worker started. session=980eb254-33dd-4df1-bf9f-e46ffdfedbb4
+[2026-04-07 17:51:06] [SESSION_END] Calling Gemini CLI... (27130 chars)
+[2026-04-07 17:51:06] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_175106_812628.txt (29751 chars)
+[2026-04-07 17:51:06] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 17:52:55] [SESSION_END] Gemini rc=0, stdout_len=3850, stderr_len=15540
+[2026-04-07 17:52:55] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_175106_812628.txt
+[2026-04-07 17:52:55] [SESSION_END] Validation result: True
+[2026-04-07 17:52:55] [SESSION_END] Writing to vault...
+[2026-04-07 17:52:55] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-07.md
+[2026-04-07 17:52:55] [SESSION_END] Finished. OK.
+[2026-04-07 21:45:47] [SESSION_START] SessionStart fired. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b, sections=0, context_chars=0
+[2026-04-07 22:13:31] [PRECOMPACT] PreCompact hook spawned worker. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-07 22:13:31] [PRECOMPACT] PreCompact worker started. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-07 22:13:31] [PRECOMPACT] Calling Gemini CLI... (13607 chars)
+[2026-04-07 22:13:31] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_221331_641088.txt (16370 chars)
+[2026-04-07 22:13:31] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_221331_641088.txt --output-format json --approval-mode auto_edit
+[2026-04-07 22:13:31] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_221331_641088.txt
+[2026-04-07 22:14:13] [PRECOMPACT] Gemini rc=0, stdout_len=3649, stderr_len=297
+[2026-04-07 22:14:13] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_221331_641088.txt
+[2026-04-07 22:14:13] [PRECOMPACT] PreCompact validation result: True
+[2026-04-07 22:14:13] [PRECOMPACT] PreCompact writing to vault...
+[2026-04-07 22:14:13] [PRECOMPACT] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-07.md
+[2026-04-07 22:14:13] [PRECOMPACT] PreCompact finished. OK.
+[2026-04-07 22:14:54] [SESSION_START] SessionStart fired. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b, sections=0, context_chars=0
+[2026-04-07 22:15:04] [SESSION_END] Hook spawned worker. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-07 22:15:04] [SESSION_END] Worker started. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-07 22:15:04] [SESSION_END] Empty conversation, exiting.
+[2026-04-07 22:16:14] [SESSION_START] SessionStart fired. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b, sections=0, context_chars=0
+[2026-04-07 22:52:01] [SESSION_START] SessionStart fired. session=a67ac252-3fc3-499c-a67d-9b7b2d908fb5, sections=0, context_chars=0
+[2026-04-07 22:52:04] [SESSION_END] Hook spawned worker. session=a67ac252-3fc3-499c-a67d-9b7b2d908fb5
+[2026-04-07 22:52:04] [SESSION_END] Worker started. session=a67ac252-3fc3-499c-a67d-9b7b2d908fb5
+[2026-04-07 22:52:04] [SESSION_END] Empty conversation, exiting.
+[2026-04-07 22:52:13] [SESSION_START] SessionStart fired. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b, sections=0, context_chars=0
+[2026-04-07 23:05:19] [SESSION_END] Hook spawned worker. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-07 23:05:19] [SESSION_END] Worker started. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-07 23:05:19] [SESSION_END] Calling Gemini CLI... (4769 chars)
+[2026-04-07 23:05:19] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_230519_801217.txt (7390 chars)
+[2026-04-07 23:05:19] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-07 23:07:20] [SESSION_END] Gemini rc=0, stdout_len=3347, stderr_len=297
+[2026-04-07 23:07:20] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260407_230519_801217.txt
+[2026-04-07 23:07:20] [SESSION_END] Validation result: True
+[2026-04-07 23:07:20] [SESSION_END] Writing to vault...
+[2026-04-07 23:07:20] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-07.md
+[2026-04-07 23:07:20] [SESSION_END] Finished. OK.
+[2026-04-08 00:29:50] [SESSION_START] SessionStart fired. session=edd8c34e-0f4f-445d-9c7f-53150c9e2bc1, sections=0, context_chars=0
+[2026-04-08 00:32:00] [SESSION_END] Hook spawned worker. session=edd8c34e-0f4f-445d-9c7f-53150c9e2bc1
+[2026-04-08 00:32:00] [SESSION_END] Worker started. session=edd8c34e-0f4f-445d-9c7f-53150c9e2bc1
+[2026-04-08 00:32:00] [SESSION_END] Empty conversation, exiting.
+[2026-04-08 00:33:26] [SESSION_START] SessionStart fired. session=12f86abb-47c9-47f6-acea-09865b37c8b9, sections=0, context_chars=0
+[2026-04-08 00:47:16] [SESSION_START] SessionStart fired. session=12f86abb-47c9-47f6-acea-09865b37c8b9, sections=0, context_chars=0
+[2026-04-08 02:07:40] [SESSION_END] Hook spawned worker. session=12f86abb-47c9-47f6-acea-09865b37c8b9
+[2026-04-08 02:07:40] [SESSION_END] Worker started. session=12f86abb-47c9-47f6-acea-09865b37c8b9
+[2026-04-08 02:07:40] [SESSION_END] Calling Gemini CLI... (9856 chars)
+[2026-04-08 02:07:40] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_020740_226256.txt (12477 chars)
+[2026-04-08 02:07:40] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 02:08:10] [SESSION_END] Hook spawned worker. session=12f86abb-47c9-47f6-acea-09865b37c8b9
+[2026-04-08 02:08:10] [SESSION_END] Worker started. session=12f86abb-47c9-47f6-acea-09865b37c8b9
+[2026-04-08 02:08:10] [SESSION_END] Calling Gemini CLI... (9856 chars)
+[2026-04-08 02:08:10] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_020810_216944.txt (12477 chars)
+[2026-04-08 02:08:10] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 02:08:16] [SESSION_END] Gemini rc=0, stdout_len=3891, stderr_len=297
+[2026-04-08 02:08:16] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_020740_226256.txt
+[2026-04-08 02:08:16] [SESSION_END] Validation result: True
+[2026-04-08 02:08:16] [SESSION_END] Writing to vault...
+[2026-04-08 02:08:16] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-08.md
+[2026-04-08 02:08:16] [SESSION_END] Finished. OK.
+[2026-04-08 02:11:10] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-08 02:11:10] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_020810_216944.txt
+[2026-04-08 02:11:10] [SESSION_END] Validation result: False
+[2026-04-08 02:11:10] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-08 02:11:10] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-08 07:03:40] [SESSION_END] Hook spawned worker. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-08 07:03:40] [SESSION_END] Worker started. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-08 07:03:40] [SESSION_END] Calling Gemini CLI... (15717 chars)
+[2026-04-08 07:03:40] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_070340_504319.txt (18338 chars)
+[2026-04-08 07:03:40] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 07:04:31] [SESSION_END] Gemini rc=0, stdout_len=4186, stderr_len=297
+[2026-04-08 07:04:31] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_070340_504319.txt
+[2026-04-08 07:04:31] [SESSION_END] Validation result: True
+[2026-04-08 07:04:31] [SESSION_END] Writing to vault...
+[2026-04-08 07:04:31] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-08.md
+[2026-04-08 07:04:31] [SESSION_END] Finished. OK.
+[2026-04-08 16:37:04] [SESSION_START] SessionStart fired. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b, sections=0, context_chars=0
+[2026-04-08 16:48:03] [PRECOMPACT] PreCompact hook spawned worker. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-08 16:48:03] [PRECOMPACT] PreCompact worker started. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-08 16:48:03] [PRECOMPACT] Calling Gemini CLI... (16484 chars)
+[2026-04-08 16:48:03] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_164803_821721.txt (19247 chars)
+[2026-04-08 16:48:03] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_164803_821721.txt --output-format json --approval-mode auto_edit
+[2026-04-08 16:48:03] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_164803_821721.txt
+[2026-04-08 16:48:13] [SESSION_END] Hook spawned worker. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-08 16:48:13] [SESSION_END] Worker started. session=872daec8-6c31-4a1b-84ba-dc2f2af9149b
+[2026-04-08 16:48:13] [SESSION_END] Calling Gemini CLI... (16484 chars)
+[2026-04-08 16:48:13] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_164813_265018.txt (19105 chars)
+[2026-04-08 16:48:13] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 16:51:03] [PRECOMPACT] Gemini TIMEOUT (180s)
+[2026-04-08 16:51:08] [PRECOMPACT] Gemini stdout (partial): 
+[2026-04-08 16:51:08] [PRECOMPACT] Gemini stderr (partial): 
+[2026-04-08 16:51:08] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_164803_821721.txt
+[2026-04-08 16:51:08] [PRECOMPACT] PreCompact validation result: False
+[2026-04-08 16:51:08] [PRECOMPACT] PreCompact Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-08 16:51:08] [PRECOMPACT] Full output was:
+[Gemini error]: timeout
+[2026-04-08 16:51:13] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-08 16:51:13] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_164813_265018.txt
+[2026-04-08 16:51:13] [SESSION_END] Validation result: False
+[2026-04-08 16:51:13] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-08 16:51:13] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-08 17:11:51] [SESSION_START] SessionStart fired. session=7309606d-f6ce-48f4-adf5-8e19440a72b5, sections=0, context_chars=0
+[2026-04-08 17:14:24] [SESSION_END] Hook spawned worker. session=7309606d-f6ce-48f4-adf5-8e19440a72b5
+[2026-04-08 17:14:24] [SESSION_END] Worker started. session=7309606d-f6ce-48f4-adf5-8e19440a72b5
+[2026-04-08 17:14:24] [SESSION_END] Calling Gemini CLI... (213 chars)
+[2026-04-08 17:14:24] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_171424_952703.txt (2834 chars)
+[2026-04-08 17:14:24] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 17:14:27] [SESSION_START] SessionStart fired. session=d3b51203-55ee-4bc6-8dca-886e36720aff, sections=0, context_chars=0
+[2026-04-08 17:15:12] [SESSION_END] Gemini rc=0, stdout_len=2364, stderr_len=5377
+[2026-04-08 17:15:12] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_171424_952703.txt
+[2026-04-08 17:15:12] [SESSION_END] Validation result: True
+[2026-04-08 17:15:12] [SESSION_END] Writing to vault...
+[2026-04-08 17:15:12] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-08.md
+[2026-04-08 17:15:12] [SESSION_END] Finished. OK.
+[2026-04-08 17:15:17] [SESSION_END] Hook spawned worker. session=d3b51203-55ee-4bc6-8dca-886e36720aff
+[2026-04-08 17:15:17] [SESSION_END] Worker started. session=d3b51203-55ee-4bc6-8dca-886e36720aff
+[2026-04-08 17:15:17] [SESSION_END] Calling Gemini CLI... (1774 chars)
+[2026-04-08 17:15:17] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_171517_639613.txt (4395 chars)
+[2026-04-08 17:15:17] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 17:16:03] [SESSION_START] SessionStart fired. session=d3b51203-55ee-4bc6-8dca-886e36720aff, sections=0, context_chars=0
+[2026-04-08 17:16:05] [SESSION_END] Gemini rc=0, stdout_len=3737, stderr_len=297
+[2026-04-08 17:16:05] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_171517_639613.txt
+[2026-04-08 17:16:05] [SESSION_END] Validation result: True
+[2026-04-08 17:16:05] [SESSION_END] Writing to vault...
+[2026-04-08 17:16:05] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-08.md
+[2026-04-08 17:16:05] [SESSION_END] Finished. OK.
+[2026-04-08 17:58:18] [SESSION_START] SessionStart fired. session=d3b51203-55ee-4bc6-8dca-886e36720aff, sections=0, context_chars=0
+[2026-04-08 18:47:20] [SESSION_END] Hook spawned worker. session=d3b51203-55ee-4bc6-8dca-886e36720aff
+[2026-04-08 18:47:20] [SESSION_END] Worker started. session=d3b51203-55ee-4bc6-8dca-886e36720aff
+[2026-04-08 18:47:20] [SESSION_END] Calling Gemini CLI... (16973 chars)
+[2026-04-08 18:47:20] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_184720_026911.txt (19594 chars)
+[2026-04-08 18:47:20] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 18:48:05] [SESSION_END] Gemini rc=0, stdout_len=4296, stderr_len=297
+[2026-04-08 18:48:05] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_184720_026911.txt
+[2026-04-08 18:48:05] [SESSION_END] Validation result: True
+[2026-04-08 18:48:05] [SESSION_END] Writing to vault...
+[2026-04-08 18:48:05] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-08.md
+[2026-04-08 18:48:05] [SESSION_END] Finished. OK.
+[2026-04-08 20:29:58] [SESSION_START] SessionStart fired. session=d3b51203-55ee-4bc6-8dca-886e36720aff, sections=0, context_chars=0
+[2026-04-08 21:17:20] [SESSION_END] Hook spawned worker. session=d3b51203-55ee-4bc6-8dca-886e36720aff
+[2026-04-08 21:17:20] [SESSION_END] Worker started. session=d3b51203-55ee-4bc6-8dca-886e36720aff
+[2026-04-08 21:17:20] [SESSION_END] Calling Gemini CLI... (17254 chars)
+[2026-04-08 21:17:20] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_211720_973021.txt (19875 chars)
+[2026-04-08 21:17:20] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-08 21:19:57] [SESSION_END] Gemini rc=0, stdout_len=5256, stderr_len=31402
+[2026-04-08 21:19:57] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260408_211720_973021.txt
+[2026-04-08 21:19:57] [SESSION_END] Validation result: True
+[2026-04-08 21:19:57] [SESSION_END] Writing to vault...
+[2026-04-08 21:19:57] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-08.md
+[2026-04-08 21:19:57] [SESSION_END] Finished. OK.
+[2026-04-15 12:38:18] [SESSION_START] SessionStart fired. session=7c17e4e1-465b-41b8-b5dc-2590ae373555, sections=0, context_chars=0
+[2026-04-15 12:43:39] [SESSION_START] SessionStart fired. session=a108d9d2-4b44-4e59-86d9-d3921a1be18a, sections=0, context_chars=0
+[2026-04-15 13:03:32] [SESSION_END] Hook spawned worker. session=7c17e4e1-465b-41b8-b5dc-2590ae373555
+[2026-04-15 13:03:32] [SESSION_END] Worker started. session=7c17e4e1-465b-41b8-b5dc-2590ae373555
+[2026-04-15 13:03:32] [SESSION_END] Calling Gemini CLI... (4161 chars)
+[2026-04-15 13:03:32] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_130332_801935.txt (6782 chars)
+[2026-04-15 13:03:32] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-15 13:06:32] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-15 13:06:32] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_130332_801935.txt
+[2026-04-15 13:06:32] [SESSION_END] Validation result: False
+[2026-04-15 13:06:32] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-15 13:06:32] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-15 13:40:14] [SESSION_START] SessionStart fired. session=39a56d13-059a-42e9-9a84-aa2f0468e029, sections=0, context_chars=0
+[2026-04-15 15:39:04] [SESSION_END] Hook spawned worker. session=39a56d13-059a-42e9-9a84-aa2f0468e029
+[2026-04-15 15:39:04] [SESSION_END] Worker started. session=39a56d13-059a-42e9-9a84-aa2f0468e029
+[2026-04-15 15:39:04] [SESSION_END] Calling Gemini CLI... (8377 chars)
+[2026-04-15 15:39:04] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_153904_554241.txt (10998 chars)
+[2026-04-15 15:39:04] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-15 15:39:30] [SESSION_START] SessionStart fired. session=d43fd745-3b37-4e68-9e91-731630606a64, sections=0, context_chars=0
+[2026-04-15 15:40:27] [SESSION_END] Hook spawned worker. session=d43fd745-3b37-4e68-9e91-731630606a64
+[2026-04-15 15:40:27] [SESSION_END] Worker started. session=d43fd745-3b37-4e68-9e91-731630606a64
+[2026-04-15 15:40:27] [SESSION_END] Calling Gemini CLI... (171 chars)
+[2026-04-15 15:40:27] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_154027_605662.txt (2792 chars)
+[2026-04-15 15:40:27] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-15 15:41:11] [SESSION_END] Gemini rc=0, stdout_len=4407, stderr_len=25697
+[2026-04-15 15:41:11] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_153904_554241.txt
+[2026-04-15 15:41:11] [SESSION_END] Validation result: True
+[2026-04-15 15:41:11] [SESSION_END] Writing to vault...
+[2026-04-15 15:41:11] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-15.md
+[2026-04-15 15:41:11] [SESSION_END] Finished. OK.
+[2026-04-15 15:41:23] [SESSION_END] Gemini rc=0, stdout_len=2510, stderr_len=15537
+[2026-04-15 15:41:23] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_154027_605662.txt
+[2026-04-15 15:41:23] [SESSION_END] Validation result: True
+[2026-04-15 15:41:23] [SESSION_END] Writing to vault...
+[2026-04-15 15:41:23] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-15.md
+[2026-04-15 15:41:23] [SESSION_END] Finished. OK.
+[2026-04-15 17:37:10] [SESSION_END] Hook spawned worker. session=a108d9d2-4b44-4e59-86d9-d3921a1be18a
+[2026-04-15 17:37:10] [SESSION_END] Worker started. session=a108d9d2-4b44-4e59-86d9-d3921a1be18a
+[2026-04-15 17:37:10] [SESSION_END] Calling Gemini CLI... (20101 chars)
+[2026-04-15 17:37:10] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_173710_326178.txt (22722 chars)
+[2026-04-15 17:37:10] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-15 17:40:10] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-15 17:40:10] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260415_173710_326178.txt
+[2026-04-15 17:40:10] [SESSION_END] Validation result: False
+[2026-04-15 17:40:10] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-15 17:40:10] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-16 18:00:55] [SESSION_START] SessionStart fired. session=8a6c6f06-3ab6-41e1-af0c-e7ff71ce07d6, sections=0, context_chars=0
+[2026-04-16 20:06:24] [SESSION_END] Hook spawned worker. session=8a6c6f06-3ab6-41e1-af0c-e7ff71ce07d6
+[2026-04-16 20:06:24] [SESSION_END] Worker started. session=8a6c6f06-3ab6-41e1-af0c-e7ff71ce07d6
+[2026-04-16 20:06:24] [SESSION_END] Calling Gemini CLI... (68883 chars)
+[2026-04-16 20:06:24] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260416_200624_067795.txt (71504 chars)
+[2026-04-16 20:06:24] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-16 20:09:24] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-16 20:09:24] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260416_200624_067795.txt
+[2026-04-16 20:09:24] [SESSION_END] Validation result: False
+[2026-04-16 20:09:24] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-16 20:09:24] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-17 14:06:11] [SESSION_START] SessionStart fired. session=a2a32e1c-2379-48f1-8845-6c9c9ee0e1df, sections=0, context_chars=0
+[2026-04-17 16:30:43] [SESSION_END] Hook spawned worker. session=a2a32e1c-2379-48f1-8845-6c9c9ee0e1df
+[2026-04-17 16:30:43] [SESSION_END] Worker started. session=a2a32e1c-2379-48f1-8845-6c9c9ee0e1df
+[2026-04-17 16:30:43] [SESSION_END] Calling Gemini CLI... (15201 chars)
+[2026-04-17 16:30:43] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260417_163043_931220.txt (17822 chars)
+[2026-04-17 16:30:43] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-17 16:33:37] [SESSION_END] Gemini rc=0, stdout_len=4769, stderr_len=478
+[2026-04-17 16:33:37] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260417_163043_931220.txt
+[2026-04-17 16:33:37] [SESSION_END] Validation result: True
+[2026-04-17 16:33:37] [SESSION_END] Writing to vault...
+[2026-04-17 16:33:37] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-17.md
+[2026-04-17 16:33:37] [SESSION_END] Finished. OK.
+[2026-04-20 14:10:58] [SESSION_START] SessionStart fired. session=d8764fa5-2ea2-4646-a4c4-184373aefe48, sections=0, context_chars=0
+[2026-04-20 15:38:12] [SESSION_START] SessionStart fired. session=9ea7a729-5f8a-4727-b0b2-c3ea53aace13, sections=0, context_chars=0
+[2026-04-20 21:41:29] [SESSION_END] Hook spawned worker. session=d8764fa5-2ea2-4646-a4c4-184373aefe48
+[2026-04-20 21:41:29] [SESSION_END] Hook spawned worker. session=9ea7a729-5f8a-4727-b0b2-c3ea53aace13
+[2026-04-20 21:41:29] [SESSION_END] Worker started. session=d8764fa5-2ea2-4646-a4c4-184373aefe48
+[2026-04-20 21:41:29] [SESSION_END] Calling Gemini CLI... (25109 chars)
+[2026-04-20 21:41:29] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260420_214129_536509.txt (27730 chars)
+[2026-04-20 21:41:29] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-20 21:41:29] [SESSION_END] Worker started. session=9ea7a729-5f8a-4727-b0b2-c3ea53aace13
+[2026-04-20 21:41:29] [SESSION_END] Calling Gemini CLI... (19665 chars)
+[2026-04-20 21:41:29] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260420_214129_540505.txt (22286 chars)
+[2026-04-20 21:41:29] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-20 21:42:03] [SESSION_END] Gemini rc=0, stdout_len=4179, stderr_len=163
+[2026-04-20 21:42:03] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260420_214129_540505.txt
+[2026-04-20 21:42:03] [SESSION_END] Validation result: True
+[2026-04-20 21:42:03] [SESSION_END] Writing to vault...
+[2026-04-20 21:42:03] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-20.md
+[2026-04-20 21:42:03] [SESSION_END] Finished. OK.
+[2026-04-20 21:42:04] [SESSION_END] Gemini rc=0, stdout_len=4007, stderr_len=163
+[2026-04-20 21:42:04] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260420_214129_536509.txt
+[2026-04-20 21:42:04] [SESSION_END] Validation result: True
+[2026-04-20 21:42:04] [SESSION_END] Writing to vault...
+[2026-04-20 21:42:04] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-20.md
+[2026-04-20 21:42:04] [SESSION_END] Finished. OK.
+[2026-04-21 21:00:00] [SESSION_START] SessionStart fired. session=8dee5ee4-f8e9-4979-a996-b6c7583bd4b1, sections=0, context_chars=0
+[2026-04-21 21:34:07] [PRECOMPACT] PreCompact hook spawned worker. session=8dee5ee4-f8e9-4979-a996-b6c7583bd4b1
+[2026-04-21 21:34:07] [PRECOMPACT] PreCompact worker started. session=8dee5ee4-f8e9-4979-a996-b6c7583bd4b1
+[2026-04-21 21:34:07] [PRECOMPACT] Calling Gemini CLI... (9228 chars)
+[2026-04-21 21:34:07] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_213407_321780.txt (11991 chars)
+[2026-04-21 21:34:07] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_213407_321780.txt --output-format json --approval-mode auto_edit
+[2026-04-21 21:34:07] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_213407_321780.txt
+[2026-04-21 21:34:48] [PRECOMPACT] Gemini rc=0, stdout_len=3903, stderr_len=163
+[2026-04-21 21:34:48] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_213407_321780.txt
+[2026-04-21 21:34:48] [PRECOMPACT] PreCompact validation result: True
+[2026-04-21 21:34:48] [PRECOMPACT] PreCompact writing to vault...
+[2026-04-21 21:34:48] [PRECOMPACT] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-21.md
+[2026-04-21 21:34:48] [PRECOMPACT] PreCompact finished. OK.
+[2026-04-21 21:35:24] [SESSION_START] SessionStart fired. session=8dee5ee4-f8e9-4979-a996-b6c7583bd4b1, sections=0, context_chars=0
+[2026-04-21 22:41:22] [SESSION_START] SessionStart fired. session=674bb741-ee2e-417e-aa5e-93df810a2fac, sections=0, context_chars=0
+[2026-04-21 22:56:16] [SESSION_START] SessionStart fired. session=df978c8c-1c1c-4586-bce8-be04ea805304, sections=0, context_chars=0
+[2026-04-21 22:57:00] [SESSION_END] Hook spawned worker. session=df978c8c-1c1c-4586-bce8-be04ea805304
+[2026-04-21 22:57:00] [SESSION_END] Worker started. session=df978c8c-1c1c-4586-bce8-be04ea805304
+[2026-04-21 22:57:00] [SESSION_END] Empty conversation, exiting.
+[2026-04-21 22:57:17] [SESSION_END] Hook spawned worker. session=9225dcc6-729f-486c-970f-692a91870505
+[2026-04-21 22:57:17] [SESSION_END] Worker started. session=9225dcc6-729f-486c-970f-692a91870505
+[2026-04-21 22:57:17] [SESSION_END] Empty conversation, exiting.
+[2026-04-21 22:58:06] [SESSION_START] SessionStart fired. session=3e78cf28-56dc-48a1-8085-4a10a9e9a661, sections=0, context_chars=0
+[2026-04-21 23:22:48] [PRECOMPACT] PreCompact hook spawned worker. session=3e78cf28-56dc-48a1-8085-4a10a9e9a661
+[2026-04-21 23:22:48] [PRECOMPACT] PreCompact worker started. session=3e78cf28-56dc-48a1-8085-4a10a9e9a661
+[2026-04-21 23:22:48] [PRECOMPACT] Calling Gemini CLI... (14191 chars)
+[2026-04-21 23:22:48] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_232248_613357.txt (16954 chars)
+[2026-04-21 23:22:48] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_232248_613357.txt --output-format json --approval-mode auto_edit
+[2026-04-21 23:22:48] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_232248_613357.txt
+[2026-04-21 23:23:57] [SESSION_START] SessionStart fired. session=3e78cf28-56dc-48a1-8085-4a10a9e9a661, sections=0, context_chars=0
+[2026-04-21 23:24:45] [PRECOMPACT] Gemini rc=0, stdout_len=5337, stderr_len=5560
+[2026-04-21 23:24:45] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_232248_613357.txt
+[2026-04-21 23:24:45] [PRECOMPACT] PreCompact validation result: True
+[2026-04-21 23:24:45] [PRECOMPACT] PreCompact writing to vault...
+[2026-04-21 23:24:45] [PRECOMPACT] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-21.md
+[2026-04-21 23:24:45] [PRECOMPACT] PreCompact finished. OK.
+[2026-04-21 23:27:47] [SESSION_END] Hook spawned worker. session=3e78cf28-56dc-48a1-8085-4a10a9e9a661
+[2026-04-21 23:27:47] [SESSION_END] Worker started. session=3e78cf28-56dc-48a1-8085-4a10a9e9a661
+[2026-04-21 23:27:47] [SESSION_END] Calling Gemini CLI... (1082 chars)
+[2026-04-21 23:27:47] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_232747_168603.txt (3703 chars)
+[2026-04-21 23:27:47] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-21 23:27:54] [SESSION_START] SessionStart fired. session=2bd758fe-b209-433a-90df-f6238dc7912e, sections=0, context_chars=0
+[2026-04-21 23:28:29] [SESSION_END] Gemini rc=0, stdout_len=3340, stderr_len=5245
+[2026-04-21 23:28:29] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260421_232747_168603.txt
+[2026-04-21 23:28:29] [SESSION_END] Validation result: True
+[2026-04-21 23:28:29] [SESSION_END] Writing to vault...
+[2026-04-21 23:28:29] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-21.md
+[2026-04-21 23:28:29] [SESSION_END] Finished. OK.
+[2026-04-22 00:05:23] [SESSION_END] Hook spawned worker. session=674bb741-ee2e-417e-aa5e-93df810a2fac
+[2026-04-22 00:05:23] [SESSION_END] Worker started. session=674bb741-ee2e-417e-aa5e-93df810a2fac
+[2026-04-22 00:05:23] [SESSION_END] Empty conversation, exiting.
+[2026-04-22 10:26:17] [SESSION_START] SessionStart fired. session=5ea39903-485d-4561-9560-118757278745, sections=0, context_chars=0
+[2026-04-22 11:16:38] [SESSION_END] Hook spawned worker. session=5ea39903-485d-4561-9560-118757278745
+[2026-04-22 11:16:38] [SESSION_END] Worker started. session=5ea39903-485d-4561-9560-118757278745
+[2026-04-22 11:16:38] [SESSION_END] Calling Gemini CLI... (12998 chars)
+[2026-04-22 11:16:38] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_111638_256377.txt (15619 chars)
+[2026-04-22 11:16:38] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-22 11:19:38] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-22 11:19:38] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_111638_256377.txt
+[2026-04-22 11:19:38] [SESSION_END] Validation result: False
+[2026-04-22 11:19:38] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-22 11:19:38] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-22 12:46:57] [SESSION_START] SessionStart fired. session=efcd9335-9996-4f98-bcfa-dddaf3c23c0f, sections=0, context_chars=0
+[2026-04-22 13:06:13] [SESSION_END] Hook spawned worker. session=efcd9335-9996-4f98-bcfa-dddaf3c23c0f
+[2026-04-22 13:06:13] [SESSION_END] Worker started. session=efcd9335-9996-4f98-bcfa-dddaf3c23c0f
+[2026-04-22 13:06:13] [SESSION_END] Calling Gemini CLI... (1327 chars)
+[2026-04-22 13:06:13] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_130613_144481.txt (3948 chars)
+[2026-04-22 13:06:13] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-22 13:06:20] [SESSION_START] SessionStart fired. session=45a5945f-909d-469b-9553-9dc7b4c2cccc, sections=0, context_chars=0
+[2026-04-22 13:07:08] [SESSION_END] Gemini rc=0, stdout_len=2753, stderr_len=10505
+[2026-04-22 13:07:08] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_130613_144481.txt
+[2026-04-22 13:07:08] [SESSION_END] Validation result: True
+[2026-04-22 13:07:08] [SESSION_END] Writing to vault...
+[2026-04-22 13:07:08] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-22.md
+[2026-04-22 13:07:08] [SESSION_END] Finished. OK.
+[2026-04-22 13:33:01] [SESSION_END] Hook spawned worker. session=45a5945f-909d-469b-9553-9dc7b4c2cccc
+[2026-04-22 13:33:01] [SESSION_END] Worker started. session=45a5945f-909d-469b-9553-9dc7b4c2cccc
+[2026-04-22 13:33:01] [SESSION_END] Calling Gemini CLI... (12607 chars)
+[2026-04-22 13:33:01] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_133301_825145.txt (15228 chars)
+[2026-04-22 13:33:01] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-22 13:35:22] [SESSION_END] Gemini rc=0, stdout_len=4231, stderr_len=15991
+[2026-04-22 13:35:22] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_133301_825145.txt
+[2026-04-22 13:35:22] [SESSION_END] Validation result: True
+[2026-04-22 13:35:22] [SESSION_END] Writing to vault...
+[2026-04-22 13:35:22] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-22.md
+[2026-04-22 13:35:22] [SESSION_END] Finished. OK.
+[2026-04-22 13:50:31] [SESSION_START] SessionStart fired. session=79f29bc1-d6a0-4550-8eab-3f2446a8dd36, sections=0, context_chars=0
+[2026-04-22 15:02:46] [SESSION_END] Hook spawned worker. session=79f29bc1-d6a0-4550-8eab-3f2446a8dd36
+[2026-04-22 15:02:46] [SESSION_END] Worker started. session=79f29bc1-d6a0-4550-8eab-3f2446a8dd36
+[2026-04-22 15:02:46] [SESSION_END] Calling Gemini CLI... (1741 chars)
+[2026-04-22 15:02:46] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_150246_547033.txt (4362 chars)
+[2026-04-22 15:02:46] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-22 15:02:50] [SESSION_START] SessionStart fired. session=076a6bf7-f36d-43fc-83e2-718c0847ddcc, sections=0, context_chars=0
+[2026-04-22 15:05:46] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-04-22 15:05:46] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_150246_547033.txt
+[2026-04-22 15:05:46] [SESSION_END] Validation result: False
+[2026-04-22 15:05:46] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-04-22 15:05:46] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-04-22 22:50:46] [SESSION_END] Hook spawned worker. session=076a6bf7-f36d-43fc-83e2-718c0847ddcc
+[2026-04-22 22:50:46] [SESSION_END] Worker started. session=076a6bf7-f36d-43fc-83e2-718c0847ddcc
+[2026-04-22 22:50:46] [SESSION_END] Calling Gemini CLI... (18907 chars)
+[2026-04-22 22:50:46] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_225046_512379.txt (21528 chars)
+[2026-04-22 22:50:46] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-22 22:51:17] [SESSION_END] Gemini rc=0, stdout_len=4267, stderr_len=163
+[2026-04-22 22:51:17] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260422_225046_512379.txt
+[2026-04-22 22:51:17] [SESSION_END] Validation result: True
+[2026-04-22 22:51:17] [SESSION_END] Writing to vault...
+[2026-04-22 22:51:17] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-22.md
+[2026-04-22 22:51:17] [SESSION_END] Finished. OK.
+[2026-04-23 12:23:40] [SESSION_START] SessionStart fired. session=be598cf1-e8f2-4e8d-b29f-151a9db77705, sections=0, context_chars=0
+[2026-04-23 12:54:46] [PRECOMPACT] PreCompact hook spawned worker. session=be598cf1-e8f2-4e8d-b29f-151a9db77705
+[2026-04-23 12:54:46] [PRECOMPACT] PreCompact worker started. session=be598cf1-e8f2-4e8d-b29f-151a9db77705
+[2026-04-23 12:54:46] [PRECOMPACT] Calling Gemini CLI... (10926 chars)
+[2026-04-23 12:54:46] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_125446_921799.txt (13689 chars)
+[2026-04-23 12:54:46] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_125446_921799.txt --output-format json --approval-mode auto_edit
+[2026-04-23 12:54:46] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_125446_921799.txt
+[2026-04-23 12:55:43] [PRECOMPACT] Gemini rc=0, stdout_len=4156, stderr_len=10504
+[2026-04-23 12:55:43] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_125446_921799.txt
+[2026-04-23 12:55:43] [PRECOMPACT] PreCompact validation result: True
+[2026-04-23 12:55:43] [PRECOMPACT] PreCompact writing to vault...
+[2026-04-23 12:55:43] [PRECOMPACT] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-23.md
+[2026-04-23 12:55:43] [PRECOMPACT] PreCompact finished. OK.
+[2026-04-23 12:56:20] [SESSION_START] SessionStart fired. session=be598cf1-e8f2-4e8d-b29f-151a9db77705, sections=0, context_chars=0
+[2026-04-23 13:03:35] [PRECOMPACT] PreCompact hook spawned worker. session=be598cf1-e8f2-4e8d-b29f-151a9db77705
+[2026-04-23 13:03:35] [PRECOMPACT] PreCompact worker started. session=be598cf1-e8f2-4e8d-b29f-151a9db77705
+[2026-04-23 13:03:35] [PRECOMPACT] Calling Gemini CLI... (4211 chars)
+[2026-04-23 13:03:35] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_130335_741612.txt (6974 chars)
+[2026-04-23 13:03:35] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_130335_741612.txt --output-format json --approval-mode auto_edit
+[2026-04-23 13:03:35] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_130335_741612.txt
+[2026-04-23 13:04:16] [PRECOMPACT] Gemini rc=0, stdout_len=3247, stderr_len=163
+[2026-04-23 13:04:16] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_130335_741612.txt
+[2026-04-23 13:04:16] [PRECOMPACT] PreCompact validation result: True
+[2026-04-23 13:04:16] [PRECOMPACT] PreCompact writing to vault...
+[2026-04-23 13:04:16] [PRECOMPACT] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-23.md
+[2026-04-23 13:04:16] [PRECOMPACT] PreCompact finished. OK.
+[2026-04-23 13:04:46] [SESSION_START] SessionStart fired. session=be598cf1-e8f2-4e8d-b29f-151a9db77705, sections=0, context_chars=0
+[2026-04-23 13:05:04] [SESSION_END] Hook spawned worker. session=be598cf1-e8f2-4e8d-b29f-151a9db77705
+[2026-04-23 13:05:04] [SESSION_END] Worker started. session=be598cf1-e8f2-4e8d-b29f-151a9db77705
+[2026-04-23 13:05:04] [SESSION_END] Empty conversation, exiting.
+[2026-04-23 16:06:54] [SESSION_START] SessionStart fired. session=cba4cc1b-728d-4e6b-9042-8a81f249d129, sections=0, context_chars=0
+[2026-04-23 16:07:27] [SESSION_END] Hook spawned worker. session=cba4cc1b-728d-4e6b-9042-8a81f249d129
+[2026-04-23 16:07:27] [SESSION_END] Worker started. session=cba4cc1b-728d-4e6b-9042-8a81f249d129
+[2026-04-23 16:07:27] [SESSION_END] Empty conversation, exiting.
+[2026-04-23 16:30:26] [SESSION_START] SessionStart fired. session=c02e772c-15eb-4582-be73-e75df296454d, sections=0, context_chars=0
+[2026-04-23 16:42:58] [SESSION_END] Hook spawned worker. session=c02e772c-15eb-4582-be73-e75df296454d
+[2026-04-23 16:42:58] [SESSION_END] Worker started. session=c02e772c-15eb-4582-be73-e75df296454d
+[2026-04-23 16:42:58] [SESSION_END] Calling Gemini CLI... (3796 chars)
+[2026-04-23 16:42:58] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_164258_192855.txt (6417 chars)
+[2026-04-23 16:42:58] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-23 16:43:51] [SESSION_END] Gemini rc=0, stdout_len=3471, stderr_len=5334
+[2026-04-23 16:43:51] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260423_164258_192855.txt
+[2026-04-23 16:43:51] [SESSION_END] Validation result: True
+[2026-04-23 16:43:51] [SESSION_END] Writing to vault...
+[2026-04-23 16:43:51] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-23.md
+[2026-04-23 16:43:51] [SESSION_END] Finished. OK.
+[2026-04-24 11:13:16] [SESSION_START] SessionStart fired. session=13546601-5168-4fa1-9b20-3be8b68cbc92, sections=0, context_chars=0
+[2026-04-24 11:52:24] [SESSION_START] SessionStart fired. session=1553410c-85b0-4c7b-9f60-d080594ac5a3, sections=0, context_chars=0
+[2026-04-24 12:01:39] [SESSION_END] Hook spawned worker. session=1553410c-85b0-4c7b-9f60-d080594ac5a3
+[2026-04-24 12:01:39] [SESSION_END] Worker started. session=1553410c-85b0-4c7b-9f60-d080594ac5a3
+[2026-04-24 12:01:39] [SESSION_END] Calling Gemini CLI... (6455 chars)
+[2026-04-24 12:01:39] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_120139_597654.txt (9076 chars)
+[2026-04-24 12:01:39] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 12:02:15] [SESSION_END] Gemini rc=0, stdout_len=3813, stderr_len=163
+[2026-04-24 12:02:15] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_120139_597654.txt
+[2026-04-24 12:02:15] [SESSION_END] Validation result: True
+[2026-04-24 12:02:15] [SESSION_END] Writing to vault...
+[2026-04-24 12:02:15] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 12:02:15] [SESSION_END] Finished. OK.
+[2026-04-24 13:05:20] [SESSION_START] SessionStart fired. session=52acf5cd-893e-4f22-9aa5-2327faacb558, sections=0, context_chars=0
+[2026-04-24 13:26:52] [SESSION_START] SessionStart fired. session=1fc5556c-3b4b-4f9c-846d-9dd768a8ebbf, sections=0, context_chars=0
+[2026-04-24 14:31:42] [SESSION_END] Hook spawned worker. session=52acf5cd-893e-4f22-9aa5-2327faacb558
+[2026-04-24 14:31:42] [SESSION_END] Worker started. session=52acf5cd-893e-4f22-9aa5-2327faacb558
+[2026-04-24 14:31:42] [SESSION_END] Calling Gemini CLI... (9112 chars)
+[2026-04-24 14:31:42] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_143142_634745.txt (11733 chars)
+[2026-04-24 14:31:42] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 14:32:20] [SESSION_END] Gemini rc=0, stdout_len=3839, stderr_len=163
+[2026-04-24 14:32:20] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_143142_634745.txt
+[2026-04-24 14:32:20] [SESSION_END] Validation result: True
+[2026-04-24 14:32:20] [SESSION_END] Writing to vault...
+[2026-04-24 14:32:20] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 14:32:20] [SESSION_END] Finished. OK.
+[2026-04-24 16:48:10] [SESSION_START] SessionStart fired. session=8c5a3551-3e41-46b5-ade8-64d001d15889, sections=0, context_chars=0
+[2026-04-24 16:51:35] [SESSION_END] Hook spawned worker. session=1fc5556c-3b4b-4f9c-846d-9dd768a8ebbf
+[2026-04-24 16:51:35] [SESSION_END] Worker started. session=1fc5556c-3b4b-4f9c-846d-9dd768a8ebbf
+[2026-04-24 16:51:35] [SESSION_END] Calling Gemini CLI... (13353 chars)
+[2026-04-24 16:51:35] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_165135_218162.txt (15974 chars)
+[2026-04-24 16:51:35] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 16:52:19] [SESSION_END] Gemini rc=0, stdout_len=4244, stderr_len=298
+[2026-04-24 16:52:19] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_165135_218162.txt
+[2026-04-24 16:52:19] [SESSION_END] Validation result: True
+[2026-04-24 16:52:19] [SESSION_END] Writing to vault...
+[2026-04-24 16:52:19] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 16:52:19] [SESSION_END] Finished. OK.
+[2026-04-24 17:01:10] [SESSION_END] Hook spawned worker. session=8c5a3551-3e41-46b5-ade8-64d001d15889
+[2026-04-24 17:01:10] [SESSION_END] Worker started. session=8c5a3551-3e41-46b5-ade8-64d001d15889
+[2026-04-24 17:01:10] [SESSION_END] Calling Gemini CLI... (4008 chars)
+[2026-04-24 17:01:10] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_170110_264418.txt (6629 chars)
+[2026-04-24 17:01:10] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 17:01:12] [SESSION_START] SessionStart fired. session=9a4c592c-6917-4cfe-bf62-8203d5139112, sections=0, context_chars=0
+[2026-04-24 17:02:20] [SESSION_END] Gemini rc=0, stdout_len=3387, stderr_len=5519
+[2026-04-24 17:02:20] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_170110_264418.txt
+[2026-04-24 17:02:20] [SESSION_END] Validation result: True
+[2026-04-24 17:02:20] [SESSION_END] Writing to vault...
+[2026-04-24 17:02:20] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 17:02:20] [SESSION_END] Finished. OK.
+[2026-04-24 17:26:37] [SESSION_END] Hook spawned worker. session=9a4c592c-6917-4cfe-bf62-8203d5139112
+[2026-04-24 17:26:37] [SESSION_END] Worker started. session=9a4c592c-6917-4cfe-bf62-8203d5139112
+[2026-04-24 17:26:37] [SESSION_END] Calling Gemini CLI... (4284 chars)
+[2026-04-24 17:26:37] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_172637_493207.txt (6905 chars)
+[2026-04-24 17:26:37] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 17:26:39] [SESSION_START] SessionStart fired. session=fc8f2a36-1c87-433e-9ff7-d14d8dc33fc6, sections=0, context_chars=0
+[2026-04-24 17:27:13] [SESSION_END] Gemini rc=0, stdout_len=3352, stderr_len=298
+[2026-04-24 17:27:13] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_172637_493207.txt
+[2026-04-24 17:27:13] [SESSION_END] Validation result: True
+[2026-04-24 17:27:13] [SESSION_END] Writing to vault...
+[2026-04-24 17:27:13] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 17:27:13] [SESSION_END] Finished. OK.
+[2026-04-24 17:37:41] [SESSION_END] Hook spawned worker. session=fc8f2a36-1c87-433e-9ff7-d14d8dc33fc6
+[2026-04-24 17:37:41] [SESSION_END] Worker started. session=fc8f2a36-1c87-433e-9ff7-d14d8dc33fc6
+[2026-04-24 17:37:41] [SESSION_END] Calling Gemini CLI... (1561 chars)
+[2026-04-24 17:37:41] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_173741_753911.txt (4182 chars)
+[2026-04-24 17:37:41] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 17:37:46] [SESSION_START] SessionStart fired. session=892b73bf-d311-4a01-8bbc-b854e71d3ed0, sections=0, context_chars=0
+[2026-04-24 17:38:12] [SESSION_END] Gemini rc=0, stdout_len=2760, stderr_len=298
+[2026-04-24 17:38:12] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_173741_753911.txt
+[2026-04-24 17:38:12] [SESSION_END] Validation result: True
+[2026-04-24 17:38:12] [SESSION_END] Writing to vault...
+[2026-04-24 17:38:12] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 17:38:12] [SESSION_END] Finished. OK.
+[2026-04-24 17:52:33] [SESSION_END] Hook spawned worker. session=892b73bf-d311-4a01-8bbc-b854e71d3ed0
+[2026-04-24 17:52:33] [SESSION_END] Worker started. session=892b73bf-d311-4a01-8bbc-b854e71d3ed0
+[2026-04-24 17:52:33] [SESSION_END] Calling Gemini CLI... (3776 chars)
+[2026-04-24 17:52:33] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_175233_949652.txt (6397 chars)
+[2026-04-24 17:52:33] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 17:53:16] [SESSION_END] Gemini rc=0, stdout_len=3457, stderr_len=437
+[2026-04-24 17:53:16] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_175233_949652.txt
+[2026-04-24 17:53:16] [SESSION_END] Validation result: True
+[2026-04-24 17:53:16] [SESSION_END] Writing to vault...
+[2026-04-24 17:53:16] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 17:53:16] [SESSION_END] Finished. OK.
+[2026-04-24 18:24:59] [SESSION_START] SessionStart fired. session=35fc746c-7c37-45be-9301-c602ce54f951, sections=0, context_chars=0
+[2026-04-24 18:28:20] [SESSION_END] Hook spawned worker. session=35fc746c-7c37-45be-9301-c602ce54f951
+[2026-04-24 18:28:20] [SESSION_END] Worker started. session=35fc746c-7c37-45be-9301-c602ce54f951
+[2026-04-24 18:28:20] [SESSION_END] Calling Gemini CLI... (49 chars)
+[2026-04-24 18:28:20] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_182820_639837.txt (2670 chars)
+[2026-04-24 18:28:20] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-24 18:29:09] [SESSION_END] Gemini rc=0, stdout_len=2289, stderr_len=5633
+[2026-04-24 18:29:09] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260424_182820_639837.txt
+[2026-04-24 18:29:09] [SESSION_END] Validation result: True
+[2026-04-24 18:29:09] [SESSION_END] Writing to vault...
+[2026-04-24 18:29:09] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-24.md
+[2026-04-24 18:29:09] [SESSION_END] Finished. OK.
+[2026-04-24 18:29:59] [SESSION_START] SessionStart fired. session=90323165-003a-4297-be28-8341adca6425, sections=0, context_chars=0
+[2026-04-26 22:01:23] [SESSION_START] SessionStart fired. session=2da9a4d1-c341-4165-98d0-8f5a3901a715, sections=0, context_chars=0
+[2026-04-26 22:36:16] [SESSION_END] Hook spawned worker. session=2da9a4d1-c341-4165-98d0-8f5a3901a715
+[2026-04-26 22:36:16] [SESSION_END] Worker started. session=2da9a4d1-c341-4165-98d0-8f5a3901a715
+[2026-04-26 22:36:16] [SESSION_END] Calling Gemini CLI... (19736 chars)
+[2026-04-26 22:36:16] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_223616_990599.txt (22357 chars)
+[2026-04-26 22:36:16] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-26 22:36:58] [SESSION_END] Gemini rc=0, stdout_len=4343, stderr_len=298
+[2026-04-26 22:36:58] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_223616_990599.txt
+[2026-04-26 22:36:58] [SESSION_END] Validation result: True
+[2026-04-26 22:36:58] [SESSION_END] Writing to vault...
+[2026-04-26 22:36:58] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-26.md
+[2026-04-26 22:36:58] [SESSION_END] Finished. OK.
+[2026-04-26 22:52:40] [SESSION_START] SessionStart fired. session=b672b366-f1dd-4b2d-bbc9-523177966e13, sections=0, context_chars=0
+[2026-04-26 23:33:03] [PRECOMPACT] PreCompact hook spawned worker. session=b672b366-f1dd-4b2d-bbc9-523177966e13
+[2026-04-26 23:33:03] [PRECOMPACT] PreCompact worker started. session=b672b366-f1dd-4b2d-bbc9-523177966e13
+[2026-04-26 23:33:03] [PRECOMPACT] Calling Gemini CLI... (13550 chars)
+[2026-04-26 23:33:03] [PRECOMPACT] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_233303_394321.txt (16313 chars)
+[2026-04-26 23:33:03] [PRECOMPACT] Running command: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p Read and process the instructions and transcript in @/home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_233303_394321.txt --output-format json --approval-mode auto_edit
+[2026-04-26 23:33:03] [PRECOMPACT] Prompt file for Gemini: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_233303_394321.txt
+[2026-04-26 23:33:33] [PRECOMPACT] Gemini rc=0, stdout_len=4290, stderr_len=298
+[2026-04-26 23:33:33] [PRECOMPACT] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_233303_394321.txt
+[2026-04-26 23:33:33] [PRECOMPACT] PreCompact validation result: True
+[2026-04-26 23:33:33] [PRECOMPACT] PreCompact writing to vault...
+[2026-04-26 23:33:33] [PRECOMPACT] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-26.md
+[2026-04-26 23:33:33] [PRECOMPACT] PreCompact finished. OK.
+[2026-04-26 23:34:58] [SESSION_START] SessionStart fired. session=b672b366-f1dd-4b2d-bbc9-523177966e13, sections=0, context_chars=0
+[2026-04-26 23:50:34] [SESSION_END] Hook spawned worker. session=b672b366-f1dd-4b2d-bbc9-523177966e13
+[2026-04-26 23:50:34] [SESSION_END] Worker started. session=b672b366-f1dd-4b2d-bbc9-523177966e13
+[2026-04-26 23:50:34] [SESSION_END] Calling Gemini CLI... (3154 chars)
+[2026-04-26 23:50:34] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_235034_362094.txt (5775 chars)
+[2026-04-26 23:50:34] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-26 23:51:05] [SESSION_END] Gemini rc=0, stdout_len=3604, stderr_len=444
+[2026-04-26 23:51:05] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260426_235034_362094.txt
+[2026-04-26 23:51:05] [SESSION_END] Validation result: True
+[2026-04-26 23:51:05] [SESSION_END] Writing to vault...
+[2026-04-26 23:51:05] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-04-26.md
+[2026-04-26 23:51:05] [SESSION_END] Finished. OK.
+[2026-04-27 12:30:14] [SESSION_START] SessionStart fired. session=dd2551f1-71d9-447d-82dd-b1ed876bf3c9, sections=0, context_chars=0
+[2026-04-27 13:06:39] [SESSION_END] Hook spawned worker. session=dd2551f1-71d9-447d-82dd-b1ed876bf3c9
+[2026-04-27 13:06:39] [SESSION_END] Worker started. session=dd2551f1-71d9-447d-82dd-b1ed876bf3c9
+[2026-04-27 13:06:39] [SESSION_END] Calling Gemini CLI... (1061 chars)
+[2026-04-27 13:06:39] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260427_130639_918185.txt (3682 chars)
+[2026-04-27 13:06:39] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-04-27 13:07:11] [SESSION_END] Gemini rc=41, stdout_len=0, stderr_len=1421
+[2026-04-27 13:07:11] [SESSION_END] Gemini stderr: Error authenticating: FatalAuthenticationError: Manual authorization is required but the current session is non-interactive. Please run the Gemini CLI in an interactive terminal to log in, provide a GEMINI_API_KEY, or ensure Application Default Credentials are configured.
+    at initOauthClient (file:///home/padidavid/.npm-global/lib/node_modules/@google/gemini-cli/bundle/chunk-UIBQS45C.js:250543:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async createCodeAssistContentGenerator (file:///home/padidavid/.npm-global/lib/node_modules/@google/gemini-cli/bundle/chunk-UIBQS45C.js:278491:24)
+    at async file:///home/padidavid/.npm-global/lib/node_modules/@google/gemini-cli/bundle/chunk-UIBQS45C.js:278831:42
+    at async createContentGenerator (file:///home/padidavid/.npm-global/lib/node_modules/@google/gemini-cli/bundle/chunk-UIBQS45C.js:278788:21)
+    at async Config.refreshAuth (file:///home/padidavid/.npm-global/lib/node_modules/@google/gemi
+[2026-04-27 13:07:11] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260427_130639_918185.txt
+[2026-04-27 13:07:11] [SESSION_END] Validation result: False
+[2026-04-27 13:07:11] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 516
+[2026-04-27 13:07:11] [SESSION_END] Full output was:
+[Gemini error]: Error authenticating: FatalAuthenticationError: Manual authorization is required but the current session is non-interactive. Please run the Gemini CLI in an interactive terminal to log in, provide a GEMINI_API_KEY, or ensure Application Default Credentials are configured.
+    at initOauthClient (file:///home/padidavid/.npm-global/lib/node_modules/@google/gemini-cli/bundle/chunk-UIBQS45C.js:250543:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async c
+[2026-04-28 11:43:15] [SESSION_START] SessionStart fired. session=1d3e912f-3b98-4cb1-884d-2d452ac48c18, sections=0, context_chars=0
+[2026-04-28 11:43:17] [SESSION_END] Hook spawned worker. session=1d3e912f-3b98-4cb1-884d-2d452ac48c18
+[2026-04-28 11:43:17] [SESSION_END] Worker started. session=1d3e912f-3b98-4cb1-884d-2d452ac48c18
+[2026-04-28 11:43:17] [SESSION_END] Empty conversation, exiting.
+[2026-05-08 04:05:09] [SESSION_START] SessionStart fired. session=eff914f1-6b3c-49e7-8b03-cb682455e69a, sections=0, context_chars=0
+[2026-05-08 11:58:42] [SESSION_END] Hook spawned worker. session=eff914f1-6b3c-49e7-8b03-cb682455e69a
+[2026-05-08 11:58:42] [SESSION_END] Worker started. session=eff914f1-6b3c-49e7-8b03-cb682455e69a
+[2026-05-08 11:58:42] [SESSION_END] Calling Gemini CLI... (46994 chars)
+[2026-05-08 11:58:42] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260508_115842_978296.txt (49615 chars)
+[2026-05-08 11:58:42] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-08 12:01:43] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-05-08 12:01:43] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260508_115842_978296.txt
+[2026-05-08 12:01:43] [SESSION_END] Validation result: False
+[2026-05-08 12:01:43] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-05-08 12:01:43] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-05-11 23:48:02] [SESSION_START] SessionStart fired. session=a5be4bfc-bd0b-4e3e-b4b7-406aee03c14d, sections=0, context_chars=0
+[2026-05-12 00:36:21] [SESSION_START] SessionStart fired. session=2aafd211-5eff-4fd3-b281-b8e4bd52560b, sections=0, context_chars=0
+[2026-05-12 00:36:21] [SESSION_END] Hook spawned worker. session=a5be4bfc-bd0b-4e3e-b4b7-406aee03c14d
+[2026-05-12 00:36:21] [SESSION_END] Worker started. session=a5be4bfc-bd0b-4e3e-b4b7-406aee03c14d
+[2026-05-12 00:36:21] [SESSION_END] Calling Gemini CLI... (39914 chars)
+[2026-05-12 00:36:21] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_003621_951330.txt (42535 chars)
+[2026-05-12 00:36:21] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-12 00:39:21] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-05-12 00:39:21] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_003621_951330.txt
+[2026-05-12 00:39:21] [SESSION_END] Validation result: False
+[2026-05-12 00:39:21] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-05-12 00:39:21] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-05-12 00:51:59] [SESSION_START] SessionStart fired. session=47e110a2-4795-483c-995a-a5c0869a1932, sections=0, context_chars=0
+[2026-05-12 00:51:59] [SESSION_END] Hook spawned worker. session=2aafd211-5eff-4fd3-b281-b8e4bd52560b
+[2026-05-12 00:51:59] [SESSION_END] Worker started. session=2aafd211-5eff-4fd3-b281-b8e4bd52560b
+[2026-05-12 00:51:59] [SESSION_END] Calling Gemini CLI... (5079 chars)
+[2026-05-12 00:51:59] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_005159_914402.txt (7700 chars)
+[2026-05-12 00:51:59] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-12 00:53:57] [SESSION_END] Gemini rc=0, stdout_len=4231, stderr_len=352
+[2026-05-12 00:53:57] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_005159_914402.txt
+[2026-05-12 00:53:57] [SESSION_END] Validation result: True
+[2026-05-12 00:53:57] [SESSION_END] Writing to vault...
+[2026-05-12 00:53:57] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-12.md
+[2026-05-12 00:53:57] [SESSION_END] Finished. OK.
+[2026-05-12 01:11:55] [SESSION_END] Hook spawned worker. session=47e110a2-4795-483c-995a-a5c0869a1932
+[2026-05-12 01:11:55] [SESSION_END] Worker started. session=47e110a2-4795-483c-995a-a5c0869a1932
+[2026-05-12 01:11:55] [SESSION_END] Calling Gemini CLI... (18041 chars)
+[2026-05-12 01:11:55] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_011155_589841.txt (20662 chars)
+[2026-05-12 01:11:55] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-12 01:12:21] [SESSION_START] SessionStart fired. session=d9fad718-c44f-4562-92a5-504b50acfd84, sections=0, context_chars=0
+[2026-05-12 01:14:55] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-05-12 01:14:55] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_011155_589841.txt
+[2026-05-12 01:14:55] [SESSION_END] Validation result: False
+[2026-05-12 01:14:55] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-05-12 01:14:55] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-05-12 01:40:20] [SESSION_END] Hook spawned worker. session=d9fad718-c44f-4562-92a5-504b50acfd84
+[2026-05-12 01:40:20] [SESSION_END] Worker started. session=d9fad718-c44f-4562-92a5-504b50acfd84
+[2026-05-12 01:40:20] [SESSION_END] Calling Gemini CLI... (17889 chars)
+[2026-05-12 01:40:20] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_014020_896315.txt (20510 chars)
+[2026-05-12 01:40:20] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-12 01:40:26] [SESSION_START] SessionStart fired. session=d9fad718-c44f-4562-92a5-504b50acfd84, sections=0, context_chars=0
+[2026-05-12 01:41:10] [SESSION_START] SessionStart fired. session=c0b9cb23-43bb-48a8-b3fc-82d1371ffb77, sections=0, context_chars=0
+[2026-05-12 01:43:20] [SESSION_END] Gemini TIMEOUT (180s)
+[2026-05-12 01:43:20] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_014020_896315.txt
+[2026-05-12 01:43:20] [SESSION_END] Validation result: False
+[2026-05-12 01:43:20] [SESSION_END] Gemini failed/empty/invalid format. Summary length: 23
+[2026-05-12 01:43:20] [SESSION_END] Full output was:
+[Gemini error]: timeout
+[2026-05-12 01:43:37] [SESSION_END] Hook spawned worker. session=d9fad718-c44f-4562-92a5-504b50acfd84
+[2026-05-12 01:43:37] [SESSION_END] Worker started. session=d9fad718-c44f-4562-92a5-504b50acfd84
+[2026-05-12 01:43:37] [SESSION_END] Calling Gemini CLI... (17889 chars)
+[2026-05-12 01:43:37] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_014337_193801.txt (20510 chars)
+[2026-05-12 01:43:37] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-12 01:43:49] [SESSION_START] SessionStart fired. session=85ec723d-3f14-49a5-a753-2abb1784c426, sections=0, context_chars=0
+[2026-05-12 01:44:01] [SESSION_END] Gemini rc=0, stdout_len=3719, stderr_len=187
+[2026-05-12 01:44:01] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260512_014337_193801.txt
+[2026-05-12 01:44:01] [SESSION_END] Validation result: True
+[2026-05-12 01:44:01] [SESSION_END] Writing to vault...
+[2026-05-12 01:44:01] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-12.md
+[2026-05-12 01:44:01] [SESSION_END] Finished. OK.
+[2026-05-25 20:03:06] [SESSION_START] SessionStart fired. session=79ec4552-f1e5-4850-9faa-5b835b11be17, sections=0, context_chars=0
+[2026-05-25 20:07:29] [SESSION_START] SessionStart fired. session=a26a8f9c-638e-4d67-afc6-89c50b29c95a, sections=0, context_chars=0
+[2026-05-25 22:44:46] [SESSION_START] SessionStart fired. session=33012314-74ae-4551-b6d4-966b3863a211, sections=0, context_chars=0
+[2026-05-25 22:47:59] [SESSION_END] Hook spawned worker. session=85ec723d-3f14-49a5-a753-2abb1784c426
+[2026-05-25 22:47:59] [SESSION_END] Worker started. session=85ec723d-3f14-49a5-a753-2abb1784c426
+[2026-05-25 22:48:00] [SESSION_END] Calling Gemini CLI... (10886 chars)
+[2026-05-25 22:48:00] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_224800_002137.txt (13507 chars)
+[2026-05-25 22:48:00] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-25 22:50:08] [SESSION_END] Gemini rc=0, stdout_len=5387, stderr_len=603
+[2026-05-25 22:50:08] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_224800_002137.txt
+[2026-05-25 22:50:08] [SESSION_END] Validation result: True
+[2026-05-25 22:50:08] [SESSION_END] Writing to vault...
+[2026-05-25 22:50:08] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-25.md
+[2026-05-25 22:50:08] [SESSION_END] Finished. OK.
+[2026-05-25 22:55:31] [SESSION_START] SessionStart fired. session=76b51623-01f4-4ee8-ace5-086f50ee8d4f, sections=0, context_chars=0
+[2026-05-25 23:03:10] [SESSION_END] Hook spawned worker. session=76b51623-01f4-4ee8-ace5-086f50ee8d4f
+[2026-05-25 23:03:10] [SESSION_END] Worker started. session=76b51623-01f4-4ee8-ace5-086f50ee8d4f
+[2026-05-25 23:03:10] [SESSION_END] Calling Gemini CLI... (1751 chars)
+[2026-05-25 23:03:10] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_230310_426196.txt (4372 chars)
+[2026-05-25 23:03:10] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-25 23:03:25] [SESSION_END] Gemini rc=0, stdout_len=2617, stderr_len=189
+[2026-05-25 23:03:25] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_230310_426196.txt
+[2026-05-25 23:03:25] [SESSION_END] Validation result: True
+[2026-05-25 23:03:25] [SESSION_END] Writing to vault...
+[2026-05-25 23:03:25] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-25.md
+[2026-05-25 23:03:25] [SESSION_END] Finished. OK.
+[2026-05-25 23:03:31] [SESSION_START] SessionStart fired. session=aa4104b9-9915-48aa-8da7-127cd7b66b68, sections=0, context_chars=0
+[2026-05-25 23:31:50] [SESSION_END] Hook spawned worker. session=a26a8f9c-638e-4d67-afc6-89c50b29c95a
+[2026-05-25 23:31:50] [SESSION_END] Hook spawned worker. session=79ec4552-f1e5-4850-9faa-5b835b11be17
+[2026-05-25 23:31:50] [SESSION_END] Worker started. session=79ec4552-f1e5-4850-9faa-5b835b11be17
+[2026-05-25 23:31:50] [SESSION_END] Worker started. session=a26a8f9c-638e-4d67-afc6-89c50b29c95a
+[2026-05-25 23:31:50] [SESSION_END] Calling Gemini CLI... (21996 chars)
+[2026-05-25 23:31:50] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_233150_112019.txt (24617 chars)
+[2026-05-25 23:31:50] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-25 23:31:50] [SESSION_END] Calling Gemini CLI... (9119 chars)
+[2026-05-25 23:31:50] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_233150_113299.txt (11740 chars)
+[2026-05-25 23:31:50] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-25 23:32:07] [SESSION_END] Gemini rc=0, stdout_len=3258, stderr_len=189
+[2026-05-25 23:32:07] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_233150_113299.txt
+[2026-05-25 23:32:07] [SESSION_END] Validation result: True
+[2026-05-25 23:32:07] [SESSION_END] Writing to vault...
+[2026-05-25 23:32:07] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-25.md
+[2026-05-25 23:32:07] [SESSION_END] Finished. OK.
+[2026-05-25 23:32:07] [SESSION_END] Gemini rc=0, stdout_len=2636, stderr_len=189
+[2026-05-25 23:32:07] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260525_233150_112019.txt
+[2026-05-25 23:32:07] [SESSION_END] Validation result: True
+[2026-05-25 23:32:07] [SESSION_END] Writing to vault...
+[2026-05-25 23:32:07] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-25.md
+[2026-05-25 23:32:07] [SESSION_END] Finished. OK.
+[2026-05-26 00:03:48] [SESSION_END] Hook spawned worker. session=aa4104b9-9915-48aa-8da7-127cd7b66b68
+[2026-05-26 00:03:48] [SESSION_END] Worker started. session=aa4104b9-9915-48aa-8da7-127cd7b66b68
+[2026-05-26 00:03:48] [SESSION_END] Calling Gemini CLI... (10436 chars)
+[2026-05-26 00:03:48] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_000348_648068.txt (13057 chars)
+[2026-05-26 00:03:48] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-26 00:04:07] [SESSION_END] Gemini rc=0, stdout_len=3193, stderr_len=189
+[2026-05-26 00:04:07] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_000348_648068.txt
+[2026-05-26 00:04:07] [SESSION_END] Validation result: True
+[2026-05-26 00:04:07] [SESSION_END] Writing to vault...
+[2026-05-26 00:04:07] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-26.md
+[2026-05-26 00:04:07] [SESSION_END] Finished. OK.
+[2026-05-26 00:31:28] [SESSION_START] SessionStart fired. session=aa4104b9-9915-48aa-8da7-127cd7b66b68, sections=0, context_chars=0
+[2026-05-26 00:34:29] [SESSION_START] SessionStart fired. session=5c8a6a0d-0649-4084-a6ee-3a6450df9b53, sections=0, context_chars=0
+[2026-05-26 03:54:37] [SESSION_END] Hook spawned worker. session=33012314-74ae-4551-b6d4-966b3863a211
+[2026-05-26 03:54:37] [SESSION_END] Worker started. session=33012314-74ae-4551-b6d4-966b3863a211
+[2026-05-26 03:54:37] [SESSION_END] Empty conversation, exiting.
+[2026-05-26 13:40:54] [SESSION_START] SessionStart fired. session=e1eb1136-0cc2-4520-b765-cb735318a017, sections=0, context_chars=0
+[2026-05-26 14:36:09] [SESSION_END] Hook spawned worker. session=e1eb1136-0cc2-4520-b765-cb735318a017
+[2026-05-26 14:36:09] [SESSION_END] Worker started. session=e1eb1136-0cc2-4520-b765-cb735318a017
+[2026-05-26 14:36:09] [SESSION_END] Calling Gemini CLI... (13575 chars)
+[2026-05-26 14:36:09] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_143609_578887.txt (16196 chars)
+[2026-05-26 14:36:09] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-26 14:36:31] [SESSION_END] Gemini rc=0, stdout_len=3033, stderr_len=189
+[2026-05-26 14:36:31] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_143609_578887.txt
+[2026-05-26 14:36:31] [SESSION_END] Validation result: True
+[2026-05-26 14:36:31] [SESSION_END] Writing to vault...
+[2026-05-26 14:36:31] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-26.md
+[2026-05-26 14:36:31] [SESSION_END] Finished. OK.
+[2026-05-26 14:38:04] [SESSION_START] SessionStart fired. session=2219fd3a-2c91-48a6-8012-8b63267d8f38, sections=0, context_chars=0
+[2026-05-26 14:44:19] [SESSION_START] SessionStart fired. session=32c7f084-d686-4343-83ce-e13eb3de6f8b, sections=0, context_chars=0
+[2026-05-26 15:13:24] [SESSION_END] Hook spawned worker. session=32c7f084-d686-4343-83ce-e13eb3de6f8b
+[2026-05-26 15:13:24] [SESSION_END] Worker started. session=32c7f084-d686-4343-83ce-e13eb3de6f8b
+[2026-05-26 15:13:24] [SESSION_END] Calling Gemini CLI... (12480 chars)
+[2026-05-26 15:13:24] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_151324_470579.txt (15101 chars)
+[2026-05-26 15:13:24] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-26 15:13:46] [SESSION_END] Gemini rc=0, stdout_len=3148, stderr_len=189
+[2026-05-26 15:13:46] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_151324_470579.txt
+[2026-05-26 15:13:46] [SESSION_END] Validation result: True
+[2026-05-26 15:13:46] [SESSION_END] Writing to vault...
+[2026-05-26 15:13:46] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-26.md
+[2026-05-26 15:13:46] [SESSION_END] Finished. OK.
+[2026-05-26 15:59:22] [SESSION_START] SessionStart fired. session=485d311f-fac9-4c29-9613-05f34296fd34, sections=0, context_chars=0
+[2026-05-26 15:59:22] [SESSION_END] Hook spawned worker. session=2219fd3a-2c91-48a6-8012-8b63267d8f38
+[2026-05-26 15:59:22] [SESSION_END] Worker started. session=2219fd3a-2c91-48a6-8012-8b63267d8f38
+[2026-05-26 15:59:22] [SESSION_END] Calling Gemini CLI... (2347 chars)
+[2026-05-26 15:59:22] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_155922_921069.txt (4968 chars)
+[2026-05-26 15:59:22] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-26 15:59:48] [SESSION_END] Gemini rc=0, stdout_len=2955, stderr_len=189
+[2026-05-26 15:59:48] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_155922_921069.txt
+[2026-05-26 15:59:48] [SESSION_END] Validation result: True
+[2026-05-26 15:59:48] [SESSION_END] Writing to vault...
+[2026-05-26 15:59:48] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-26.md
+[2026-05-26 15:59:48] [SESSION_END] Finished. OK.
+[2026-05-26 16:17:35] [SESSION_START] SessionStart fired. session=32c7f084-d686-4343-83ce-e13eb3de6f8b, sections=0, context_chars=0
+[2026-05-26 16:17:40] [SESSION_START] SessionStart fired. session=d1395677-d486-4dff-a3db-554c7e9b1e55, sections=0, context_chars=0
+[2026-05-26 16:17:40] [SESSION_END] Hook spawned worker. session=485d311f-fac9-4c29-9613-05f34296fd34
+[2026-05-26 16:17:40] [SESSION_END] Worker started. session=485d311f-fac9-4c29-9613-05f34296fd34
+[2026-05-26 16:17:40] [SESSION_END] Calling Gemini CLI... (5356 chars)
+[2026-05-26 16:17:40] [SESSION_END] Temp file written: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_161740_819004.txt (7977 chars)
+[2026-05-26 16:17:40] [SESSION_END] Running: /home/padidavid/.npm-global/bin/gemini -m gemini-3.1-pro-preview -p ...
+[2026-05-26 16:18:01] [SESSION_END] Gemini rc=0, stdout_len=3150, stderr_len=189
+[2026-05-26 16:18:01] [SESSION_END] Temp file removed: /home/padidavid/repos/OVO/.claude/tmp/gemini_hook_20260526_161740_819004.txt
+[2026-05-26 16:18:01] [SESSION_END] Validation result: True
+[2026-05-26 16:18:01] [SESSION_END] Writing to vault...
+[2026-05-26 16:18:01] [SESSION_END] Vault written: /home/padidavid/Documentos/Obsidian Vault/daily/2026-05-26.md
+[2026-05-26 16:18:01] [SESSION_END] Finished. OK.
