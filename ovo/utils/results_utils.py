@@ -165,12 +165,16 @@ def parse_statistics_file(file_path: Path) -> dict | None:
         macc = float(np.nanmean(df['Acc'].values))
 
         thirds = len(df) // 3
-        head_iou   = float(np.nanmean(df['IoU'].values[0:thirds]))
-        head_acc   = float(np.nanmean(df['Acc'].values[0:thirds]))
-        common_iou = float(np.nanmean(df['IoU'].values[thirds:2*thirds]))
-        common_acc = float(np.nanmean(df['Acc'].values[thirds:2*thirds]))
-        tail_iou   = float(np.nanmean(df['IoU'].values[2*thirds:3*thirds]))
-        tail_acc   = float(np.nanmean(df['Acc'].values[2*thirds:3*thirds]))
+
+        def _safe_nanmean(arr):
+            return float(np.nanmean(arr)) if len(arr) > 0 else float('nan')
+
+        head_iou   = _safe_nanmean(df['IoU'].values[0:thirds])
+        head_acc   = _safe_nanmean(df['Acc'].values[0:thirds])
+        common_iou = _safe_nanmean(df['IoU'].values[thirds:2*thirds])
+        common_acc = _safe_nanmean(df['Acc'].values[thirds:2*thirds])
+        tail_iou   = _safe_nanmean(df['IoU'].values[2*thirds:3*thirds])
+        tail_acc   = _safe_nanmean(df['Acc'].values[2*thirds:3*thirds])
 
         return {
             'mIoU': miou, 'mAcc': macc,
