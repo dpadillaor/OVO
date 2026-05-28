@@ -12,6 +12,7 @@ Design principles:
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -91,6 +92,38 @@ def parse_experiment_name(folder_name: str) -> dict | None:
         'Rot_Noise':   rot_noise,
         'Jump_Count':  jump_count,
     }
+
+
+def parse_experiment_meta(folder: Path) -> dict:
+    """Read experiment_meta.json sidecar from an experiment folder.
+
+    Returns a dict with DataFrame-ready column names, or {} if the file is
+    missing or malformed (backward-compatible with old experiments).
+    """
+    meta_path = folder / "experiment_meta.json"
+    if not meta_path.is_file():
+        return {}
+    try:
+        with open(meta_path) as f:
+            data = json.load(f)
+        criteria = data.get("fusion_criteria")
+        return {
+            "Fusion_Method":        data.get("fusion_method"),
+            "Fusion_Criteria":      ",".join(criteria) if criteria else None,
+            "Th_Centroid":          data.get("th_centroid"),
+            "Th_AABB":              data.get("th_aabb"),
+            "Th_CosSim":            data.get("th_cossim"),
+            "Th_Points":            data.get("th_points"),
+            "Cooccurrence_Veto":    data.get("cooccurrence_veto_threshold"),
+            "SLAM_Module":          data.get("slam_module"),
+            "Close_Loops":          data.get("close_loops"),
+            # Override name-parsed noise fields with authoritative config values
+            "Trans_Noise":          data.get("trans_noise"),
+            "Rot_Noise":            data.get("rot_noise"),
+            "Jump_Count":           data.get("jump_count"),
+        }
+    except Exception:
+        return {}
 
 
 def parse_statistics_file(file_path: Path) -> dict | None:
@@ -325,6 +358,10 @@ def load_experiments(
             if meta is None:
                 continue
 
+            sidecar = parse_experiment_meta(folder)
+            if sidecar:
+                meta.update({k: v for k, v in sidecar.items() if v is not None})
+
             # Apply filters early to avoid unnecessary I/O
             if date_filter and meta['Date'] not in date_filter:
                 continue
@@ -383,7 +420,10 @@ def load_experiments(
 
     _exp_cols = [
         'Date', 'Dataset', 'SLAM_Config', 'Fusion', 'Label', 'Method',
-        'Trans_Noise', 'Rot_Noise', 'Jump_Count', 'mIoU', 'mAcc',
+        'Trans_Noise', 'Rot_Noise', 'Jump_Count',
+        'Fusion_Method', 'Fusion_Criteria', 'Th_Centroid', 'Th_AABB', 'Th_CosSim', 'Th_Points',
+        'Cooccurrence_Veto', 'SLAM_Module', 'Close_Loops',
+        'mIoU', 'mAcc',
         'Head_mIoU', 'Head_mAcc', 'Common_mIoU', 'Common_mAcc', 'Tail_mIoU', 'Tail_mAcc',
         'Num_Instances',
         'AP', 'AP_50', 'AP_25', 'AP_agnostic', 'AP_agnostic_50', 'AP_agnostic_25',
@@ -443,6 +483,19 @@ def get_available_jump_counts(df: pd.DataFrame) -> list[int]:
     return sorted(df['Jump_Count'].dropna().unique().tolist())
 
 
+def get_available_labels(df: pd.DataFrame) -> list[str]:
+    """Return sorted unique Label values present in the DataFrame."""
+    return sorted(df['Label'].dropna().unique().tolist())
+
+
+def get_available_fusion_criteria(df: pd.DataFrame) -> list[str]:
+    """Return sorted unique Fusion_Criteria strings present in the DataFrame."""
+    col = 'Fusion_Criteria'
+    if col not in df.columns:
+        return []
+    return sorted(df[col].dropna().unique().tolist())
+
+
 def filter_experiments(
     df: pd.DataFrame,
     dates: list[str] | None = None,
@@ -453,12 +506,16 @@ def filter_experiments(
     noise_levels: list[float] | None = None,
     experiment_ids: list[str] | None = None,
     exclude_experiment_ids: list[str] | None = None,
+    labels: list[str] | None = None,
+    fusion_criteria: list[str] | None = None,
 ) -> pd.DataFrame:
     """Filter an experiment DataFrame with AND logic across all provided criteria.
 
     Pass None for any parameter to skip that filter.
     experiment_ids: keep only these IDs (include filter).
     exclude_experiment_ids: drop these IDs (exclude filter).
+    labels: keep only experiments whose Label is in this list.
+    fusion_criteria: keep only experiments whose Fusion_Criteria string is in this list.
     """
     mask = pd.Series(True, index=df.index)
     if dates is not None:
@@ -477,6 +534,10 @@ def filter_experiments(
         mask &= df['Experiment_ID'].isin(experiment_ids)
     if exclude_experiment_ids is not None:
         mask &= ~df['Experiment_ID'].isin(exclude_experiment_ids)
+    if labels is not None and 'Label' in df.columns:
+        mask &= df['Label'].isin(labels)
+    if fusion_criteria is not None and 'Fusion_Criteria' in df.columns:
+        mask &= df['Fusion_Criteria'].isin(fusion_criteria)
     return df[mask].copy()
 
 
@@ -517,6 +578,10 @@ def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
             meta = parse_experiment_name(folder.name)
             if meta is None:
                 continue
+
+            sidecar = parse_experiment_meta(folder)
+            if sidecar:
+                meta.update({k: v for k, v in sidecar.items() if v is not None})
 
             replica_dir = folder / 'replica'
             search_dir = replica_dir if replica_dir.is_dir() else folder
@@ -563,7 +628,10 @@ def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     _scene_cols = [
         'Date', 'Dataset', 'SLAM_Config', 'Fusion', 'Label', 'Method',
-        'Trans_Noise', 'Rot_Noise', 'Jump_Count', 'Scene', 'mIoU', 'mAcc',
+        'Trans_Noise', 'Rot_Noise', 'Jump_Count',
+        'Fusion_Method', 'Fusion_Criteria', 'Th_Centroid', 'Th_AABB', 'Th_CosSim', 'Th_Points',
+        'Cooccurrence_Veto', 'SLAM_Module', 'Close_Loops',
+        'Scene', 'mIoU', 'mAcc',
         'Head_mIoU', 'Head_mAcc', 'Common_mIoU', 'Common_mAcc', 'Tail_mIoU', 'Tail_mAcc',
         'Num_Instances',
         'AP', 'AP_50', 'AP_25', 'AP_agnostic', 'AP_agnostic_50', 'AP_agnostic_25',
@@ -594,6 +662,8 @@ def filter_scene_results(
     slam_configs: list[str] | None = None,
     noise_levels: list[float] | None = None,
     exclude_experiment_ids: list[str] | None = None,
+    labels: list[str] | None = None,
+    fusion_criteria: list[str] | None = None,
 ) -> pd.DataFrame:
     """Filter a per-scene DataFrame with AND logic across all provided criteria."""
     mask = pd.Series(True, index=df.index)
@@ -613,6 +683,10 @@ def filter_scene_results(
         mask &= df['Trans_Noise'].isin(noise_levels)
     if exclude_experiment_ids is not None:
         mask &= ~df['Experiment_ID'].isin(exclude_experiment_ids)
+    if labels is not None and 'Label' in df.columns:
+        mask &= df['Label'].isin(labels)
+    if fusion_criteria is not None and 'Fusion_Criteria' in df.columns:
+        mask &= df['Fusion_Criteria'].isin(fusion_criteria)
     return df[mask].copy()
 
 

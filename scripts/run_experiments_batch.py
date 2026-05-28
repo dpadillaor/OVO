@@ -1,6 +1,7 @@
 import yaml
 import subprocess
 import shutil
+import json
 import os
 import datetime
 import sys
@@ -215,6 +216,42 @@ class ExperimentRunner:
         shutil.copy(self.slam_backup_path, self.slam_config_path)
         os.remove(self.slam_backup_path)
 
+    def _write_meta_json(self) -> None:
+        """Write experiment_meta.json sidecar to the output directory."""
+        ovo_data = self._build_ovo_data()
+        semantic = ovo_data.get("semantic", {})
+        noise    = ovo_data.get("noise", {})
+        slam     = ovo_data.get("slam", {})
+
+        is_jump    = noise.get("jump_drift_enabled", False)
+        jumps      = noise.get("jumps", [])
+        jump_count = len(jumps) if is_jump else 0
+        trans_noise = 0.0 if is_jump else float(noise.get("translation_noise_std", 0.0))
+        rot_noise   = 0.0 if is_jump else float(noise.get("rotation_noise_std", 0.0))
+
+        meta = {
+            "date":                       datetime.datetime.now().strftime("%Y%m%d"),
+            "label":                      self.label,
+            "dataset":                    self.dataset,
+            "slam_module":                self.slam_module,
+            "close_loops":                slam.get("close_loops", True),
+            "trans_noise":                trans_noise,
+            "rot_noise":                  rot_noise,
+            "jump_count":                 jump_count,
+            "fusion_method":              semantic.get("fusion_method", "clip"),
+            "fusion_criteria":            semantic.get("fusion_criteria", None),
+            "th_centroid":                float(semantic.get("th_centroid", 1.5)),
+            "th_aabb":                    float(semantic.get("th_aabb", 0.3)),
+            "th_cossim":                  float(semantic.get("th_cossim", 0.81)),
+            "th_points":                  float(semantic.get("th_points", 0.1)),
+            "cooccurrence_veto_threshold": int(semantic.get("cooccurrence_veto_threshold", 5)),
+        }
+
+        out_dir = Path(f"data/output/{self.dataset}/{self.experiment_name}")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        with open(out_dir / "experiment_meta.json", "w") as f:
+            json.dump(meta, f, indent=2)
+
     def setup(self):
         """
         Prepares the environment for the experiment.
@@ -222,6 +259,7 @@ class ExperimentRunner:
         print(f"    Generated Name: {Colors.BOLD}{self.experiment_name}{Colors.ENDC}")
         self._backup_configs()
         self._apply_config_overrides()
+        self._write_meta_json()
 
     def run(self):
         """

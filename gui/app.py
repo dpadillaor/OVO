@@ -22,8 +22,10 @@ from ovo.utils.results_utils import (
     filter_scene_results,
     get_available_datasets,
     get_available_dates,
+    get_available_fusion_criteria,
     get_available_fusions,
     get_available_jump_counts,
+    get_available_labels,
     get_available_methods,
     get_available_slam_configs,
     get_available_noise_levels,
@@ -144,6 +146,12 @@ with st.sidebar:
             options=get_available_noise_levels(df_all),
             format_func=lambda v: f"{v:.4g}",
         )
+        sel_labels = st.multiselect(
+            "Labels", options=get_available_labels(df_all)
+        )
+        sel_fusion_criteria = st.multiselect(
+            "Fusion Criteria", options=get_available_fusion_criteria(df_all)
+        )
         _exp_id_options = sorted(df_all["Experiment_ID"].dropna().unique().tolist())
         _exp_id_labels = {
             row["Experiment_ID"]: (
@@ -182,6 +190,8 @@ with st.sidebar:
             fusions=sel_fusions or None,
             slam_configs=sel_slam or None,
             noise_levels=sel_noise or None,
+            labels=sel_labels or None,
+            fusion_criteria=sel_fusion_criteria or None,
             exclude_experiment_ids=sel_exclude_experiments or None,
         )
         after = len(df_filtered)
@@ -212,26 +222,30 @@ df_class_all: "pd.DataFrame" = st.session_state["df_class"]
 df_scene_all: "pd.DataFrame" = st.session_state.get("df_scene", pd.DataFrame())
 df_scene_class_all: "pd.DataFrame" = st.session_state.get("df_scene_class", pd.DataFrame())
 
-_dates        = (sel_dates       or None) if "sel_dates"       in dir() else None
-_datasets     = (sel_datasets    or None) if "sel_datasets"    in dir() else None
-_methods      = (sel_methods     or None) if "sel_methods"     in dir() else None
-_fusions      = (sel_fusions     or None) if "sel_fusions"     in dir() else None
-_slam         = (sel_slam        or None) if "sel_slam"        in dir() else None
-_noise        = (sel_noise       or None) if "sel_noise"       in dir() else None
+_dates            = (sel_dates              or None) if "sel_dates"              in dir() else None
+_datasets         = (sel_datasets           or None) if "sel_datasets"           in dir() else None
+_methods          = (sel_methods            or None) if "sel_methods"            in dir() else None
+_fusions          = (sel_fusions            or None) if "sel_fusions"            in dir() else None
+_slam             = (sel_slam               or None) if "sel_slam"               in dir() else None
+_noise            = (sel_noise              or None) if "sel_noise"              in dir() else None
+_labels           = (sel_labels             or None) if "sel_labels"             in dir() else None
+_fusion_criteria  = (sel_fusion_criteria    or None) if "sel_fusion_criteria"    in dir() else None
 _exclude_experiment_ids = (sel_exclude_experiments or None) if "sel_exclude_experiments" in dir() else None
-_scenes       = (sel_scenes      or None) if "sel_scenes"      in dir() else None
+_scenes           = (sel_scenes             or None) if "sel_scenes"             in dir() else None
 
 df_class_filtered = filter_experiments(
     df_class_all,
     dates=_dates, datasets=_datasets, methods=_methods,
     fusions=_fusions, slam_configs=_slam, noise_levels=_noise,
+    labels=_labels, fusion_criteria=_fusion_criteria,
     exclude_experiment_ids=_exclude_experiment_ids,
 )
 df_scene_filtered = (
     filter_scene_results(
         df_scene_all,
         dates=_dates, datasets=_datasets, methods=_methods,
-        fusions=_fusions, slam_configs=_slam, noise_levels=_noise, scenes=_scenes,
+        fusions=_fusions, slam_configs=_slam, noise_levels=_noise,
+        labels=_labels, fusion_criteria=_fusion_criteria, scenes=_scenes,
     )
     if not df_scene_all.empty else df_scene_all
 )
@@ -239,7 +253,8 @@ df_scene_class_filtered = (
     filter_scene_results(
         df_scene_class_all,
         dates=_dates, datasets=_datasets, methods=_methods,
-        fusions=_fusions, slam_configs=_slam, noise_levels=_noise, scenes=_scenes,
+        fusions=_fusions, slam_configs=_slam, noise_levels=_noise,
+        labels=_labels, fusion_criteria=_fusion_criteria, scenes=_scenes,
     )
     if not df_scene_class_all.empty else df_scene_class_all
 )
