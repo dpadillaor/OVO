@@ -39,8 +39,8 @@ class TestFusionVeto(unittest.TestCase):
         inst2 = _make_instance(2)
         pcd = (MagicMock(), torch.zeros(3))
 
-        with patch('ovo.entities.fusion.compute_centroid_distance', return_value=0.0), \
-             patch('ovo.entities.fusion.compute_pcd_overlap', return_value=1.0):
+        with patch('ovo.entities.fusion.criteria.compute_centroid_distance', return_value=0.0), \
+             patch('ovo.entities.fusion.criteria.compute_pcd_overlap', return_value=1.0):
             self.assertFalse(fusion.same_instance(inst1, inst2, pcd, pcd))
 
     def test_veto_inactive_semantic(self):
@@ -52,8 +52,8 @@ class TestFusionVeto(unittest.TestCase):
         inst2 = _make_instance(2)
         pcd = (MagicMock(), torch.zeros(3))
 
-        with patch('ovo.entities.fusion.compute_centroid_distance', return_value=0.0), \
-             patch('ovo.entities.fusion.compute_pcd_overlap', return_value=1.0):
+        with patch('ovo.entities.fusion.criteria.compute_centroid_distance', return_value=0.0), \
+             patch('ovo.entities.fusion.criteria.compute_pcd_overlap', return_value=1.0):
             self.assertTrue(fusion.same_instance(inst1, inst2, pcd, pcd))
 
     def test_shared_kfs_in_decisions(self):
@@ -66,8 +66,8 @@ class TestFusionVeto(unittest.TestCase):
         inst2 = _make_instance(2)
         pcd = (MagicMock(), torch.zeros(3))
 
-        with patch('ovo.entities.fusion.compute_centroid_distance', return_value=0.0), \
-             patch('ovo.entities.fusion.compute_pcd_overlap', return_value=1.0):
+        with patch('ovo.entities.fusion.criteria.compute_centroid_distance', return_value=0.0), \
+             patch('ovo.entities.fusion.criteria.compute_pcd_overlap', return_value=1.0):
             fusion.same_instance(inst1, inst2, pcd, pcd)
 
         decisions = fusion.pop_decisions()
@@ -84,8 +84,8 @@ class TestFusionVeto(unittest.TestCase):
         inst2 = _make_instance(2)
         pcd = (MagicMock(), torch.zeros(3))
 
-        with patch('ovo.entities.fusion.compute_centroid_distance', return_value=0.0), \
-             patch('ovo.entities.fusion.compute_pcd_overlap', return_value=1.0):
+        with patch('ovo.entities.fusion.criteria.compute_centroid_distance', return_value=0.0), \
+             patch('ovo.entities.fusion.criteria.compute_pcd_overlap', return_value=1.0):
             self.assertTrue(fusion.same_instance(inst1, inst2, pcd, pcd))
 
     def test_custom_chain_order_matters(self):
@@ -97,8 +97,8 @@ class TestFusionVeto(unittest.TestCase):
         inst2 = _make_instance(2)
         pcd = (MagicMock(), torch.zeros(3))
 
-        with patch('ovo.entities.fusion.compute_centroid_distance', return_value=1.0), \
-             patch('ovo.entities.fusion.compute_pcd_overlap', return_value=1.0):
+        with patch('ovo.entities.fusion.criteria.compute_centroid_distance', return_value=1.0), \
+             patch('ovo.entities.fusion.criteria.compute_pcd_overlap', return_value=1.0):
             self.assertFalse(fusion.same_instance(inst1, inst2, pcd, pcd))
 
         decisions = fusion.pop_decisions()
