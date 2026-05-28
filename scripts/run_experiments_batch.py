@@ -9,6 +9,7 @@ import itertools
 import time
 import threading
 import argparse
+import uuid
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -131,14 +132,17 @@ class ExperimentRunner:
     def _generate_experiment_name(self) -> str:
         """
         Generates the experiment folder name based on the defined convention.
-        Format: [DATE]_[SCENES_ID]_[SLAM_CONFIG]_[FUSION_CONFIG]_[DESCRIPTION]
+        Format: [DATE]_[SLAM_CONFIG]_[FUSION_CONFIG]_[LABEL]_[UID]
+        UID is a 5-char hex suffix that guarantees uniqueness; all experiment
+        parameters are stored in the experiment_meta.json sidecar.
         """
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         slam_token = self._get_slam_token()
         fusion_config_token = self._get_fusion_token()
         tag = self.experiment.label
+        uid = uuid.uuid4().hex[:5]
 
-        return f"{date_str}_{slam_token}_{fusion_config_token}_{tag}"
+        return f"{date_str}_{slam_token}_{fusion_config_token}_{tag}_{uid}"
 
     def _backup_configs(self):
         """Creates backups of the original config files."""
