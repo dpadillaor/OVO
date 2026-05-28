@@ -5,6 +5,10 @@ import psutil
 import pprint
 import torch
 import wandb
+import csv
+import time
+
+_FUSION_LOG_FIELDS = ["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "aabb_dist", "cos_sim", "p_dist", "shared_kfs"]
 
 class Logger:
     def __init__(self, output_path: str, pid: int | None = None, use_wandb: bool = False) -> None:
@@ -12,11 +16,36 @@ class Logger:
         (self.output_path / "logger").mkdir(exist_ok=True, parents=True)
         (self.output_path / "logger" / "segment_vis").mkdir(exist_ok=True, parents=True)
         stat_keys = [
-            "frame_id", "t_sam", "t_obj","n_obj", "n_matches", "t_up", "t_seg",   "t_clip", "avg_fps", "ram", "vram", "spf"]
-        
+            "frame_id", "t_sam", "t_obj", "n_obj", "n_matches", "t_up", "t_seg", "t_clip",
+            "avg_fps", "ram", "vram", "spf", "total_time",
+            "t_fusion", "t_crit_cooccurrence", "t_crit_centroid", "t_crit_aabb", "t_crit_cos_sim", "t_crit_p_dist"]
+
         self.stats ={key: [] for key in stat_keys}
         self.python_process = psutil.Process(pid)
         self.use_wandb = use_wandb
+        self._init_fusion_log()
+
+    @property
+    def _fusion_log_path(self) -> Path:
+        return self.output_path / "fusion_decisions.csv"
+
+    def _init_fusion_log(self) -> None:
+        with open(self._fusion_log_path, "w", newline="") as f:
+            csv.DictWriter(f, fieldnames=_FUSION_LOG_FIELDS, extrasaction="ignore").writeheader()
+
+    def log_fusion_timings(self, t_fusion: float, criterion_times: dict) -> None:
+        self.stats["t_fusion"].append(t_fusion)
+        for key, val in criterion_times.items():
+            stat_key = f"t_crit_{key}"
+            if stat_key not in self.stats:
+                self.stats[stat_key] = []
+            self.stats[stat_key].append(val)
+
+    def log_fusion_decisions(self, frame_id: int, decisions: list) -> None:
+        with open(self._fusion_log_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=_FUSION_LOG_FIELDS, extrasaction="ignore")
+            for d in decisions:
+                writer.writerow({"frame_id": frame_id, **d})
 
     def log_ovo_stats(self, stats: Dict[str, Any], print_output=False) -> None:
         """
@@ -82,7 +111,8 @@ class Logger:
         """
         torch.cuda.synchronize()
         self.stats["max_vram"] = [torch.cuda.max_memory_allocated("cuda") / (1000 ** 3)]
-        self.stats["max_ram"] = [np.asarray(self.stats["ram"]).max()]
+        ram_stats = np.asarray(self.stats["ram"])
+        self.stats["max_ram"] = [ram_stats.max() if ram_stats.size > 0 else 0.0]
 
     def write_stats(self) -> None:
         """

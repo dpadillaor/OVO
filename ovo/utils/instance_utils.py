@@ -24,6 +24,22 @@ def compute_centroid_distance(centroid1: torch.Tensor, centroid2: torch.Tensor) 
     return ((centroid1 - centroid2) ** 2).sum().sqrt()
 
 
+def compute_aabb_distance(points1: torch.Tensor, points2: torch.Tensor) -> float:
+    """
+    Minimum 3D distance between the axis-aligned bounding boxes of two point clouds.
+
+    Returns 0.0 when AABBs intersect. Otherwise returns the Euclidean length of
+    the per-axis gap vector. More robust than centroid distance for elongated
+    objects (sofas, tables) where centroids can be far apart but shapes overlap.
+    """
+    min1, _ = points1.min(dim=0)
+    max1, _ = points1.max(dim=0)
+    min2, _ = points2.min(dim=0)
+    max2, _ = points2.max(dim=0)
+    gap = torch.clamp(torch.maximum(min1 - max2, min2 - max1), min=0)
+    return gap.norm().item()
+
+
 def compute_pcd_overlap(
     points1: torch.Tensor,
     points2: torch.Tensor,

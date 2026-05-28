@@ -11,7 +11,7 @@ sys.modules["sam3"] = mock_sam3
 sys.modules["sam3.model_builder"] = mock_sam3.model_builder
 
 from ovo.entities.sam3_generator import SAM3Generator
-from ovo.entities.fusion import create_fusion_strategy, SemanticGeometricFusion
+from ovo.entities.fusion import create_fusion_strategy, FusionStrategy
 
 
 class TestSAM3GeneratorInit:

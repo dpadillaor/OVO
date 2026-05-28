@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Any, Dict
-import csv
 import torch
 import torch.multiprocessing as mp
 from pathlib import Path
@@ -111,10 +110,6 @@ class OVOSemMap():
             self.ovo.mask_generator.precompute(self.dataset, self.segment_every)
 
         # Optional map restoration state.
-        self._fusion_log_path = self.output_path / "fusion_decisions.csv"
-        with open(self._fusion_log_path, "w", newline="") as f:
-            csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist", "shared_kfs"]).writeheader()
-
         self.first_frame = 0
         if self.config.get("restore_map", False):
             assert config["slam"].get("slam_module", "vanilla") == "vanilla", "Restoring representation only implemented for 'vanilla' configuration!"
@@ -404,13 +399,11 @@ class OVOSemMap():
         # Send "before fusion" snapshot to stream visualizer
         self._send_stream_frame(frame_id, mpqueue)
 
-        updated_points_ins_ids, fusion_decisions = self.ovo.update_map(map_data, kfs)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs)
 
         if fusion_decisions:
-            with open(self._fusion_log_path, "a", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "cos_sim", "p_dist", "shared_kfs"])
-                for d in fusion_decisions:
-                    writer.writerow({"frame_id": frame_id, **d})
+            self.logger.log_fusion_decisions(frame_id, fusion_decisions)
+        self.logger.log_fusion_timings(t_fusion, criterion_times)
 
         if updated_points_ins_ids is not None:
             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)

@@ -44,13 +44,14 @@ class TestOVOSAM3Initialization:
              patch('ovo.entities.ovo.CLIPGenerator'), \
              patch('ovo.entities.ovo.PEGenerator'):
             from ovo.entities.logger import Logger
-            from ovo.entities.fusion import SemanticGeometricFusion
+            from ovo.entities.fusion import FusionStrategy, CosSimilarityCriterion
 
             mock_logger = MagicMock(spec=Logger)
             ovo = OVO(minimal_ovo_config_sam3, mock_logger, eval=True)
 
-            assert isinstance(ovo.fusion_strategy, SemanticGeometricFusion)
-            assert ovo.fusion_strategy.feature_attr == "sam3_feature"
+            assert isinstance(ovo.fusion_strategy, FusionStrategy)
+            cos = next(c for c in ovo.fusion_strategy.criteria if isinstance(c, CosSimilarityCriterion))
+            assert cos.feature_attr == "sam3_feature"
 
 
 class TestOVOSAM3FusionAdapter:

@@ -171,17 +171,33 @@ semantic:
     load_from_hf: true
 ```
 
-#### `geometric` — Geometry only, no semantic features
-```yaml
-semantic:
-  fusion_method: geometric
-```
-
 #### `dino` — DINO features (not fully implemented)
 ```yaml
 semantic:
   fusion_method: dino
 ```
+
+### `fusion_criteria` — Custom criterion chain (optional)
+
+Override the default criterion chain for any `fusion_method`. Default chains all use `[cooccurrence, centroid, cos_sim, overlap]`.
+
+```yaml
+semantic:
+  fusion_method: clip
+  fusion_criteria: ["centroid", "cos_sim", "overlap"]   # skip cooccurrence veto
+```
+
+Available criteria (run in order listed):
+
+| Criterion | What it does |
+|---|---|
+| `cooccurrence` | Vetoes pairs that co-occurred in > N keyframes (different objects seen together) |
+| `centroid` | Rejects pairs with centroid distance > `th_centroid` |
+| `aabb` | Rejects pairs whose axis-aligned bounding boxes are > `th_aabb` apart (more robust than centroid for elongated objects) |
+| `cos_sim` | Rejects pairs with cosine similarity < `th_cossim` |
+| `overlap` | Accepts/rejects based on point cloud overlap > 0.5 (or > 0.2 if cos_sim > 0.9) |
+
+**Note:** the experiment name token only encodes `fusion_method`. Use `label` to distinguish experiments with custom chains (e.g. `clip-no-cooc`).
 
 ### Covisibility filter (optional)
 
@@ -216,7 +232,8 @@ These live under `ovo_config.semantic:` and override `ovo.yaml > semantic:`.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `th_centroid` | `1.5` | Max centroid distance (m) for instance fusion |
+| `th_centroid` | `1.5` | Max centroid distance (m) — used by `centroid` criterion |
+| `th_aabb` | `0.3` | Max AABB-to-AABB distance (m) — used by `aabb` criterion |
 | `th_cossim` | `0.81` | Min cosine similarity for instance fusion |
 | `th_points` | `0.1` | Min point overlap ratio for fusion |
 | `cooccurrence_veto_threshold` | `5` | Min shared keyframes to veto a fusion (task 17) |

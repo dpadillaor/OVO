@@ -12,6 +12,7 @@ from .pe_generator import PEGenerator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy
+from ..utils.cooccurrence_graph import CooccurrenceGraph
 from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter, SAM3FusionAdapter
 
 class OVO:
@@ -80,8 +81,11 @@ class OVO:
         self.th_cossim = config.get("th_cossim", 0.81)
         self.th_points = config.get("th_points", 0.1)
 
+        # Co-occurrence graph — tracks which instance pairs were seen together in the same frame
+        self.cooccurrence = CooccurrenceGraph()
+
         # Initialize fusion strategy
-        self.fusion_strategy = create_fusion_strategy(config)
+        self.fusion_strategy = create_fusion_strategy(config, self.cooccurrence)
         
         # Initialize fusion encoder adapter
         self.fusion_encoder = self._get_fusion_encoder()
@@ -374,6 +378,9 @@ class OVO:
             - binary_maps (torch.Tensor): Updated binary maps on self.device with shape (M, H, W).
         """
 
+        # Capture all detected instances before top-kf filtering for co-occurrence tracking
+        all_ins_ids = list(matched_ins_info.keys())
+
         matched_ins_ids = []
         maps_idxs=[]
         to_pop = []
@@ -400,6 +407,10 @@ class OVO:
         for ins_id in to_pop:
             matched_ins_info.pop(ins_id)
 
+        # Update co-occurrence graph with all detected instances (before top-kf filtering)
+        for i_idx, ins_i in enumerate(all_ins_ids):
+            for ins_j in all_ins_ids[i_idx + 1:]:
+                self.cooccurrence.increment(ins_i, ins_j, kf_id)
 
         binary_maps = binary_maps[maps_idxs]
 
@@ -492,6 +503,7 @@ class OVO:
                 objects_list.append(self.objects[ins_id])
             else:
                 objects_to_del.append(self.objects[ins_id])
+                self.cooccurrence.remove(ins_id)
 
     def update_map(self, map_data, kfs):
         # 0. clean the queue
@@ -507,7 +519,7 @@ class OVO:
         self._remove_missing_instances(points_ins_ids, objects_list, objects_to_del)
 
         # 2. Fuse 3D instances that fulfill a condition.
-        new_objects, fused_objects, points_ins_ids, fusion_decisions = self._fuse_overlapping_instances(
+        new_objects, fused_objects, points_ins_ids, fusion_decisions, t_fusion, criterion_times = self._fuse_overlapping_instances(
             objects_list, points_3d, map_data
         )
 
@@ -526,7 +538,7 @@ class OVO:
         if self.pe_generator is not None and self.fusion_encoder is None:
             self.update_objects_pe()
 
-        return points_ins_ids, fusion_decisions
+        return points_ins_ids, fusion_decisions, t_fusion, criterion_times
 
     def _fuse_overlapping_instances(
         self,
@@ -543,6 +555,7 @@ class OVO:
         """
         # TODO: optimize brute-force approach (compare all instances to each-other)
         # Precompute pointcloud data for efficiency
+        t_fuse_start = time.time()
         _, _, points_ins_ids = map_data
         obj_pcds = {}
         for instance in objects_list:
@@ -561,11 +574,14 @@ class OVO:
                     instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id]
                 ):
                     instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, map_data)
+                    self.cooccurrence.merge(target=instance1.id, source=instance2.id)
                     fused_objects[instance2.id] = instance1.id
             objects[instance1.id] = instance1
 
+        t_fusion = time.time() - t_fuse_start
         decisions = self.fusion_strategy.pop_decisions()
-        return objects, fused_objects, points_ins_ids, decisions
+        criterion_times = self.fusion_strategy.pop_timings()
+        return objects, fused_objects, points_ins_ids, decisions, t_fusion, criterion_times
 
     def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> None:
         """
