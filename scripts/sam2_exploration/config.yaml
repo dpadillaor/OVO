@@ -1,0 +1,48 @@
+# SAM2 Parameter Exploration Config
+# OVO Default values from data/working/configs/ovo.yaml
+
+# Dataset input
+dataset:
+  # Path to RGB frames folder
+  # Replica format: data/input/Datasets/Replica/{scene}/results/
+  # Frames named: frame000000.jpg, frame000001.jpg, ...
+  dataset_path: "data/input/Datasets/Replica/office0/results"
+  frame_indices: null  # null=all, [0,10,20] for specific frames, or range "0:100:10"
+
+# SAM2 Config
+sam:
+  precomputed: false
+  multi_crop: true
+
+  # Model checkpoint path
+  sam_ckpt_path: "data/input/sam_ckpts/"
+  sam_version: "2.1"  # "" for SAM1, "2.1" for SAM2
+  sam_encoder: "hiera_l"  # Options: hiera_l, hiera_t, vit_h, vit_b
+
+  # Sampling density: grid of points for prompting
+  # Higher = more masks, slower
+  points_per_side: 16  # OVO default. Try 8, 16, 32, 64
+
+  # NMS post-processing thresholds
+  nms_iou_th: 0.8  # IoU threshold between masks. Lower = keep more masks
+  nms_score_th: 0.1  # Score threshold (stability * predicted_iou)
+  nms_inner_th: 0.5  # Internal overlap threshold for nested masks
+
+  # Mask quality thresholds
+  stability_score_th: 0.95  # SAM2 default
+  pred_iou_thresh: 0.8
+  min_mask_region_area: 0
+
+# Output
+output:
+  # Output structure:
+  # {dataset_path}/../sam_results/{config_name}/{frame_id}/
+  # Example: data/input/Datasets/replica/office_0/sam_results/sam16_iou0.8/000000/
+  #          ├── capa_0.png    (layer 0 overlay)
+  #          ├── capa_1.png    (layer 1 overlay)
+  #          ├── capa_2.png    (layer 2 overlay)
+  #          └── final.png     (final filtered overlay)
+  debug_level: 1  # 0=silent, 1=basic, 2=verbose
+
+# Device
+device: "cuda"
