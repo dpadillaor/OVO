@@ -24,15 +24,15 @@ sys.path.insert(0, str(ROOT))
 from ovo.utils.results_utils import load_experiments, load_scene_results
 
 OUTPUT_DIR = ROOT / "data" / "output"
-MAX_SELECT = 3
+MAX_SELECT = 4
 
 # Stable colour palette assigned by position in the selection list.
-PALETTE = ["#3a7ebf", "#e07030", "#2ca02c"]
-PALETTE_BG = ["#dbeeff", "#fde8d0", "#dcefdc"]
-PALETTE_FG = ["#1a4a7a", "#7a3010", "#1f5a1f"]
+PALETTE = ["#3a7ebf", "#e07030", "#2ca02c", "#9467bd"]
+PALETTE_BG = ["#dbeeff", "#fde8d0", "#dcefdc", "#ede8f5"]
+PALETTE_FG = ["#1a4a7a", "#7a3010", "#1f5a1f", "#4a3f6b"]
 
 SEMANTIC_METRICS = ["mIoU", "mAcc", "Head_mIoU", "Common_mIoU", "Tail_mIoU"]
-AP_METRICS = ["AP", "AP_50", "AP_25", "AP_agnostic", "AP_agnostic_50", "AP_agnostic_25"]
+AP_METRICS = ["AP_agnostic", "AP_agnostic_50", "AP_agnostic_25"]
 FUSION_REJECT_COLS = [
     "Fusion_Reject_Centroid", "Fusion_Reject_AABB",
     "Fusion_Reject_CosSim", "Fusion_Reject_Overlap",
@@ -112,13 +112,29 @@ if df_exp.empty:
 all_ids = sorted(df_exp["Experiment_ID"].dropna().unique().tolist())
 default_pick = _default_selection(all_ids)
 
-selected = st.multiselect(
-    f"Experimentos a comparar (máx. {MAX_SELECT})",
-    options=all_ids,
-    default=default_pick,
-    max_selections=MAX_SELECT,
-    help="Primer seleccionado actúa como baseline para las deltas.",
-)
+if "selected_list" not in st.session_state:
+    st.session_state.selected_list = default_pick
+
+# Two-panel layout
+left, right = st.columns(2)
+
+with left:
+    selected = st.multiselect(
+        f"Elegir (máx. {MAX_SELECT})",
+        options=all_ids,
+        default=st.session_state.selected_list,
+        max_selections=MAX_SELECT,
+        key="multi_select",
+        label_visibility="collapsed",
+    )
+    st.session_state.selected_list = selected
+
+with right:
+    st.subheader(f"Seleccionados ({len(st.session_state.selected_list)}/{MAX_SELECT})")
+    for eid in st.session_state.selected_list:
+        if st.button(f"❌ {eid}", key=f"remove_{eid}", use_container_width=True):
+            st.session_state.selected_list = [e for e in st.session_state.selected_list if e != eid]
+            st.rerun()
 
 if not selected:
     st.info("Selecciona al menos un experimento.")
@@ -244,14 +260,14 @@ if avail_radar:
     angles = np.linspace(0, 2 * np.pi, n, endpoint=False).tolist()
     angles_closed = angles + angles[:1]
 
-    fig, ax = plt.subplots(figsize=(5.5, 5.5), subplot_kw={"polar": True})
+    fig, ax = plt.subplots(figsize=(3, 3), subplot_kw={"polar": True})
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.set_xticks(angles)
-    ax.set_xticklabels(radar_labels, size=9)
-    ax.set_ylim(0, 0.6)
-    ax.set_yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
-    ax.set_yticklabels(["0.1", "0.2", "0.3", "0.4", "0.5", "0.6"], size=6, color="grey")
+    ax.set_xticklabels(radar_labels, size=8)
+    ax.set_ylim(0, 0.4)
+    ax.set_yticks([0.1, 0.2, 0.3, 0.4])
+    ax.set_yticklabels(["0.1", "0.2", "0.3", "0.4"], size=6, color="grey")
     ax.grid(color="grey", linestyle="--", linewidth=0.5, alpha=0.5)
 
     for _, row in df_sel.iterrows():
@@ -262,9 +278,8 @@ if avail_radar:
         ax.plot(angles_closed, vals_closed, color=c, linewidth=1.4, label=eid)
         ax.fill(angles_closed, vals_closed, color=c, alpha=0.12)
 
-    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1.1), fontsize=7)
-    fig.tight_layout()
-    st.pyplot(fig)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.15), fontsize=6, frameon=False, ncol=2)
+    st.pyplot(fig, use_container_width=False)
     plt.close(fig)
 
 
@@ -404,22 +419,24 @@ else:
         s_angles = np.linspace(0, 2 * np.pi, n_scenes, endpoint=False).tolist()
         s_angles_closed = s_angles + s_angles[:1]
 
-        for col_key, col_label, normalize, fixed_max in avail_scene:
-            st.subheader(col_label)
-            if fixed_max is not None:
-                global_max = fixed_max
-            else:
-                global_max = df_scene_sel[col_key].dropna().max() if normalize else 1.0
-            if not global_max or global_max == 0:
-                global_max = 1.0
+        st.subheader("Radares por escena")
+        grid = st.columns(2)
+        for idx, (col_key, col_label, normalize, fixed_max) in enumerate(avail_scene):
+            col = grid[idx % 2]
+            with col:
+                st.write(f"**{col_label}**")
+                if fixed_max is not None:
+                    global_max = fixed_max
+                else:
+                    global_max = df_scene_sel[col_key].dropna().max() if normalize else 1.0
+                if not global_max or global_max == 0:
+                    global_max = 1.0
 
-            radar_layout = st.columns([1, 2, 1])
-            with radar_layout[1]:
-                fig, ax = plt.subplots(figsize=(4, 4), subplot_kw={"polar": True})
+                fig, ax = plt.subplots(figsize=(3, 3), subplot_kw={"polar": True})
                 ax.set_theta_offset(np.pi / 2)
                 ax.set_theta_direction(-1)
                 ax.set_xticks(s_angles)
-                ax.set_xticklabels(scenes_ordered, size=8)
+                ax.set_xticklabels(scenes_ordered, size=7)
                 ax.set_ylim(0, global_max)
                 if normalize:
                     ticks = [global_max * f for f in [0.25, 0.5, 0.75, 1.0]]
@@ -428,7 +445,7 @@ else:
                     ticks = [v for v in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] if v <= global_max]
                     tick_labels = [str(v) for v in ticks]
                 ax.set_yticks(ticks)
-                ax.set_yticklabels(tick_labels, size=6, color="grey")
+                ax.set_yticklabels(tick_labels, size=5, color="grey")
                 ax.grid(color="grey", linestyle="--", linewidth=0.4, alpha=0.5)
 
                 for eid in selected:
@@ -443,10 +460,9 @@ else:
                     ax.plot(s_angles_closed, vals_closed, color=c, linewidth=1.3, label=eid)
                     ax.fill(s_angles_closed, vals_closed, color=c, alpha=0.12)
 
-                ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08),
-                          ncol=1, fontsize=7, frameon=False)
-                fig.tight_layout()
-                st.pyplot(fig)
+                ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12),
+                          ncol=1, fontsize=6, frameon=False)
+                st.pyplot(fig, use_container_width=False)
                 plt.close(fig)
 
     # Per-scene comparative table: one row per scene, one block per metric

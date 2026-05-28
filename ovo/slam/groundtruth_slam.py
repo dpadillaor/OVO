@@ -87,6 +87,7 @@ class GroundTruthSLAM(VanillaMapper):
         self._jump_offset = torch.eye(4, device=self.device)
         self._applied_jump_kf_indices = set()
         self.jump_configs = []
+        self.pending_jump_events: list = []
 
         if not self.jump_drift_enabled:
             return
@@ -239,6 +240,15 @@ class GroundTruthSLAM(VanillaMapper):
                         T_jump = self._compute_jump_transform(jump_cfg["translation"], jump_cfg["rotation_matrix"])
                         self._jump_offset = T_jump @ self._jump_offset
                         self._applied_jump_kf_indices.add(N)
+                        t_mag = torch.norm(jump_cfg["translation"]).item()
+                        R = jump_cfg["rotation_matrix"]
+                        angle_rad = torch.acos(torch.clamp((torch.trace(R) - 1) / 2, -1.0, 1.0))
+                        r_mag_deg = (angle_rad * 180 / torch.pi).item()
+                        self.pending_jump_events.append({
+                            "kf_index": N,
+                            "translation_magnitude": t_mag,
+                            "rotation_magnitude": r_mag_deg,
+                        })
                         # Retroactively fix the current frame's stored pose
                         gt_pose = self.trajectory[frame_id].to(self.device) if frame_id < len(self.trajectory) else c2w
                         self.estimated_c2ws[frame_id] = self._jump_offset @ gt_pose

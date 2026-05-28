@@ -38,6 +38,7 @@ class StreamFrameMessage(TypedDict):
     rgb: np.ndarray | None
     ins_map: np.ndarray | None
     sam_map: np.ndarray | None
+    corrected_trajectory: list | None
 
 
 def is_fusion_message(data: Any) -> TypeGuard[FusionMessage]:
@@ -71,6 +72,23 @@ class UpdateMapMessage(TypedDict):
     c2w: np.ndarray
     n_fused: int
     decisions: list
+
+
+class JumpEventMessage(TypedDict):
+    type: Literal["jump_event"]
+    frame_id: int
+    c2w: np.ndarray
+    kf_index: int
+    translation_magnitude: float
+    rotation_magnitude: float
+
+
+def is_jump_event_message(data: Any) -> TypeGuard[JumpEventMessage]:
+    if not isinstance(data, dict):
+        return False
+    return data.get("type") == "jump_event" and all(
+        key in data for key in ("frame_id", "c2w", "kf_index", "translation_magnitude", "rotation_magnitude")
+    )
 
 
 def is_update_map_message(data: Any) -> TypeGuard[UpdateMapMessage]:

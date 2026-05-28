@@ -248,7 +248,7 @@ class OVOSemMap():
         c2w = self.slam_backbone.get_c2w(frame_id)
         if c2w is None:
             return
-        
+
         c2w_np = c2w.cpu().numpy().astype(np.float16)
         colors = self.slam_backbone.get_pcd_colors()
         visual_snapshot = self.ovo.get_last_visual_snapshot()
@@ -260,6 +260,17 @@ class OVOSemMap():
             rgb = visual_snapshot.get("rgb")
             ins_map = visual_snapshot.get("ins_map")
             sam_map = visual_snapshot.get("sam_map")
+
+        corrected_trajectory = None
+        if (
+            getattr(self.slam_backbone, "correction_done", False)
+            and not getattr(self, "_stream_traj_reset_done", False)
+        ):
+            corrected_trajectory = [
+                v.cpu().numpy()[:3, 3].tolist()
+                for _, v in sorted(self.slam_backbone.estimated_c2ws.items())
+            ]
+            self._stream_traj_reset_done = True
 
         _queue_put_dropping(
             mpqueue,
@@ -273,6 +284,7 @@ class OVOSemMap():
                 "rgb": rgb,
                 "ins_map": ins_map,
                 "sam_map": sam_map,
+                "corrected_trajectory": corrected_trajectory,
             },
         )
 
@@ -337,6 +349,27 @@ class OVOSemMap():
 
         return t_sem
 
+    def _dispatch_jump_events(self, frame_id: int, mpqueue) -> None:
+        if not self.stream or self.rerun_mode != "stream":
+            return
+        pending = getattr(self.slam_backbone, "pending_jump_events", [])
+        if not pending:
+            return
+        c2w = self.slam_backbone.get_c2w(frame_id)
+        if c2w is None:
+            return
+        c2w_np = c2w.cpu().numpy().astype(np.float32)
+        for event in pending:
+            _queue_put_dropping(mpqueue, {
+                "type": "jump_event",
+                "frame_id": frame_id,
+                "c2w": c2w_np,
+                "kf_index": event["kf_index"],
+                "translation_magnitude": event["translation_magnitude"],
+                "rotation_magnitude": event["rotation_magnitude"],
+            })
+        self.slam_backbone.pending_jump_events = []
+
     def _run_mapping_and_fusion_step(
         self,
         frame_id: int,
@@ -362,6 +395,7 @@ class OVOSemMap():
         if not self.slam_backbone.map_updated:
             return 0.0
 
+        self._dispatch_jump_events(frame_id, mpqueue)
         torch.cuda.synchronize()
         t_lc_i = time.time()
         map_data = self.slam_backbone.get_map()

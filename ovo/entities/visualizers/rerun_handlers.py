@@ -19,9 +19,11 @@ from .rerun_utils import (
 )
 from .rerun_contracts import (
     FusionMessage,
+    JumpEventMessage,
     LoopClosureMessage,
     UpdateMapMessage,
     is_fusion_message,
+    is_jump_event_message,
     is_loop_closure_message,
     is_stream_frame_message,
     is_stream_message,
@@ -189,6 +191,9 @@ class StreamRenderer(BaseRerunRenderer):
         if is_update_map_message(data):
             self._handle_update_map(data)
             return
+        if is_jump_event_message(data):
+            self._handle_jump_event(data)
+            return
 
         rgb = None
         ins_map = None
@@ -203,9 +208,11 @@ class StreamRenderer(BaseRerunRenderer):
             ins_map = data["ins_map"]
             sam_map = data["sam_map"]
             time_step = int(data["frame_id"])
+            corrected_trajectory = data.get("corrected_trajectory")
         elif is_stream_message(data):
             points, obj_ids, colors, c2w = data
             sam_map = None
+            corrected_trajectory = None
         else:
             return
 
@@ -218,7 +225,10 @@ class StreamRenderer(BaseRerunRenderer):
         points_full = points[mask]
         instance_ids_full = instance_ids[mask]
 
-        self.trajectory.append(c2w[:3, 3].tolist())
+        if corrected_trajectory is not None:
+            self.trajectory = corrected_trajectory
+        else:
+            self.trajectory.append(c2w[:3, 3].tolist())
 
         if len(points_full) > self.MAX_LIVE_POINTS and self.live_rec is not None:
             idx = np.random.choice(len(points_full), self.MAX_LIVE_POINTS, replace=False)
@@ -342,11 +352,25 @@ class StreamRenderer(BaseRerunRenderer):
 
         self._set_time("step", sequence=frame_id)
 
-        # Spatial marker at camera position
         label = f"update_map #{frame_id} ({n_fused} fused)"
         self._log(
             "world/update_map_events",
             rr.Points3D([cam_pos], colors=[[255, 200, 0]], radii=[0.04], labels=[label]),
+        )
+
+    def _handle_jump_event(self, data: JumpEventMessage):
+        frame_id = data["frame_id"]
+        cam_pos = data["c2w"][:3, 3].astype(np.float32)
+        kf_index = data["kf_index"]
+        t_mag = data["translation_magnitude"]
+        r_mag = data["rotation_magnitude"]
+
+        self._set_time("step", sequence=frame_id)
+
+        label = f"jump KF#{kf_index} (t={t_mag:.3f}m, r={r_mag:.2f}°)"
+        self._log(
+            "world/jump_events",
+            rr.Points3D([cam_pos], colors=[[255, 50, 50]], radii=[0.06], labels=[label]),
         )
 
 

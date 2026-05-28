@@ -1,9 +1,9 @@
 default_dataset: Replica
 
 experiments:
-  - label: baseline
-    scenes_id: [office0, office1, office2]
-    stages: [run, segment, eval, eval_instances]
+  - label: pruebaslam
+    scenes_id: [office0]
+    stages: [run]
     ovo_config:
       slam:
         slam_module: groundtruth

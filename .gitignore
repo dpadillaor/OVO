@@ -16,3 +16,8 @@ ovo_paper.png
 
 # Claude Code
 #.claude/
+.claude/logs/**
+.claude/worktrees/**
+
+scripts/*.yaml
+scripts/sam2_exploration/output/**
