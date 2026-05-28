@@ -56,12 +56,17 @@ def compute_pcd_overlap(
     Returns:
         float: Ratio of points within threshold distance
     """
-    pcd1 = o3d.geometry.PointCloud()
-    pcd1.points = o3d.utility.Vector3dVector(points1.cpu().numpy())
-    pcd2 = o3d.geometry.PointCloud()
-    pcd2.points = o3d.utility.Vector3dVector(points2.cpu().numpy())
+    if points1.shape[0] <= points2.shape[0]:
+        small, big = points1, points2
+    else:
+        small, big = points2, points1
 
-    dists = np.asarray(pcd1.compute_point_cloud_distance(pcd2))
+    pcd_small = o3d.geometry.PointCloud()
+    pcd_small.points = o3d.utility.Vector3dVector(small.cpu().numpy())
+    pcd_big = o3d.geometry.PointCloud()
+    pcd_big.points = o3d.utility.Vector3dVector(big.cpu().numpy())
+
+    dists = np.asarray(pcd_small.compute_point_cloud_distance(pcd_big))
     return (dists < th_points).astype(float).mean()
 
 
