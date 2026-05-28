@@ -131,7 +131,7 @@ class Logger:
         """
         Print logged statistics
         """
-        stats = {f"Avg {key}": np.asarray(stat).mean().round(3) for key, stat in self.stats.items() if key not in ["frame_id", "max_vram", "max_ram"] }
+        stats = {f"Avg {key}": np.asarray(stat).mean().round(3) for key, stat in self.stats.items() if key not in ["frame_id", "max_vram", "max_ram"] and len(stat) > 0}
         if "max_ram" in self.stats:
             stats["Max RAM"] = round(self.stats["max_ram"][0],2)
             stats["Max vRAM"] = round(self.stats["max_vram"][0],2)
