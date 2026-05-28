@@ -31,11 +31,17 @@ experiments:
     stages: [run, segment, eval]   # add eval_instances for instance AP metrics
     ovo_config:
       slam:
-        slam_module: <slam_module>
+        slam_module: groundtruth   # default backend
         close_loops: true
       semantic:
-        fusion_method: <fusion_method>
+        fusion_method: clip        # default fusion method
         # additional semantic keys depending on fusion_method — see below
+      vis:
+        stream: true
+        type: "rerun"
+        rerun_mode: stream         # stream | fusion | loop_closure
+        rerun_visual_mode: "off"   # off = no live viewer; change to spawn/serve if needed
+        save_rrd: true             # always save recording by default
     # slam_config block only if noise > 0:
     # slam_config:
     #   noise:
@@ -44,8 +50,9 @@ experiments:
 ```
 
 ### Experiment name convention
-`{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{LABEL}` — use this to name the file before running.
-Example: `20260407_GT_CLIP_task17-cooc-graph.yaml`
+`{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{LABEL}_{UID}` — use this to name the file before running.
+The 5-char hex UID is appended automatically by the runner. Predict it as `xxxxx` when naming the manifest file.
+Example: `20260407_GT_CLIP_baseline.yaml` (manifest) → `20260407_GT_CLIP_baseline_a3f7c` (actual folder)
 
 SLAM tokens: `GT`, `GTNoise-T{t}-R{r}`, `GTJump-J{n}`, `ORBSLAM3`, `Vanilla`
 Fusion tokens: `CLIP`, `PE-Core`, `PE-Spatial`, `SAM3`, `DINO`
