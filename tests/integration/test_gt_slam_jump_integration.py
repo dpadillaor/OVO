@@ -1,5 +1,5 @@
 """
-Integration tests for GT SLAM jump drift simulation.
+Integration tests for simulated SLAM jump drift.
 Task 18: GT SLAM Jump Drift Simulation
 
 Synthetic trajectory: 20 frames, linear motion along X axis (step 0.1 m/frame).
@@ -46,8 +46,8 @@ def make_config(noise_cfg=None, close_loops=False, device="cpu"):
 
 
 def make_slam(config, trajectory=None, device="cpu"):
-    """Construct GroundTruthSLAM without filesystem access."""
-    from ovo.slam.groundtruth_slam import GroundTruthSLAM
+    """Construct SimulatedSLAM without filesystem access."""
+    from ovo.slam.simulated import SimulatedSLAM, JumpDriftController, KeyframeSelector
     from ovo.slam.vanilla_mapper import VanillaMapper
 
     if trajectory is None:
@@ -60,24 +60,29 @@ def make_slam(config, trajectory=None, device="cpu"):
     cam_intrinsics[1, 2] = 120.0
 
     with patch("builtins.open", MagicMock()):
-        slam = GroundTruthSLAM.__new__(GroundTruthSLAM)
+        slam = SimulatedSLAM.__new__(SimulatedSLAM)
         VanillaMapper.__init__(slam, config, cam_intrinsics)
         slam.trajectory = trajectory
-        slam.last_processed_frame_id = -1
         slam.c2w = torch.eye(4, dtype=torch.float32, device=device)
-        slam._init_noise_params()
-        slam._init_jump_params()
-        slam.kf_dist_thresh = config.get("kf_dist_thresh", 0.1)
-        slam.kf_rot_thresh = config.get("kf_rot_thresh", 5.0)
-        slam.lc_dist_thresh = config.get("lc_dist_thresh", 0.2)
-        slam.lc_rot_thresh = config.get("lc_rot_thresh", 10.0)
+
+        noise_cfg = config.get("noise", {})
+        slam.noise_enabled = noise_cfg.get("noise_enabled", False)
+        slam.jump_controller = JumpDriftController(noise_cfg, device)
+        slam.jump_drift_enabled = slam.jump_controller.enabled
+        slam.pending_jump_events = []
+        slam.keyframe_selector = KeyframeSelector(
+            config.get("kf_dist_thresh", 0.1),
+            config.get("kf_rot_thresh", 5.0),
+        )
+        slam.tracking_strategy = slam._build_tracking_strategy(noise_cfg)
+
         slam.close_loops = config.get("slam", {}).get("close_loops", False)
         slam.map_every = config.get("mapping", {}).get("map_every", 10)
         slam.correction_done = False
         slam._lc_pcd_before = None
         slam._lc_traj_before = None
         slam.last_big_change_id = -1
-        slam.kfs = {}
+        slam._dedup_min_idx = 0
 
     return slam
 
@@ -216,9 +221,9 @@ class TestYamlConfigLoadedCorrectly:
         slam = make_slam(make_config(noise_cfg))
 
         assert slam.jump_drift_enabled is True
-        assert len(slam.jump_configs) == 2
-        assert slam.jump_configs[0]["kf_index"] == 5
-        assert slam.jump_configs[1]["kf_index"] == 10
+        assert len(slam.jump_controller.jump_configs) == 2
+        assert slam.jump_controller.jump_configs[0]["kf_index"] == 5
+        assert slam.jump_controller.jump_configs[1]["kf_index"] == 10
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +232,7 @@ class TestYamlConfigLoadedCorrectly:
 
 class TestJumpAndContinuousDriftIndependent:
     def test_noise_enabled_no_jump_offset(self):
-        """Case A: noise_enabled=True, jump_drift_enabled=False → _jump_offset stays identity."""
+        """Case A: noise_enabled=True, jump_drift_enabled=False → jump offset stays identity."""
         noise_cfg = {
             "noise_enabled": True,
             "translation_noise_std": 0.01,
@@ -239,7 +244,7 @@ class TestJumpAndContinuousDriftIndependent:
 
         run_loop(slam, n_frames=20)
 
-        assert torch.allclose(slam._jump_offset, torch.eye(4), atol=1e-6)
+        assert torch.allclose(slam.jump_controller.offset, torch.eye(4), atol=1e-6)
 
     def test_jump_enabled_no_noise_applied(self):
         """Case B: jump_drift_enabled=True, no jumps configured → poses identical to GT."""
@@ -342,3 +347,52 @@ class TestJumpConfigWithLoopClosure:
                 gt_pose = traj[frame_id]
                 assert torch.allclose(est_pose[:3, 3], gt_pose[:3, 3], atol=1e-3), \
                     f"Frame {frame_id}: after correction est {est_pose[:3,3]} != gt {gt_pose[:3,3]}"
+
+
+# ---------------------------------------------------------------------------
+# IT-08: Jump opens a new dedup epoch (re-observed surfaces kept as a ghost)
+# ---------------------------------------------------------------------------
+
+class TestJumpOpensDedupEpoch:
+    def test_epoch_boundary_controls_dedup(self):
+        """Directly exercise _add_points: re-observing the same view normally dedups
+        (few new points), but after opening a dedup epoch the re-observation is kept
+        in full — the "ghost" a jump must produce."""
+        slam = make_slam(make_config({"jump_drift_enabled": True, "jump_seed": 42, "jumps": []}))
+        # Sane intrinsics matching a 64x64 image so the dedup matching actually fires.
+        slam.cam_intrinsics = torch.tensor([[64.0, 0.0, 32.0],
+                                            [0.0, 64.0, 32.0],
+                                            [0.0, 0.0, 1.0]], dtype=torch.float32)
+        c2w = torch.eye(4, dtype=torch.float32)
+        image = np.zeros((64, 64, 3), dtype=np.uint8)
+        depth = np.ones((64, 64), dtype=np.float32) * 2.0
+
+        # First observation: full frame added.
+        slam._add_points([0, image, depth, np.eye(4)], c2w)
+        n_first = slam.pcd.shape[0]
+        assert n_first > 0
+
+        # Re-observe the SAME view in the same epoch: dedup should suppress most points.
+        slam._add_points([1, image, depth, np.eye(4)], c2w)
+        n_dedup = slam.pcd.shape[0] - n_first
+        assert n_dedup < n_first, f"Dedup should suppress re-observed points, added {n_dedup}/{n_first}"
+
+        # Open a new epoch (as a jump does) and re-observe: the view is kept in full.
+        slam._dedup_min_idx = slam.pcd.shape[0]
+        before_epoch = slam.pcd.shape[0]
+        slam._add_points([2, image, depth, np.eye(4)], c2w)
+        n_epoch = slam.pcd.shape[0] - before_epoch
+        assert n_epoch > n_dedup, f"Epoch boundary should re-add the view (ghost), added {n_epoch} vs deduped {n_dedup}"
+
+    def test_dedup_epoch_reset_on_correction(self):
+        """The global correction makes the map consistent again, so the dedup epoch
+        is reset to match against the whole map."""
+        slam = make_slam(make_config(
+            {"jump_drift_enabled": True, "jump_seed": 42,
+             "jumps": [{"kf_index": 1, "translation": [0.5, 0.0, 0.0]}]},
+            close_loops=True,
+        ))
+        run_loop(slam, n_frames=20)
+
+        assert slam.correction_done is True
+        assert slam._dedup_min_idx == 0

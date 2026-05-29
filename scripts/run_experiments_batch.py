@@ -61,7 +61,7 @@ class ExperimentRunner:
         self.manifest = manifest 
         self.verbose = verbose
         self.dataset = self.experiment.dataset if self.experiment.dataset else self.manifest.default_dataset
-        self.slam_module = self.experiment.ovo_config.slam.get("slam_module", "groundtruth")
+        self.slam_module = self.experiment.ovo_config.slam.get("slam_module", "simulated")
 
         # Paths
         self.ovo_config_path = "data/working/configs/ovo.yaml"
@@ -77,7 +77,7 @@ class ExperimentRunner:
         Generates the SLAM token part of the experiment name.
         """
         match self.slam_module:
-            case "groundtruth":
+            case "simulated":
                 if self.experiment.slam_config.noise.get("jump_drift_enabled", False):
                     jumps = self.experiment.slam_config.noise.get("jumps", [])
                     n_jumps = len(jumps)
@@ -168,7 +168,7 @@ class ExperimentRunner:
             _update_recursive(ovo_data, {"vis": self.experiment.ovo_config.vis})
 
         # Noise goes to ovo.yaml root (not to the slam config file).
-        # GroundTruthSLAM reads noise from config["noise"] which comes from ovo.yaml.
+        # SimulatedSLAM reads noise from config["noise"] which comes from ovo.yaml.
         if self.experiment.slam_config.noise:
             noise_cfg = self.experiment.slam_config.noise
             is_jump_drift = noise_cfg.get("jump_drift_enabled", False)

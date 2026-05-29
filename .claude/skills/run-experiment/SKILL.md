@@ -2,7 +2,7 @@
 name: run-experiment
 description: Set up and launch an OVO experiment via the batch runner. Use during task verification when you need to run a new experiment to check if an implementation works as expected.
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools:
   - Read
   - Write
@@ -31,7 +31,7 @@ experiments:
     stages: [run, segment, eval]   # add eval_instances for instance AP metrics
     ovo_config:
       slam:
-        slam_module: groundtruth   # default backend
+        slam_module: simulated   # default backend
         close_loops: true
       semantic:
         fusion_method: clip        # default fusion method
@@ -82,21 +82,21 @@ Use `scenes_list: scenes.txt` when a full evaluation across all scenes is needed
 
 ### `slam_module` — SLAM backends
 
-#### Groundtruth (clean poses)
+#### Simulated — clean poses (SimulatedSLAM)
 Token: `GT`
 ```yaml
 ovo_config:
   slam:
-    slam_module: groundtruth
+    slam_module: simulated
     close_loops: true
 ```
 
-#### Groundtruth + noise
+#### Simulated + noise
 Token: `GTNoise-T{t}-R{r}` (e.g. `GTNoise-T0p001-R0p01`)
 ```yaml
 ovo_config:
   slam:
-    slam_module: groundtruth
+    slam_module: simulated
     close_loops: true
 slam_config:
   noise:
@@ -105,12 +105,12 @@ slam_config:
 ```
 The runner writes noise to `ovo.yaml > noise:` automatically and sets `noise_enabled: true`.
 
-#### Groundtruth + jump drift
+#### Simulated + jump drift
 Token: `GTJump-J{n}` where `n` = number of jumps (e.g. `GTJump-J3`)
 ```yaml
 ovo_config:
   slam:
-    slam_module: groundtruth
+    slam_module: simulated
     close_loops: true
 slam_config:
   noise:

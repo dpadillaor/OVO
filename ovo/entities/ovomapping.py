@@ -46,9 +46,9 @@ def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Ten
     elif backbone ==  "orbslam2":
         from ..slam.orbslam2 import WrapperORBSLAM2
         return WrapperORBSLAM2(config, cam_intrinsics, world_ref=torch.from_numpy(dataset[0][3]))
-    elif backbone == "groundtruth":
-        from ..slam.groundtruth_slam import GroundTruthSLAM
-        return GroundTruthSLAM(config, cam_intrinsics)
+    elif backbone == "simulated":
+        from ..slam.simulated import SimulatedSLAM
+        return SimulatedSLAM(config, cam_intrinsics)
     else:
         return VanillaMapper(config, cam_intrinsics)
 
@@ -387,10 +387,9 @@ class OVOSemMap():
             return 0.0
 
         self.slam_backbone.map(frame_data, estimated_c2w)
+        self._dispatch_jump_events(frame_id, mpqueue)
         if not self.slam_backbone.map_updated:
             return 0.0
-
-        self._dispatch_jump_events(frame_id, mpqueue)
         torch.cuda.synchronize()
         t_lc_i = time.time()
         map_data = self.slam_backbone.get_map()

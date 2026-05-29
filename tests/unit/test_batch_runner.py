@@ -40,7 +40,7 @@ SLAMConfigOverride = _mod.SLAMConfigOverride
 
 def _make_runner(
     *,
-    slam_module: str = "groundtruth",
+    slam_module: str = "simulated",
     noise: dict | None = None,
     slam_overrides: dict | None = None,
     semantic_overrides: dict | None = None,
@@ -100,13 +100,13 @@ class TestUpdateRecursive:
 
 class TestGetSlamToken:
 
-    def test_groundtruth_no_noise(self):
-        runner = _make_runner(slam_module="groundtruth")
+    def test_simulated_no_noise(self):
+        runner = _make_runner(slam_module="simulated")
         assert runner._get_slam_token() == "GT"
 
-    def test_groundtruth_with_translation_noise(self):
+    def test_simulated_with_translation_noise(self):
         runner = _make_runner(
-            slam_module="groundtruth",
+            slam_module="simulated",
             noise={"translation_noise_std": 0.001, "rotation_noise_std": 0.01},
         )
         token = runner._get_slam_token()
@@ -176,11 +176,12 @@ class TestGetFusionToken:
 
 class TestGenerateExperimentName:
 
-    def test_format_four_parts(self):
+    def test_format_five_parts(self):
+        # {DATE}_{SLAM}_{FUSION}_{LABEL}_{UID}
         runner = _make_runner(label="MyLabel")
         name = runner._generate_experiment_name()
         parts = name.split("_")
-        assert len(parts) == 4, f"Expected 4 parts, got {len(parts)}: {name}"
+        assert len(parts) == 5, f"Expected 5 parts, got {len(parts)}: {name}"
 
     def test_date_matches_today(self):
         runner = _make_runner()
@@ -188,10 +189,13 @@ class TestGenerateExperimentName:
         today = datetime.datetime.now().strftime("%Y%m%d")
         assert name.startswith(today)
 
-    def test_label_in_last_position(self):
+    def test_label_in_penultimate_position(self):
+        # Label sits before the trailing 5-char uid suffix.
         runner = _make_runner(label="SpecialTag")
         name = runner._generate_experiment_name()
-        assert name.endswith("_SpecialTag")
+        parts = name.split("_")
+        assert parts[-2] == "SpecialTag"
+        assert len(parts[-1]) == 5  # uid suffix
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +203,7 @@ class TestGenerateExperimentName:
 # ---------------------------------------------------------------------------
 
 _OVO_BASE = {
-    "slam": {"slam_module": "groundtruth"},
+    "slam": {"slam_module": "simulated"},
     "noise": {
         "noise_enabled": False,
         "translation_noise_std": 0.0,
@@ -327,7 +331,7 @@ class TestScenesArg:
             label="X",
             scenes_id=scenes_id,
             scenes_list=scenes_list,
-            ovo_config=OVOConfigOverride(slam={"slam_module": "groundtruth"}),
+            ovo_config=OVOConfigOverride(slam={"slam_module": "simulated"}),
         )
         if scenes_list:
             return f"--scenes_list {scenes_list}"
@@ -375,11 +379,11 @@ experiments:
   - label: exp1
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
   - label: exp2
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
 """
         path = self._write_manifest(tmp_path, manifest_yaml)
         manifest = _load_experiment_manifest(path)
@@ -393,7 +397,7 @@ experiments:
     scenes_id: office0
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
 """
         path = self._write_manifest(tmp_path, manifest_yaml)
         manifest = _load_experiment_manifest(path)
@@ -409,7 +413,7 @@ experiments:
       - room1
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
 """
         path = self._write_manifest(tmp_path, manifest_yaml)
         manifest = _load_experiment_manifest(path)
@@ -423,7 +427,7 @@ experiments:
     scenes_list: scenes.txt
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
 """
         path = self._write_manifest(tmp_path, manifest_yaml)
         manifest = _load_experiment_manifest(path)
@@ -436,7 +440,7 @@ experiments:
   - label: exp1
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
       fusion_method: pe
 """
         path = self._write_manifest(tmp_path, manifest_yaml)
@@ -451,7 +455,7 @@ experiments:
   - label: exp1
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
 """
         path = self._write_manifest(tmp_path, manifest_yaml)
         manifest = _load_experiment_manifest(path)
