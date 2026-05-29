@@ -420,8 +420,8 @@ def main():
                              "without running anything. Useful to verify configs before execution.")
     parser.add_argument("--preview-dir", default="data/working/config_preview",
                         help="Directory where preview configs are written (default: data/working/config_preview).")
-    parser.add_argument("--manifest", default="scripts/experiments_manifest.yaml",
-                        help="Path to the experiments manifest YAML (default: scripts/experiments_manifest.yaml).")
+    parser.add_argument("--manifest", default="manifests/experiments_manifest.yaml",
+                        help="Path to the experiments manifest YAML (default: manifests/experiments_manifest.yaml).")
     args = parser.parse_args()
 
     manifest_path = args.manifest

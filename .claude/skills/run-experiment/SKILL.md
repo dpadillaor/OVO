@@ -20,7 +20,7 @@ Parse $ARGUMENTS to extract the experiment config. If critical info is missing a
 
 ## Manifest file
 
-Create a new YAML file at `scripts/<Experiment_ID>.yaml` (predict the name from the config before running — see naming convention below). This file serves as both the manifest to execute and the permanent record of what was launched. Never touch `scripts/experiments_manifest.yaml`.
+Create a new YAML file at `manifests/<Experiment_ID>.yaml` (predict the name from the config before running — see naming convention below). This file serves as both the manifest to execute and the permanent record of what was launched. Never touch `manifests/experiments_manifest.yaml`.
 
 ```yaml
 default_dataset: Replica
@@ -287,17 +287,17 @@ ls <root>/data/input/Datasets/Replica
 If missing or empty: **stop and tell the user**. Do not proceed.
 
 ### 3 — Create manifest file
-Write `<root>/scripts/<Experiment_ID>.yaml` with the full manifest structure (see above). This file is the permanent record — never delete it.
+Write `<root>/manifests/<Experiment_ID>.yaml` with the full manifest structure (see above). This file is the permanent record — never delete it.
 
 ### 4 — Preview (recommended)
 ```bash
-cd <root> && conda run -n ovo2 python scripts/run_experiments_batch.py --manifest scripts/<Experiment_ID>.yaml --preview
+cd <root> && conda run -n ovo2 python scripts/run_experiments_batch.py --manifest manifests/<Experiment_ID>.yaml --preview
 ```
 Read the generated YAML in `data/working/config_preview/` and verify it looks correct.
 
 ### 5 — Run
 ```bash
-cd <root> && conda run -n ovo2 python scripts/run_experiments_batch.py --manifest scripts/<Experiment_ID>.yaml --verbose
+cd <root> && conda run -n ovo2 python scripts/run_experiments_batch.py --manifest manifests/<Experiment_ID>.yaml --verbose
 ```
 
 ### 6 — Report
