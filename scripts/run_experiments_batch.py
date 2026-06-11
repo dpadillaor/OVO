@@ -1,6 +1,5 @@
 import yaml
 import subprocess
-import shutil
 import json
 import os
 import datetime
@@ -43,6 +42,7 @@ class Experiment:
     ovo_config: OVOConfigOverride = field(default_factory=OVOConfigOverride)
     slam_config: SLAMConfigOverride = field(default_factory=SLAMConfigOverride)
     dataset: Optional[str] = None
+    restore_pre_fusion_checkpoint: Optional[str] = None
 
 @dataclass # Represents the entire experiments_manifest.yaml file
 class Manifest:
@@ -66,8 +66,7 @@ class ExperimentRunner:
         # Paths
         self.ovo_config_path = "data/working/configs/ovo.yaml"
         self.slam_config_path = f"data/working/configs/slam/{self.slam_module}/{self.dataset.lower()}.yaml"
-        self.ovo_backup_path = f"{self.ovo_config_path}.bak"
-        self.slam_backup_path = f"{self.slam_config_path}.bak"
+        self._tmp_config_path: Optional[str] = None
         
         # Experiment identifier
         self.experiment_name = self._generate_experiment_name()
@@ -144,12 +143,6 @@ class ExperimentRunner:
 
         return f"{date_str}_{slam_token}_{fusion_config_token}_{tag}_{uid}"
 
-    def _backup_configs(self):
-        """Creates backups of the original config files."""
-        print(f"    Backing up configs...")
-        shutil.copy(self.ovo_config_path, self.ovo_backup_path)
-        shutil.copy(self.slam_config_path, self.slam_backup_path)
-
     def _build_ovo_data(self) -> dict:
         """
         Reads ovo.yaml and applies all experiment overrides in memory.
@@ -179,24 +172,22 @@ class ExperimentRunner:
                 }
             })
 
+        if self.experiment.restore_pre_fusion_checkpoint:
+            ovo_data["restore_pre_fusion_checkpoint"] = self.experiment.restore_pre_fusion_checkpoint
+
         return ovo_data
 
-    def _apply_config_overrides(self):
-        """Applies the experiment-specific config changes to the YAML files."""
-        print(f"    Applying overrides for experiment '{self.label}'...")
-
-        ovo_data = self._build_ovo_data()   # read before opening for write
-        with open(self.ovo_config_path, 'w') as f:
-            yaml.dump(ovo_data, f, default_flow_style=False, sort_keys=False)
-
-        # Slam config: read and rewrite (no noise overrides — noise lives in ovo.yaml)
-        # ORB-SLAM configs use OpenCV's %YAML:1.0 header which PyYAML cannot parse,
-        # and have no Python-side overrides to apply, so skip the round-trip.
-        if not self.slam_module.startswith("orbslam"):
-            with open(self.slam_config_path, 'r') as f:
-                slam_data = yaml.full_load(f)
-            with open(self.slam_config_path, 'w') as f:
-                yaml.dump(slam_data, f, default_flow_style=False, sort_keys=False)
+    def _write_tmp_config(self) -> str:
+        """Writes merged ovo config to a temp file. Returns the path."""
+        import tempfile
+        ovo_data = self._build_ovo_data()
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".yaml", prefix=f"ovo_{self.experiment_name}_",
+            delete=False, mode='w'
+        )
+        yaml.dump(ovo_data, tmp, default_flow_style=False, sort_keys=False)
+        tmp.close()
+        return tmp.name
 
     def preview(self, output_dir: Path) -> Path:
         """
@@ -210,15 +201,10 @@ class ExperimentRunner:
             yaml.dump(ovo_data, f, default_flow_style=False, sort_keys=False)
         return out_path
 
-    def _restore_configs(self):
-        """
-        Restores original config files from backups and cleans up backup files.
-        """
-        print(f"    Restoring original configs...")
-        shutil.copy(self.ovo_backup_path, self.ovo_config_path)
-        os.remove(self.ovo_backup_path)
-        shutil.copy(self.slam_backup_path, self.slam_config_path)
-        os.remove(self.slam_backup_path)
+    def _cleanup_tmp_config(self):
+        if self._tmp_config_path and os.path.exists(self._tmp_config_path):
+            os.unlink(self._tmp_config_path)
+            self._tmp_config_path = None
 
     def _write_meta_json(self) -> None:
         """Write experiment_meta.json sidecar to the output directory."""
@@ -261,8 +247,8 @@ class ExperimentRunner:
         Prepares the environment for the experiment.
         """
         print(f"    Generated Name: {Colors.BOLD}{self.experiment_name}{Colors.ENDC}")
-        self._backup_configs()
-        self._apply_config_overrides()
+        self._tmp_config_path = self._write_tmp_config()
+        print(f"    Temp config: {self._tmp_config_path}")
         self._write_meta_json()
 
     def run(self):
@@ -289,7 +275,7 @@ class ExperimentRunner:
         command = (
             f"python run_eval.py --dataset_name {self.dataset} "
             f"--experiment_name {self.experiment_name} {scenes_arg} "
-            f"{stage_flags}"
+            f"{stage_flags} --ovo_config {self._tmp_config_path}"
         )
         print(f"    {Colors.BOLD}Executing run_eval.py for:{Colors.ENDC} {self.dataset} - {self.experiment_name} - Scenes: {scenes_display}")
         print(f"    Stages: {', '.join(self.experiment.stages)}")
@@ -343,7 +329,7 @@ class ExperimentRunner:
 
     def cleanup(self):
         """Cleans up the environment after the experiment."""
-        self._restore_configs()
+        self._cleanup_tmp_config()
 
 
 def _update_recursive(d: Dict[Any, Any], u: Dict[Any, Any]) -> Dict[Any, Any]:
@@ -391,7 +377,8 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
             stages=exp_data.get("stages", ["run", "segment", "eval"]),
             ovo_config=ovo_override,
             slam_config=slam_override,
-            dataset=exp_data.get("dataset")
+            dataset=exp_data.get("dataset"),
+            restore_pre_fusion_checkpoint=exp_data.get("restore_pre_fusion_checkpoint"),
         )
         loaded_experiments.append(experiment_obj)
 

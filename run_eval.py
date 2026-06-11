@@ -71,9 +71,9 @@ def compute_scene_labels(scene_path: Path, dataset_name: str, scene_name: str, d
     del ovo
 
 
-def run_scene(scene: str, dataset: str, experiment_name: str, tmp_run: bool = False, depth_filter: bool = None) -> None:
+def run_scene(scene: str, dataset: str, experiment_name: str, tmp_run: bool = False, depth_filter: bool = None, ovo_config_path: str = "data/working/configs/ovo.yaml") -> None:
 
-    config = io_utils.load_config("data/working/configs/ovo.yaml")
+    config = io_utils.load_config(ovo_config_path)
     map_module = config["slam"]["slam_module"]
     if map_module == "orbslam2":
         map_module = "vanilla"
@@ -118,7 +118,12 @@ def run_scene(scene: str, dataset: str, experiment_name: str, tmp_run: bool = Fa
 
     gen_utils.setup_seed(config["seed"])
     gslam = OVOSemMap(config, output_path=output_path)
-    gslam.run()
+    ckpt_path = config.get("restore_pre_fusion_checkpoint")
+    if ckpt_path:
+        ckpt_path = ckpt_path.replace("{scene}", scene)
+        gslam.run_fusion_from_checkpoint(ckpt_path)
+    else:
+        gslam.run()
 
     if tmp_run:
         final_path = Path(f"data/output/{dataset}/") / experiment_name / scene
@@ -157,7 +162,7 @@ def main(args):
         input_path = f"./data/input/Datasets/{args.dataset_name}/{scene}"
         if args.run:
             t0 = time.time()
-            run_scene(scene, args.dataset_name, experiment_name, tmp_run = tmp_run)
+            run_scene(scene, args.dataset_name, experiment_name, tmp_run=tmp_run, ovo_config_path=args.ovo_config)
             t1 = time.time()
             print(f"Scene {scene} took: {t1-t0:.2f}")
         gc.collect()
@@ -193,5 +198,6 @@ if __name__ == "__main__":
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--ignore_background', action='store_true',help="If set, does not use background ids from eval_info to compute metrics.")
     parser.add_argument('--eval_instances', action='store_true', help="If set, compute instance AP (class-aware and class-agnostic) using masks from the segment step.")
+    parser.add_argument('--ovo_config', default="data/working/configs/ovo.yaml", help="Path to the OVO config YAML (default: data/working/configs/ovo.yaml).")
     args = parser.parse_args()
     main(args)
