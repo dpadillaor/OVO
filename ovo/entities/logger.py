@@ -134,7 +134,7 @@ class Logger:
                 if not line:
                     continue
                 try:
-                    v = int(line) if key == "n_obj" else float(line)
+                    v = int(line) if ('.' not in line) else float(line)
                     values.append([v] if key == "n_obj" else v)
                 except ValueError:
                     pass
