@@ -299,6 +299,7 @@ def load_sam(config: Dict[str, Any], device: str = "cuda") -> SamAutomaticMaskGe
         "stability_score_thresh": config.get("stability_score_th",0.95),
         "min_mask_region_area": config.get("min_mask_region_area", 0),
         "use_m2m": config.get("use_m2m", False),
+        "crop_n_layers": config.get("crop_n_layers", 0),
         }
         
 

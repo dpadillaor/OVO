@@ -43,6 +43,22 @@ class CooccurrenceGraph:
             self.graph[neighbor].pop(node_id, None)
         del self.graph[node_id]
 
+    def to_dict(self) -> dict:
+        """Serialize graph to a plain dict for checkpointing."""
+        return {i: {j: list(kfs) for j, kfs in neighbors.items()}
+                for i, neighbors in self.graph.items()}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "CooccurrenceGraph":
+        """Restore graph from a checkpointed dict."""
+        g = cls()
+        for i_str, neighbors in data.items():
+            i = int(i_str)
+            for j_str, kfs in neighbors.items():
+                j = int(j_str)
+                g.graph[i][j] = list(kfs)
+        return g
+
     def export_json(self, path: str) -> None:
         export_data = {"nodes": list(self.graph.keys()), "edges": []}
         for i, neighbors in self.graph.items():

@@ -229,7 +229,7 @@ class SimulatedSLAM(VanillaMapper):
         if (self.noise_enabled or self.jump_drift_enabled) and self.close_loops:
             self.correct_map_globally()
         else:
-            self.map_updated = True
+            self.map_updated = False
         self.correction_done = True
 
     def correct_map_globally(self) -> None:

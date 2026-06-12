@@ -20,4 +20,6 @@ ovo_paper.png
 .claude/worktrees/**
 
 scripts/*.yaml
+manifests/*.yaml
 scripts/sam2_exploration/output/**
+segmentation_exp/output/**

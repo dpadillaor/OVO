@@ -69,6 +69,19 @@ def compute_pcd_overlap(
     dists = np.asarray(pcd_small.compute_point_cloud_distance(pcd_big))
     return (dists < th_points).astype(float).mean()
 
+def compute_pcd_old_overlap(
+      points1: torch.Tensor,
+      points2: torch.Tensor,
+      th_points: float
+  ) -> float:
+      pcd1 = o3d.geometry.PointCloud()
+      pcd1.points = o3d.utility.Vector3dVector(points1.cpu().numpy())
+      pcd2 = o3d.geometry.PointCloud()
+      pcd2.points = o3d.utility.Vector3dVector(points2.cpu().numpy())
+
+      dists = np.asarray(pcd1.compute_point_cloud_distance(pcd2))
+      return (dists < th_points).astype(float).mean()
+
 
 def same_instance(instance1, instance2, points_centroid1, points_centroid2, th_centroid, th_cossim, th_points):
     """

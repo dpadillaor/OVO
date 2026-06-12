@@ -21,9 +21,11 @@ import streamlit as st
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from ovo.utils.results_utils import load_experiments, load_scene_results
+from ovo.utils.results_utils import load_experiments, load_scene_results, load_timing_stats
 
 OUTPUT_DIR = ROOT / "data" / "output"
+PAPER_REF_CSV = ROOT / "references" / "paper_results.csv"
+PAPER_REF_ID = "paper_ovo_mapping"
 MAX_SELECT = 4
 
 # Stable colour palette assigned by position in the selection list.
@@ -40,13 +42,23 @@ FUSION_REJECT_COLS = [
 ]
 
 
+@st.cache_data(ttl=3600)
+def _load_paper_ref() -> pd.Series | None:
+    if not PAPER_REF_CSV.exists():
+        return None
+    df = pd.read_csv(PAPER_REF_CSV)
+    rows = df[df["Experiment_ID"] == PAPER_REF_ID]
+    return rows.iloc[0] if not rows.empty else None
+
+
 @st.cache_data(ttl=60)
-def _load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def _load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     df_exp, df_class = load_experiments(OUTPUT_DIR, dataset_filter="Replica")
     df_scene, _ = load_scene_results(OUTPUT_DIR)
     if not df_scene.empty:
         df_scene = df_scene[df_scene["Dataset"] == "Replica"]
-    return df_exp, df_class, df_scene
+    df_timing = load_timing_stats(OUTPUT_DIR, dataset_filter="Replica")
+    return df_exp, df_class, df_scene, df_timing
 
 
 def _default_selection(exp_ids: list[str]) -> list[str]:
@@ -103,7 +115,8 @@ if st.button("Refresh"):
     st.cache_data.clear()
     st.rerun()
 
-df_exp, df_class, df_scene = _load()
+df_exp, df_class, df_scene, df_timing = _load()
+paper_ref = _load_paper_ref()
 
 if df_exp.empty:
     st.warning("No se encontraron experimentos en data/output/Replica/.")
@@ -185,6 +198,47 @@ st.dataframe(
     df_status.style.apply(_row_style, axis=1),
     use_container_width=True, hide_index=True,
 )
+
+
+# ── Paper reference ───────────────────────────────────────────────────────────
+if paper_ref is not None:
+    with st.expander("📄 Referencia: OVO-mapping (paper)", expanded=False):
+        _PAPER_DISPLAY = [
+            ("mIoU", False), ("mAcc", False),
+            ("Head_mIoU", False), ("Common_mIoU", False), ("Tail_mIoU", False),
+        ]
+        paper_cols = st.columns(len(_PAPER_DISPLAY))
+        for col_w, (m, _) in zip(paper_cols, _PAPER_DISPLAY):
+            v = paper_ref.get(m)
+            with col_w:
+                st.metric(m, _fmt(v) if v is not None else "—")
+
+        st.caption("Valores del paper original. Sin AP de instancias disponible.")
+
+        # Deltas of each selected experiment vs paper
+        delta_rows = []
+        for _, row in df_sel.iterrows():
+            eid = row["Experiment_ID"]
+            dr = {"Experiment_ID": eid}
+            for m, _ in _PAPER_DISPLAY:
+                b = paper_ref.get(m, float("nan"))
+                c = row.get(m, float("nan"))
+                delta = (c - b) if (pd.notna(b) and pd.notna(c)) else float("nan")
+                dr[f"Δ{m}"] = _delta_str(delta)
+                dr[f"_color_{m}"] = _delta_color(delta, True)
+            delta_rows.append(dr)
+
+        html = "<table style='font-size:12px;width:100%'>"
+        html += "<thead><tr><th>Experimento</th>" + "".join(f"<th>Δ{m}</th>" for m, _ in _PAPER_DISPLAY) + "</tr></thead><tbody>"
+        for dr in delta_rows:
+            html += f"<tr><td>{dr['Experiment_ID']}</td>"
+            for m, _ in _PAPER_DISPLAY:
+                color_key = f"_color_{m}"
+                delta_key = f"Δ{m}"
+                html += f"<td style='{dr[color_key]}'>{dr[delta_key]}</td>"
+            html += "</tr>"
+        html += "</tbody></table>"
+        st.markdown(html, unsafe_allow_html=True)
 
 
 # ── Delta table ──────────────────────────────────────────────────────────────
@@ -277,6 +331,12 @@ if avail_radar:
         c = color_map[eid]
         ax.plot(angles_closed, vals_closed, color=c, linewidth=1.4, label=eid)
         ax.fill(angles_closed, vals_closed, color=c, alpha=0.12)
+
+    if paper_ref is not None:
+        paper_vals = [float(paper_ref[m]) if pd.notna(paper_ref.get(m)) else 0.0 for m in avail_radar]
+        paper_closed = paper_vals + paper_vals[:1]
+        ax.plot(angles_closed, paper_closed, color="#888888", linewidth=1.2,
+                linestyle="--", label="paper (OVO-mapping)")
 
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.15), fontsize=6, frameon=False, ncol=2)
     st.pyplot(fig, use_container_width=False)
@@ -603,6 +663,132 @@ if not df_scene_sel.empty and "Fusion_Total" in df_scene_sel.columns:
             subset=rej_cols_eid, **{"font-weight": "bold", "color": "#c0392b"},
         )
     st.dataframe(styled, use_container_width=True, hide_index=True)
+
+
+# ── Timing / Performance ─────────────────────────────────────────────────────
+st.header("Tiempos de ejecución")
+
+df_timing_sel = (
+    df_timing[df_timing["Experiment_ID"].isin(selected)].copy()
+    if not df_timing.empty else pd.DataFrame()
+)
+
+if df_timing_sel.empty:
+    st.info("Sin datos de timing para la selección (necesita run con log=true).")
+else:
+    # ── Summary table ──────────────────────────────────────────────────────
+    st.subheader("Resumen (medias por experimento)")
+    _TIME_GROUPS = {
+        "Pipeline / frame": ["t_sam", "t_obj", "t_clip", "t_up"],
+        "Fusión O(n²)": ["t_fusion", "t_precompute_fusion", "t_descriptor_update", "t_loop_closure_refusion"],
+        "Criterios (s/ciclo)": ["t_crit_cooccurrence", "t_crit_centroid", "t_crit_cos_sim", "t_crit_overlap"],
+        "Pares / ciclo": ["n_instances_alive", "n_pairs_evaluated", "sc_cooccurrence", "sc_centroid", "sc_cos_sim", "sc_overlap"],
+    }
+    summary_rows = []
+    for _, row in df_timing_sel.iterrows():
+        eid = row["Experiment_ID"]
+        r = {"Experiment": eid}
+        for group, keys in _TIME_GROUPS.items():
+            for k in keys:
+                v = row.get(k, float("nan"))
+                is_int = k.startswith("n_") or k.startswith("sc_")
+                r[k] = f"{int(round(v)):,}" if is_int and pd.notna(v) else (f"{v:.4f}" if pd.notna(v) else "—")
+        summary_rows.append(r)
+    df_sum = pd.DataFrame(summary_rows)
+
+    def _timing_row_style(row):
+        eid = row["Experiment"]
+        return [f"background-color: {bg_map.get(eid, '')}; color: {fg_map.get(eid, '')}"] * len(row)
+
+    st.dataframe(df_sum.style.apply(_timing_row_style, axis=1), use_container_width=True, hide_index=True)
+
+    # ── Bar charts: key timings ────────────────────────────────────────────
+    st.subheader("Comparativa de tiempos clave (segundos, media por experimento)")
+    _KEY_TIMES = [k for k in ["t_sam", "t_clip", "t_fusion", "t_crit_overlap", "t_loop_closure_refusion"]
+                  if k in df_timing_sel.columns and df_timing_sel[k].notna().any()]
+    if _KEY_TIMES:
+        n_cols = min(3, len(_KEY_TIMES))
+        cols_t = st.columns(n_cols)
+        for i, key in enumerate(_KEY_TIMES):
+            with cols_t[i % n_cols]:
+                fig, ax = plt.subplots(figsize=(4, 3))
+                heights = [float(df_timing_sel[df_timing_sel["Experiment_ID"] == eid][key].iloc[0])
+                           if not df_timing_sel[df_timing_sel["Experiment_ID"] == eid].empty
+                           and pd.notna(df_timing_sel[df_timing_sel["Experiment_ID"] == eid][key].iloc[0])
+                           else 0.0
+                           for eid in selected]
+                colors = [color_map[eid] for eid in selected]
+                bars = ax.bar(range(len(selected)), heights, color=colors)
+                ymax = max(max(heights, default=0.01), 0.01)
+                ax.set_ylim(0, ymax * 1.3)
+                ax.set_xticks(range(len(selected)))
+                ax.set_xticklabels([letter_map[e] for e in selected], fontsize=9)
+                for bar, h in zip(bars, heights):
+                    if h > 0:
+                        ax.text(bar.get_x() + bar.get_width() / 2, h + ymax * 0.02,
+                                f"{h:.3f}s", ha="center", va="bottom", fontsize=8)
+                ax.set_title(key, fontsize=10)
+                ax.set_ylabel("s")
+                fig.tight_layout()
+                st.pyplot(fig)
+                plt.close(fig)
+
+    # ── Fusion criterion time breakdown ────────────────────────────────────
+    st.subheader("Desglose de tiempo por criterio de fusión")
+    _CRIT_KEYS = [k for k in ["t_crit_cooccurrence", "t_crit_centroid", "t_crit_cos_sim", "t_crit_overlap"]
+                  if k in df_timing_sel.columns]
+    if _CRIT_KEYS:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        x = np.arange(len(selected))
+        bar_w = 0.6 / max(len(_CRIT_KEYS), 1)
+        crit_colors = ["#e07070", "#70a0e0", "#70c070", "#c070d0"]
+        bottoms = np.zeros(len(selected))
+        for ci, ck in enumerate(_CRIT_KEYS):
+            vals = []
+            for eid in selected:
+                sub = df_timing_sel[df_timing_sel["Experiment_ID"] == eid]
+                v = float(sub[ck].iloc[0]) if not sub.empty and pd.notna(sub[ck].iloc[0]) else 0.0
+                vals.append(v)
+            vals = np.array(vals)
+            ax.bar(x, vals, bottom=bottoms, color=crit_colors[ci % len(crit_colors)],
+                   label=ck.replace("t_crit_", ""), width=0.5)
+            bottoms += vals
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{letter_map[e]}\n{e[:30]}" for e in selected], fontsize=7)
+        ax.set_ylabel("s / ciclo de fusión")
+        ax.legend(fontsize=8, loc="upper right")
+        ax.set_title("Tiempo por criterio (stacked)")
+        fig.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
+
+    # ── Pair filtering efficiency ──────────────────────────────────────────
+    st.subheader("Eficiencia de filtrado de pares")
+    _SC_KEYS = [k for k in ["sc_cooccurrence", "sc_centroid", "sc_cos_sim", "sc_overlap"]
+                if k in df_timing_sel.columns]
+    if _SC_KEYS and "n_pairs_evaluated" in df_timing_sel.columns:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        x = np.arange(len(selected))
+        crit_colors = ["#e07070", "#70a0e0", "#70c070", "#c070d0"]
+        bottoms = np.zeros(len(selected))
+        for ci, ck in enumerate(_SC_KEYS):
+            vals = []
+            for eid in selected:
+                sub = df_timing_sel[df_timing_sel["Experiment_ID"] == eid]
+                v = float(sub[ck].iloc[0]) if not sub.empty and pd.notna(sub[ck].iloc[0]) else 0.0
+                vals.append(v)
+            vals = np.array(vals)
+            ax.bar(x, vals, bottom=bottoms, color=crit_colors[ci % len(crit_colors)],
+                   label=ck.replace("sc_", "cut@"), width=0.5)
+            bottoms += vals
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{letter_map[e]}\n{e[:30]}" for e in selected], fontsize=7)
+        ax.set_ylabel("pares cortados / ciclo")
+        ax.legend(fontsize=8, loc="upper right")
+        ax.set_title("Short-circuits por criterio (pares/ciclo, stacked)")
+        fig.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
 
 
 # ── Per-class IoU heatmap ────────────────────────────────────────────────────

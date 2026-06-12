@@ -114,6 +114,34 @@ class Logger:
         ram_stats = np.asarray(self.stats["ram"])
         self.stats["max_ram"] = [ram_stats.max() if ram_stats.size > 0 else 0.0]
 
+    def load_stats_from(self, source_path: str) -> None:
+        """Load stats from a previous run's logger/ directory into self.stats.
+
+        Values are cast to float where possible. Keys not in self.stats are
+        added dynamically (same behaviour as log_ovo_stats). Missing files are
+        silently skipped — not every key is written by every run.
+        """
+        log_dir = Path(source_path) / "logger"
+        if not log_dir.exists():
+            print(f"Warning: no logger/ dir found at {source_path}, skipping stats load.")
+            return
+        for log_file in log_dir.glob("*.log"):
+            key = log_file.stem
+            lines = log_file.read_text().splitlines()
+            values = []
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    v = int(line) if key == "n_obj" else float(line)
+                    values.append([v] if key == "n_obj" else v)
+                except ValueError:
+                    pass
+            if key not in self.stats:
+                self.stats[key] = []
+            self.stats[key].extend(values)
+
     def write_stats(self) -> None:
         """
         Writes statistics to log files. writes each statistic to a separate log file. The log files are named after the keys in the 
@@ -122,8 +150,9 @@ class Logger:
 
         for key, stat in self.stats.items():
             if key == "n_obj":
-                continue
-            stat_list = [str(i) for i in stat]
+                stat_list = [str(v[0]) if isinstance(v, list) else str(v) for v in stat]
+            else:
+                stat_list = [str(i) for i in stat]
             with open(self.output_path/"logger"/f"{key}.log", "w") as f:
                 f.write('\n'.join(stat_list))
 

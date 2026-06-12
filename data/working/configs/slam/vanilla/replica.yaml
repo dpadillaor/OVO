@@ -1,4 +1,4 @@
-dataset_name: "replica"
+dataset_name: replica
 mapping:
   max_frame_points: 1e5
   k_pooling: 3

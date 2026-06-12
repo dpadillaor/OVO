@@ -8,6 +8,7 @@ from .criteria import (
     AabbDistanceCriterion,
     CosSimilarityCriterion,
     PointOverlapCriterion,
+    PointOverlapOldCriterion,
 )
 from .strategy import FusionStrategy
 
@@ -40,7 +41,9 @@ def _build_criterion(name: str, config: Dict[str, Any], feature_attr: Optional[s
         return CosSimilarityCriterion(feature_attr, config.get("th_cossim", 0.81))
     if name == "overlap":
         return PointOverlapCriterion(config.get("th_points", 0.1))
-    raise ValueError(f"Unknown criterion: {name!r}. Valid: cooccurrence, centroid, aabb, cos_sim, overlap")
+    if name == "overlap_old":
+        return PointOverlapOldCriterion(config.get("th_points", 0.1))
+    raise ValueError(f"Unknown criterion: {name!r}. Valid: cooccurrence, centroid, aabb, cos_sim, overlap, overlap_old")
 
 
 def create_fusion_strategy(config: Dict[str, Any], cooccurrence_graph: CooccurrenceGraph) -> FusionStrategy:

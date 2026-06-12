@@ -443,6 +443,76 @@ def load_experiments(
     return df_exp, df_class
 
 
+_TIMING_LOG_KEYS = [
+    "t_sam", "t_obj", "t_clip", "t_up",
+    "t_fusion", "t_precompute_fusion", "t_descriptor_update",
+    "t_crit_cooccurrence", "t_crit_centroid", "t_crit_cos_sim", "t_crit_overlap",
+    "t_loop_closure_refusion",
+    "n_instances_alive", "n_pairs_evaluated",
+    "sc_cooccurrence", "sc_centroid", "sc_cos_sim", "sc_overlap",
+]
+
+
+def _read_log_mean(log_path: Path) -> float | None:
+    """Read a .log file (one float per line) and return the mean. None if missing/empty."""
+    if not log_path.is_file():
+        return None
+    vals = []
+    for line in log_path.read_text().splitlines():
+        line = line.strip()
+        if line:
+            try:
+                vals.append(float(line))
+            except ValueError:
+                pass
+    return float(np.mean(vals)) if vals else None
+
+
+def load_timing_stats(output_dir: Path, dataset_filter: str | None = "Replica") -> pd.DataFrame:
+    """Load timing/performance metrics from logger/*.log files.
+
+    Returns one row per experiment with mean values averaged across scenes.
+    Columns: Experiment_ID + one column per timing key (NaN if not present).
+    """
+    output_dir = Path(output_dir)
+    rows: list[dict] = []
+
+    for dataset_dir in sorted(output_dir.iterdir()):
+        if not dataset_dir.is_dir():
+            continue
+        if dataset_filter and dataset_dir.name != dataset_filter:
+            continue
+
+        for exp_folder in sorted(dataset_dir.iterdir()):
+            if not exp_folder.is_dir():
+                continue
+            if parse_experiment_name(exp_folder.name) is None:
+                continue
+
+            scene_means: dict[str, list[float]] = {k: [] for k in _TIMING_LOG_KEYS}
+
+            for scene_dir in sorted(exp_folder.iterdir()):
+                if not scene_dir.is_dir():
+                    continue
+                logger_dir = scene_dir / "logger"
+                if not logger_dir.is_dir():
+                    continue
+                for key in _TIMING_LOG_KEYS:
+                    val = _read_log_mean(logger_dir / f"{key}.log")
+                    if val is not None:
+                        scene_means[key].append(val)
+
+            row: dict = {"Experiment_ID": exp_folder.name}
+            for key in _TIMING_LOG_KEYS:
+                vals = scene_means[key]
+                row[key] = float(np.mean(vals)) if vals else float("nan")
+            rows.append(row)
+
+    if not rows:
+        return pd.DataFrame(columns=["Experiment_ID"] + _TIMING_LOG_KEYS)
+    return pd.DataFrame(rows)
+
+
 # ---------------------------------------------------------------------------
 # Section 2 — Filtering helpers (intended for GUI dropdowns)
 # ---------------------------------------------------------------------------

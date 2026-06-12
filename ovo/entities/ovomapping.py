@@ -80,7 +80,7 @@ class OVOSemMap():
 
         # Visualization configuration.
         self.stream = config["vis"]["stream"]
-        self.show_stream = config["vis"]["show_stream"]
+        self.show_stream = config["vis"].get("show_stream", False)
         self.vis_type = config["vis"].get("type", "open3d")
         self.rerun_mode = config["vis"].get("rerun_mode", "stream")  # "stream" or "fusion"
         self.rerun_visual_mode = resolve_rerun_visual_mode(config["vis"].get("rerun_visual_mode", None), self.show_stream)
@@ -398,11 +398,20 @@ class OVOSemMap():
         # Send "before fusion" snapshot to stream visualizer
         self._send_stream_frame(frame_id, mpqueue)
 
+        noise_cfg = self.config.get("noise", {})
+        if noise_cfg.get("jump_drift_enabled", False) and noise_cfg.get("save_pre_fusion_checkpoint", False):
+            self._save_pre_fusion_checkpoint(frame_id)
+
         updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)
-        self.logger.log_fusion_timings(t_fusion, criterion_times)
+        _EXTRA_STAT_KEYS = {"t_precompute_fusion", "t_descriptor_update", "n_instances_alive", "n_pairs_evaluated"}
+        extra_stats = {k: v for k, v in criterion_times.items() if k in _EXTRA_STAT_KEYS or k.startswith("sc_")}
+        crit_only = {k: v for k, v in criterion_times.items() if k not in extra_stats}
+        self.logger.log_fusion_timings(t_fusion, crit_only)
+        if extra_stats:
+            self.logger.log_ovo_stats(extra_stats)
 
         if updated_points_ins_ids is not None:
             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
@@ -447,7 +456,103 @@ class OVOSemMap():
         torch.cuda.synchronize()
         t_lc = time.time() - t_lc_i
         print(f"Sem LC update took {t_lc};")
+        self.logger.log_ovo_stats({"t_loop_closure_refusion": round(t_lc, 3)})
         return t_lc
+
+    def _save_pre_fusion_checkpoint(self, frame_id: int) -> None:
+        """Snapshot geometric + semantic state just before fusion runs.
+
+        Drains the segmentation queue first so the saved state is complete.
+        Only called when jump_drift_enabled and save_pre_fusion_checkpoint are set.
+        Saved to data/checkpoints/<experiment>/<scene>/pre_fusion.ckpt.
+        """
+        self.ovo.complete_semantic_info()
+
+        noise_cfg = self.config.get("noise", {})
+        ckpt_root = Path("data/checkpoints")
+        # Mirror output_path structure under data/checkpoints/
+        try:
+            rel = self.output_path.relative_to("data/output")
+        except ValueError:
+            rel = Path(self.output_path.name)
+        ckpt_dir = ckpt_root / rel
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+        jump_events = []
+        controller = getattr(self.slam_backbone, "jump_controller", None)
+        if controller is not None:
+            for cfg in controller.jump_configs:
+                t_mag = torch.norm(cfg["translation"]).item()
+                R = cfg["rotation_matrix"]
+                angle_deg = (torch.acos(torch.clamp((torch.trace(R) - 1) / 2, -1.0, 1.0)) * 180 / torch.pi).item()
+                jump_events.append({
+                    "kf_index": cfg["kf_index"],
+                    "translation": cfg["translation"].cpu().tolist(),
+                    "translation_magnitude": t_mag,
+                    "rotation_magnitude_deg": angle_deg,
+                })
+
+        ckpt = {
+            "frame_id": frame_id,
+            "jump_events": jump_events,
+            "map_params": self.slam_backbone.get_map_dict(),
+            "cam_params": self.slam_backbone.get_cam_dict(),
+            "kfs_params": self.slam_backbone.get_kfs_dict(),
+            "ovo_params": self.ovo.capture_dict(debug_info=True),
+            "config": self.config,
+        }
+        ckpt_path = ckpt_dir / "pre_fusion.ckpt"
+        io_utils.save_dict_to_ckpt(ckpt, "pre_fusion.ckpt", directory=ckpt_dir)
+        print(f"Pre-fusion checkpoint saved to {ckpt_path}")
+
+    def run_fusion_from_checkpoint(self, ckpt_path: str) -> None:
+        """Restore pre-fusion state from a checkpoint and run only the fusion step.
+
+        Replaces the normal run() flow: no tracking, no mapping, no segmentation.
+        Useful for re-running fusion with different parameters on a saved jump-drift state.
+        """
+        ckpt_path = Path(ckpt_path)
+        assert ckpt_path.exists(), f"Checkpoint not found: {ckpt_path}"
+        ckpt = torch.load(ckpt_path, map_location=self.device, weights_only=False)
+
+        self.slam_backbone.set_map_dict(ckpt["map_params"])
+        self.slam_backbone.set_cam_dict(ckpt["cam_params"])
+        self.slam_backbone.set_kfs_dict(ckpt["kfs_params"])
+        self.ovo.restore_dict(ckpt["ovo_params"], debug_info=True)
+
+        source_output = ckpt["config"].get("output_path")
+        if source_output:
+            self.logger.load_stats_from(source_output)
+
+        map_data = self.slam_backbone.get_map()
+        kfs = self.slam_backbone.get_kfs()
+        frame_id = ckpt["frame_id"]
+
+        print(f"Running fusion from checkpoint (frame_id={frame_id})...")
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs)
+
+        if fusion_decisions:
+            self.logger.log_fusion_decisions(frame_id, fusion_decisions)
+
+        if updated_points_ins_ids is not None:
+            self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+
+        _EXTRA_STAT_KEYS = {"t_precompute_fusion", "t_descriptor_update", "n_instances_alive", "n_pairs_evaluated"}
+        extra_stats = {k: v for k, v in criterion_times.items() if k in _EXTRA_STAT_KEYS or k.startswith("sc_")}
+        crit_only = {k: v for k, v in criterion_times.items() if k not in extra_stats}
+        self.logger.log_fusion_timings(t_fusion, crit_only)
+        if extra_stats:
+            self.logger.log_ovo_stats(extra_stats)
+        self.logger.log_ovo_stats({"t_loop_closure_refusion": round(t_fusion, 3)})
+
+        self.logger.write_stats()
+        self.logger.print_final_stats()
+        self.save_representation()
+
+        self.ovo.cpu()
+        del self.slam_backbone, self.ovo
+        torch.cuda.empty_cache()
+        print(f"Fusion replay complete. Results saved to {self.output_path}")
     
 
 
@@ -525,8 +630,11 @@ class OVOSemMap():
                 
         if 'fps' not in dir():
             fps = 0
+            t_end = time.time()
         self.logger.log_fps(fps)
-        self.logger.log_spf(spf)
+        for s in spf:
+            self.logger.log_spf(s)
+        self.logger.log_ovo_stats({"total_time": round(t_end - t_start, 3)})
         self.logger.log_max_memory_usage()
         self.logger.write_stats()
         self.logger.print_final_stats()

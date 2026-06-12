@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OVO Logger — Variables Reference</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.6; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 1.8rem; font-weight: 700; color: #f8fafc; margin-bottom: 6px; }
+  .subtitle { color: #94a3b8; font-size: 0.95rem; margin-bottom: 40px; }
+  h2 { font-size: 1.1rem; font-weight: 600; color: #7dd3fc; text-transform: uppercase; letter-spacing: 0.08em; margin: 36px 0 14px; padding-bottom: 6px; border-bottom: 1px solid #1e293b; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  thead tr { background: #1e293b; }
+  thead th { padding: 10px 14px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  tbody tr { border-bottom: 1px solid #1e293b; }
+  tbody tr:hover { background: #161b27; }
+  td { padding: 10px 14px; vertical-align: top; }
+  .key { font-family: 'Courier New', monospace; color: #a5f3fc; font-size: 0.85rem; white-space: nowrap; }
+  .file { font-family: 'Courier New', monospace; color: #86efac; font-size: 0.82rem; }
+  .fmt { font-family: 'Courier New', monospace; color: #fbbf24; font-size: 0.82rem; }
+  .desc { color: #cbd5e1; }
+  .note { font-size: 0.78rem; color: #64748b; margin-top: 3px; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin-right: 4px; }
+  .badge-per-frame { background: #1e3a5f; color: #7dd3fc; }
+  .badge-once { background: #1a3328; color: #6ee7b7; }
+  .badge-dynamic { background: #3b1f2b; color: #f9a8d4; }
+  .badge-csv { background: #2d2a1a; color: #fde68a; }
+  .section-note { background: #1e293b; border-left: 3px solid #334155; padding: 10px 14px; border-radius: 4px; font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
+  code { background: #1e293b; padding: 1px 5px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 0.83rem; color: #e2e8f0; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>OVO Logger — Variables Reference</h1>
+  <p class="subtitle">All variables recorded by <code>ovo/entities/logger.py</code> across a single scene run.</p>
+
+  <div class="legend">
+    <span class="badge badge-per-frame">per-frame</span> logged every segmented/CLIP frame
+    <span class="badge badge-once">once</span> logged once at end of sequence
+    <span class="badge badge-dynamic">dynamic</span> key created at runtime (not pre-declared)
+    <span class="badge badge-csv">CSV</span> separate file, not a .log
+  </div>
+
+  <!-- ─── TIMING: PER-FRAME SEMANTIC ─── -->
+  <h2>Timing — Per-frame semantic pipeline</h2>
+  <div class="section-note">Logged inside <code>ovo.py</code> every <code>segment_every</code> frames (default 10). One value per qualifying frame.</div>
+  <table>
+    <thead><tr><th>Key / File</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">t_sam</span><br><span class="file">logger/t_sam.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Time for SAM segmentation (mask generation). One entry per segmented frame.</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_obj</span><br><span class="file">logger/t_obj.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Time for object tracking / instance matching against existing 3D map.</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_clip</span><br><span class="file">logger/t_clip.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Time for CLIP feature extraction per keyframe (processed from queue, may lag behind segment step).</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_up</span><br><span class="file">logger/t_up.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Time to update instance CLIP descriptors after extraction.</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_seg</span><br><span class="file">logger/t_seg.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Reserved for segmentation time (currently not populated — always empty).</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── COUNTS: PER-FRAME ─── -->
+  <h2>Counts — Per-frame</h2>
+  <table>
+    <thead><tr><th>Key / File</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">frame_id</span><br><span class="file">logger/frame_id.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Frame index. Logged twice per qualifying frame: once in the segment step (with t_sam/t_obj), once in the CLIP step (with t_clip/t_up). Total entries ≈ 2× segment frames.
+          <div class="note">With segment_every=10, frame 2000 → ~400 entries total.</div>
+        </td>
+      </tr>
+      <tr>
+        <td><span class="key">n_matches</span><br><span class="file">logger/n_matches.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Number of 3D points matched to 2D pixels in the current frame (depth-based deduplication). High values indicate dense overlap with existing map.</td>
+      </tr>
+      <tr>
+        <td><span class="key">n_obj</span><br><span class="file">(not written)</span></td>
+        <td><span class="fmt">list[int]</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Number of new instances created per frame. Stored in memory but <strong>skipped by <code>write_stats</code></strong> — never persisted to disk.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── TIMING: FUSION (END-OF-SEQUENCE) ─── -->
+  <h2>Timing — Semantic fusion (end-of-sequence)</h2>
+  <div class="section-note">Logged once at end of sequence when <code>map_updated = True</code> triggers <code>ovo.update_map()</code>. Each file contains exactly 1 value. <code>wc -l</code> reports 0 because <code>'\n'.join([val])</code> produces no trailing newline — use <code>cat</code> to read.</div>
+  <table>
+    <thead><tr><th>Key / File</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">t_fusion</span><br><span class="file">logger/t_fusion.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Total time for the full fusion pass (precompute + all criterion evaluations + descriptor update).</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_loop_closure_refusion</span><br><span class="file">logger/t_loop_closure_refusion.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Wall-clock time for the entire map update step (includes fusion + SLAM map access + post-processing). Slightly larger than t_fusion.</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_precompute_fusion</span><br><span class="file">logger/t_precompute_fusion.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Time to extract point clouds and centroids for all alive instances before pairwise evaluation.</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_descriptor_update</span><br><span class="file">logger/t_descriptor_update.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Time to re-aggregate descriptors (CLIP features) of surviving instances after merges.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── TIMING: PER-CRITERION ─── -->
+  <h2>Timing — Per fusion criterion</h2>
+  <div class="section-note">Accumulated time spent inside each criterion across all evaluated pairs. One value per file (end-of-sequence). Criterion chain default: <code>cooccurrence → centroid → cos_sim → overlap</code>. Early-exit means later criteria are only timed for pairs that passed earlier ones.</div>
+  <table>
+    <thead><tr><th>Key / File</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">t_crit_cooccurrence</span><br><span class="file">logger/t_crit_cooccurrence.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Total time in cooccurrence veto. Runs on all pairs. Vetoes pairs sharing &gt; N keyframes (they are different objects seen together).</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_crit_centroid</span><br><span class="file">logger/t_crit_centroid.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Total time in centroid distance criterion. Rejects pairs with centroid distance &gt; <code>th_centroid</code> (default 1.5 m).</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_crit_aabb</span><br><span class="file">logger/t_crit_aabb.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Total time in AABB distance criterion. Only active if <code>aabb</code> is in <code>fusion_criteria</code>. Not in default chain — file is empty in standard runs.</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_crit_cos_sim</span><br><span class="file">logger/t_crit_cos_sim.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Total time in cosine similarity criterion. Compares CLIP (or other) feature vectors. Rejects if similarity &lt; <code>th_cossim</code> (default 0.81).</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_crit_overlap</span><br><span class="file">logger/t_crit_overlap.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Total time in point-overlap criterion. Most expensive criterion — computes 3D point cloud overlap ratio. Accepts/rejects based on <code>th_points</code> (default 0.1).</td>
+      </tr>
+      <tr>
+        <td><span class="key">t_crit_p_dist</span><br><span class="file">logger/t_crit_p_dist.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Legacy key (pre-declared). Equivalent to <code>t_crit_overlap</code> in older code. Always empty in current runs.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── COUNTS: FUSION ─── -->
+  <h2>Counts — Fusion statistics</h2>
+  <table>
+    <thead><tr><th>Key / File</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">n_instances_alive</span><br><span class="file">logger/n_instances_alive.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Number of active 3D instances at the time fusion runs (before any merges).</td>
+      </tr>
+      <tr>
+        <td><span class="key">n_pairs_evaluated</span><br><span class="file">logger/n_pairs_evaluated.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Total number of instance pairs evaluated by the fusion strategy (brute-force O(n²)/2).</td>
+      </tr>
+      <tr>
+        <td><span class="key">sc_cooccurrence</span><br><span class="file">logger/sc_cooccurrence.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Pairs short-circuited (decided) by the cooccurrence criterion (either accepted or rejected early).</td>
+      </tr>
+      <tr>
+        <td><span class="key">sc_centroid</span><br><span class="file">logger/sc_centroid.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Pairs short-circuited by centroid distance. This is typically the largest count — most pairs are too far apart.</td>
+      </tr>
+      <tr>
+        <td><span class="key">sc_cos_sim</span><br><span class="file">logger/sc_cos_sim.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Pairs short-circuited by cosine similarity (semantically dissimilar pairs rejected before expensive overlap check).</td>
+      </tr>
+      <tr>
+        <td><span class="key">sc_overlap</span><br><span class="file">logger/sc_overlap.log</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-once badge-dynamic">once · dynamic</span></td>
+        <td class="desc">Pairs decided by point-cloud overlap (final criterion — both accepted merges and rejections). sc_cooccurrence + sc_centroid + sc_cos_sim + sc_overlap = n_pairs_evaluated.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── SYSTEM / PERFORMANCE ─── -->
+  <h2>System &amp; performance</h2>
+  <table>
+    <thead><tr><th>Key / File</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">ram</span><br><span class="file">logger/ram.log</span></td>
+        <td><span class="fmt">float (GB)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Process RSS memory at time of each memory sample (called every mapping frame).</td>
+      </tr>
+      <tr>
+        <td><span class="key">vram</span><br><span class="file">logger/vram.log</span></td>
+        <td><span class="fmt">float (GB)</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">GPU allocated memory (torch.cuda.memory_allocated) at time of each memory sample.</td>
+      </tr>
+      <tr>
+        <td><span class="key">max_ram</span><br><span class="file">logger/max_ram.log</span></td>
+        <td><span class="fmt">float (GB)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Peak RSS memory across all sampled frames.</td>
+      </tr>
+      <tr>
+        <td><span class="key">max_vram</span><br><span class="file">logger/max_vram.log</span></td>
+        <td><span class="fmt">float (GB)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Peak GPU memory ever allocated (torch.cuda.max_memory_allocated) for the entire run.</td>
+      </tr>
+      <tr>
+        <td><span class="key">avg_fps</span><br><span class="file">logger/avg_fps.log</span></td>
+        <td><span class="fmt">float</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Average frames per second = total_frames / segment_every / total_time.</td>
+      </tr>
+      <tr>
+        <td><span class="key">spf</span><br><span class="file">logger/spf.log</span></td>
+        <td><span class="fmt">float (seconds) — one per active frame</span></td>
+        <td><span class="badge badge-per-frame">per-frame</span></td>
+        <td class="desc">Seconds per frame: t_sem + t_lc for frames where either step ran (&gt; 0). Logged as individual values (one entry per frame after fix).</td>
+      </tr>
+      <tr>
+        <td><span class="key">total_time</span><br><span class="file">logger/total_time.log</span></td>
+        <td><span class="fmt">float (seconds)</span></td>
+        <td><span class="badge badge-once">once</span></td>
+        <td class="desc">Reserved. Pre-declared but never populated — always empty.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── FUSION DECISIONS CSV ─── -->
+  <h2>Fusion decisions — fusion_decisions.csv</h2>
+  <div class="section-note">Appended incrementally to disk during each fusion event. Survives crashes. One row per evaluated pair that reached a decision.</div>
+  <table>
+    <thead><tr><th>Column</th><th>Format</th><th>Badge</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="key">frame_id</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Frame at which this fusion event was triggered.</td>
+      </tr>
+      <tr>
+        <td><span class="key">result</span></td>
+        <td><span class="fmt">ACCEPTED | REJECTED</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Whether the pair was merged into one instance.</td>
+      </tr>
+      <tr>
+        <td><span class="key">i1</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">ID of first instance in the pair.</td>
+      </tr>
+      <tr>
+        <td><span class="key">i2</span></td>
+        <td><span class="fmt">int</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">ID of second instance. On ACCEPTED, i2 is merged into i1 and deleted.</td>
+      </tr>
+      <tr>
+        <td><span class="key">reason</span></td>
+        <td><span class="fmt">string: criterion name</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Which criterion short-circuited this pair (e.g. <code>centroid</code>, <code>cooccurrence</code>, <code>overlap</code>).</td>
+      </tr>
+      <tr>
+        <td><span class="key">centroid_dist</span></td>
+        <td><span class="fmt">float (metres) | empty</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Euclidean distance between instance centroids. Empty if pair was rejected before centroid was computed.</td>
+      </tr>
+      <tr>
+        <td><span class="key">aabb_dist</span></td>
+        <td><span class="fmt">float (metres) | empty</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">AABB-to-AABB distance. Only populated if <code>aabb</code> criterion is active.</td>
+      </tr>
+      <tr>
+        <td><span class="key">cos_sim</span></td>
+        <td><span class="fmt">float [−1, 1] | empty</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Cosine similarity between instance feature vectors. Empty if pair was rejected before reaching cos_sim criterion.</td>
+      </tr>
+      <tr>
+        <td><span class="key">p_dist</span></td>
+        <td><span class="fmt">float [0, 1] | empty</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Point-cloud overlap ratio computed by the overlap criterion. Empty if pair was rejected earlier.</td>
+      </tr>
+      <tr>
+        <td><span class="key">shared_kfs</span></td>
+        <td><span class="fmt">int | empty</span></td>
+        <td><span class="badge badge-csv">CSV</span></td>
+        <td class="desc">Number of keyframes in which both instances co-occurred. Used by cooccurrence veto. Empty if cooccurrence criterion is not active.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─── FILE FORMAT NOTES ─── -->
+  <h2>File format notes</h2>
+  <table>
+    <thead><tr><th>Detail</th><th>Explanation</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="key">.log files</td>
+        <td class="desc">Plain text, one value per line. Written by <code>write_stats()</code> at end of run using <code>'\n'.join([...])</code> — no trailing newline. <strong><code>wc -l</code> will report 0 for single-entry files</strong>; use <code>cat</code> or check file size.</td>
+      </tr>
+      <tr>
+        <td class="key">dynamic keys</td>
+        <td class="desc">Keys marked <span class="badge badge-dynamic">dynamic</span> are created in <code>self.stats</code> at runtime when first logged. They exist in output only if the relevant code path ran (e.g. fusion must have triggered for sc_* and t_crit_overlap to appear).</td>
+      </tr>
+      <tr>
+        <td class="key">fusion_decisions.csv</td>
+        <td class="desc">Appended per fusion event (not buffered). Survives process crash. Initialized (truncated) at Logger construction, so re-running the same output folder overwrites it.</td>
+      </tr>
+      <tr>
+        <td class="key">n_obj</td>
+        <td class="desc">Intentionally skipped by <code>write_stats</code> — it contains a list-of-lists (one list per frame). Not currently persisted to disk.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:40px; color:#475569; font-size:0.8rem;">Generated 2026-06-11 · OVO project · <code>ovo/entities/logger.py</code></p>
+</div>
+</body>
+</html>

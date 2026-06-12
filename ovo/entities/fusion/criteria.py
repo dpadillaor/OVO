@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional
 
-from ...utils.instance_utils import compute_pcd_overlap, compute_centroid_distance, compute_aabb_distance
+from ...utils.instance_utils import compute_pcd_overlap, compute_pcd_old_overlap, compute_centroid_distance, compute_aabb_distance
 from ...utils.cooccurrence_graph import CooccurrenceGraph
 
 import logging
@@ -117,3 +117,25 @@ class PointOverlapCriterion(Criterion):
             return True, {"result": "ACCEPTED", "i1": i1.id, "i2": i2.id, "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(p_dist), "shared_kfs": shared_kfs}
         logger.debug("REJECTED i1=%s i2=%s | overlap: p_dist=%.3f (cos_sim=%s centroid_dist=%s)", i1.id, i2.id, p_dist, cos_sim, centroid_dist)
         return False, {"result": "REJECTED", "i1": i1.id, "i2": i2.id, "reason": "overlap", "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(p_dist), "shared_kfs": shared_kfs}
+
+
+class PointOverlapOldCriterion(Criterion):
+    """Asymmetric overlap: fraction of points1 within th_points of pcd2."""
+    name = "overlap_old"
+
+    def __init__(self, threshold: float):
+        self.threshold = threshold
+
+    def check(self, i1, i2, p1, c1, p2, c2, ctx):
+        p_dist = compute_pcd_old_overlap(p1, p2, self.threshold)
+        ctx["p_dist"] = float(p_dist)
+        cos_sim = ctx.get("cos_sim")
+        centroid_dist = ctx.get("centroid_dist")
+        shared_kfs = ctx.get("shared_kfs")
+
+        accepted = p_dist > 0.5 or (cos_sim is not None and cos_sim > 0.9 and p_dist > 0.2)
+        if accepted:
+            logger.debug("ACCEPTED i1=%s i2=%s | cos_sim=%s centroid_dist=%s p_dist=%.3f (overlap_old)", i1.id, i2.id, cos_sim, centroid_dist, p_dist)
+            return True, {"result": "ACCEPTED", "i1": i1.id, "i2": i2.id, "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(p_dist), "shared_kfs": shared_kfs}
+        logger.debug("REJECTED i1=%s i2=%s | overlap_old: p_dist=%.3f (cos_sim=%s centroid_dist=%s)", i1.id, i2.id, p_dist, cos_sim, centroid_dist)
+        return False, {"result": "REJECTED", "i1": i1.id, "i2": i2.id, "reason": "overlap_old", "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(p_dist), "shared_kfs": shared_kfs}

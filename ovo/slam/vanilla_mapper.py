@@ -102,6 +102,27 @@ class VanillaMapper():
     def get_kfs(self) -> Dict[int, Dict[str, Any]]:
         return self.kfs
 
+    def get_kfs_dict(self) -> Dict[str, Any]:
+        """Serialize kfs to CPU-tensors for checkpointing."""
+        out = {}
+        for kf_id, kf in self.kfs.items():
+            out[kf_id] = {
+                "id": kf["id"],
+                "pcd_idxs": kf["pcd_idxs"],
+                "pose": kf["pose"].clone().detach().cpu(),
+            }
+        return out
+
+    def set_kfs_dict(self, kfs_dict: Dict[str, Any]) -> None:
+        """Restore kfs from a checkpointed dict."""
+        self.kfs = {}
+        for kf_id, kf in kfs_dict.items():
+            self.kfs[int(kf_id)] = {
+                "id": kf["id"],
+                "pcd_idxs": kf["pcd_idxs"],
+                "pose": kf["pose"].to(self.device),
+            }
+
     def get_map_dict(self) -> Dict[str, Any]:
         return {
             "xyz": self.pcd.clone().detach().cpu(),

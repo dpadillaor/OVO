@@ -526,7 +526,7 @@ class OVO:
         print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
 
         # 3. Updated saved info
-        self._update_descriptors_after_fusion(fused_objects)
+        criterion_times["t_descriptor_update"] = round(self._update_descriptors_after_fusion(fused_objects), 4)
 
         self.objects = new_objects
         # 4. Update object descriptors
@@ -558,9 +558,12 @@ class OVO:
         t_fuse_start = time.time()
         _, _, points_ins_ids = map_data
         obj_pcds = {}
+        t_pre = time.time()
         for instance in objects_list:
             obj_pcd = points_3d[points_ins_ids == instance.id]
             obj_pcds[instance.id] = [obj_pcd, obj_pcd.mean(axis=0)]
+        t_precompute_fusion = time.time() - t_pre
+        n_instances_alive = len(objects_list)
 
         objects = {}
         fused_objects = {}
@@ -581,14 +584,17 @@ class OVO:
         t_fusion = time.time() - t_fuse_start
         decisions = self.fusion_strategy.pop_decisions()
         criterion_times = self.fusion_strategy.pop_timings()
+        criterion_times["t_precompute_fusion"] = round(t_precompute_fusion, 4)
+        criterion_times["n_instances_alive"] = n_instances_alive
         return objects, fused_objects, points_ins_ids, decisions, t_fusion, criterion_times
 
-    def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> None:
+    def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> float:
         """
         Update keyframe descriptors and fusion encoder states after instance fusion.
         Args:
             - fused_objects: Dictionary mapping {deleted_instance_id: survivor_instance_id}.
         """
+        t0 = time.time()
         for id2, id1 in fused_objects.items():
             # Access old state (self.objects) before it is updated
             for kf in self.objects[id2].kfs_ids:
@@ -603,7 +609,8 @@ class OVO:
                 # Handle Fusion Encoder descriptors (PE, DINO, SAM3, etc.)
                 if self.fusion_encoder is not None:
                     self.fusion_encoder.transfer_on_merge([id2], id1, self.keyframes)
-    
+        return time.time() - t0
+
     @profil
     def _extract_clip(self, image: torch.Tensor, binary_maps: torch.Tensor) -> List[Any]:
         """Profiled call to self.clip_generator.extract_clip. Computes a CLIP vector for each mask of the segmented image.
@@ -763,7 +770,8 @@ class OVO:
                   the dictionary will also include frame IDs, default object maps, and object descriptors.
         """
         scene_dict = {
-            "ins_3d_ids": np.asarray(list(self.objects.keys()))
+            "ins_3d_ids": np.asarray(list(self.objects.keys())),
+            "cooccurrence_graph": self.cooccurrence.to_dict(),
         }
         for obj in self.objects.values():
             scene_dict.update(obj.export(debug_info))
@@ -798,6 +806,9 @@ class OVO:
             obj = Instance3D(i)
             obj.restore(scene_dict, debug_info)
             self.objects[obj.id] = obj
+        if "cooccurrence_graph" in scene_dict:
+            self.cooccurrence = CooccurrenceGraph.from_dict(scene_dict["cooccurrence_graph"])
+            self.fusion_strategy = create_fusion_strategy(self.config, self.cooccurrence)
         if debug_info:
             self.keyframes["frame_id"] = list(scene_dict["frame_id"])
             self.keyframes["ins_maps"] = [x.squeeze() for x in np.split(scene_dict["ins_map"], len(self.keyframes["frame_id"]))]

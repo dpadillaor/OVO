@@ -47,6 +47,8 @@ experiments:
     #   noise:
     #     translation_noise_std: <float>
     #     rotation_noise_std: <float>
+    # restore_pre_fusion_checkpoint: data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt
+    # When set, the run stage skips SLAM entirely and replays only fusion from the checkpoint.
 ```
 
 ### Experiment name convention
@@ -103,7 +105,7 @@ slam_config:
     translation_noise_std: 0.001   # metres; common values: 0.001, 0.0025, 0.005, 0.0075, 0.01, 0.05
     rotation_noise_std: 0.01       # degrees; common value: 0.01
 ```
-The runner writes noise to `ovo.yaml > noise:` automatically and sets `noise_enabled: true`.
+The runner merges noise into the per-experiment temp config automatically and sets `noise_enabled: true`.
 
 #### Simulated + jump drift
 Token: `GTJump-J{n}` where `n` = number of jumps (e.g. `GTJump-J3`)
@@ -130,6 +132,41 @@ Each jump entry supports either explicit vectors or random magnitudes:
 - `rotation: [rx, ry, rz]` — explicit euler degrees, OR `rotation_magnitude: float` — random axis
 
 `noise_enabled` must NOT be set (jump drift uses `jump_drift_enabled`, a separate flag).
+
+##### Pre-fusion checkpoint (optional)
+Add `save_pre_fusion_checkpoint: true` to save the geometric + semantic state just before fusion runs. Saved to `data/checkpoints/<experiment>/<scene>/pre_fusion.ckpt`. Enables replaying only the fusion step with different parameters via `scripts/replay_fusion.py`.
+
+```yaml
+slam_config:
+  noise:
+    jump_drift_enabled: true
+    save_pre_fusion_checkpoint: true
+    jumps:
+      - ...
+```
+
+Replay with different fusion config:
+```bash
+python scripts/replay_fusion.py \
+  --checkpoint data/checkpoints/<experiment>/<scene>/pre_fusion.ckpt \
+  --experiment-name <new_experiment_name> \
+  --fusion-config data/working/configs/Replica/new_fusion.yaml
+```
+Then run `--segment --eval` on the new experiment as normal.
+
+Alternatively, replay via the batch runner manifest (integrates with segment/eval stages):
+```yaml
+experiments:
+  - label: my-replay
+    scenes_id: office0
+    stages: [run, segment, eval]
+    restore_pre_fusion_checkpoint: data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt
+    ovo_config:
+      semantic:
+        fusion_method: clip
+        # override fusion params here
+```
+When `restore_pre_fusion_checkpoint` is set, the `run` stage skips SLAM entirely and runs only fusion from the checkpoint.
 
 #### ORB-SLAM3 (real SLAM, no noise)
 Token: `ORBSLAM3`
@@ -202,7 +239,8 @@ Available criteria (run in order listed):
 | `centroid` | Rejects pairs with centroid distance > `th_centroid` |
 | `aabb` | Rejects pairs whose axis-aligned bounding boxes are > `th_aabb` apart (more robust than centroid for elongated objects) |
 | `cos_sim` | Rejects pairs with cosine similarity < `th_cossim` |
-| `overlap` | Accepts/rejects based on point cloud overlap > 0.5 (or > 0.2 if cos_sim > 0.9) |
+| `overlap` | Symmetric: fraction of smaller cloud's points within `th_points` of larger cloud. Accepts if > 0.5 (or > 0.2 if cos_sim > 0.9) |
+| `overlap_old` | Asymmetric: fraction of points1 within `th_points` of pcd2 (not normalized by cloud size). Same accept thresholds as `overlap`. Use to compare against legacy behaviour. |
 
 **Note:** the experiment name token only encodes `fusion_method`. Use `label` to distinguish experiments with custom chains (e.g. `clip-no-cooc`).
 
@@ -252,12 +290,33 @@ These live under `ovo_config.semantic:` and override `ovo.yaml > semantic:`.
 
 | Value | What it does |
 |---|---|
-| `run` | Runs OVO on the scene, produces `ovo_map.ckpt` |
+| `run` | Runs OVO on the scene, produces `ovo_map.ckpt`. If `restore_pre_fusion_checkpoint` is set, skips SLAM and replays only fusion from the checkpoint. |
 | `segment` | Runs instance segmentation on the saved map |
 | `eval` | Semantic evaluation (mIoU/mAcc) against GT, writes `statistics.txt` |
 | `eval_instances` | Instance AP evaluation (class-aware + class-agnostic) using masks from `segment`. Requires instance GT at `data/input/Datasets/{dataset}/instance_gt/{scene}.txt` |
 
 Default: all three (run, segment, eval). For re-evaluation only: `stages: [eval]`. For re-segmentation + eval: `stages: [segment, eval]`. To include instance AP: `stages: [run, segment, eval, eval_instances]`.
+
+### Checkpoint replay
+
+Replay only the fusion step from a pre-fusion checkpoint (saved during a jump-drift run). SLAM, tracking, and segmentation are skipped. Stats from the original run are merged with the new fusion stats.
+
+```yaml
+experiments:
+  - label: my-replay
+    scenes_id: office0
+    stages: [run, segment, eval]
+    restore_pre_fusion_checkpoint: data/checkpoints/Replica/<experiment>/office0/pre_fusion.ckpt
+    ovo_config:
+      semantic:
+        fusion_method: clip
+        th_cossim: 0.75             # new fusion params to test
+        fusion_criteria: ["centroid", "cos_sim", "overlap"]
+```
+
+Checkpoints are saved at `data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt` only when both `jump_drift_enabled: true` and `save_pre_fusion_checkpoint: true` are set in the noise config. Non-jump runs do not produce checkpoints.
+
+Naming: use a new `label` that identifies the changed fusion params (e.g. `ckpt-cossim075`). The experiment name will be `{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{label}_{UID}` as usual.
 
 ---
 
@@ -288,6 +347,8 @@ If missing or empty: **stop and tell the user**. Do not proceed.
 
 ### 3 — Create manifest file
 Write `<root>/manifests/<Experiment_ID>.yaml` with the full manifest structure (see above). This file is the permanent record — never delete it.
+
+> **Concurrent runs**: the batch runner writes each experiment's config to a temp file `data/working/configs/ovo.<experiment_name>.yaml` and passes it via `--config`. The shared `ovo.yaml` is never modified. Multiple runners can execute simultaneously without conflict.
 
 ### 4 — Preview (recommended)
 ```bash
