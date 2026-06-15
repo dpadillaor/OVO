@@ -112,8 +112,8 @@ class SimulatedSLAM(VanillaMapper):
         if self.keyframe_selector.is_new_keyframe(c2w, last_kf_pose):
             c2w = self._apply_pending_jump(frame_id, c2w)
 
-            # 1. Unproject depth and add points to the map (epoch-aware dedup)
-            self._add_points(frame_data, c2w)
+            # 1. Unproject depth and add points to the map
+            super().map(frame_data, c2w)
 
             # 2. Store KeyFrame info
             pcd_end_idx = self.pcd.shape[0]
@@ -173,11 +173,13 @@ class SimulatedSLAM(VanillaMapper):
         candidates = self.pcd[self._dedup_min_idx:]
         if candidates.shape[0] > 0:
             camera_frustum_corners = geometry_utils.compute_camera_frustum_corners(depth, c2w, self.cam_intrinsics)
-            frustum_mask = geometry_utils.compute_frustum_point_ids(candidates, camera_frustum_corners, device=self.device)
-            _, matches = geometry_utils.match_3d_points_to_2d_pixels(
-                depth, torch.linalg.inv(c2w), candidates[frustum_mask], self.cam_intrinsics, self.match_distance_th
-            )
-            mask[matches[:, 1], matches[:, 0]] = False
+            # compute_frustum_point_ids already returns indices into `candidates`, not a bool mask.
+            frustum_local_indices = geometry_utils.compute_frustum_point_ids(candidates, camera_frustum_corners, device=self.device)
+            frustum_subset = candidates[frustum_local_indices]
+            frustum_global_indices = frustum_local_indices + self._dedup_min_idx
+            matched_mask, matches = geometry_utils.match_3d_points_to_2d_pixels(depth, torch.linalg.inv(c2w), frustum_subset, self.cam_intrinsics, self.match_distance_th)
+            self.pcd_obs[frustum_global_indices[matched_mask]] += 1
+            mask[matches[:,1], matches[:,0]] = False
             mask = self.pooling(mask)
 
         return mask
@@ -217,6 +219,7 @@ class SimulatedSLAM(VanillaMapper):
         self.pcd_ids = torch.vstack((self.pcd_ids, torch.arange(self.max_id, self.max_id + n_new, device=self.device, dtype=torch.int32).unsqueeze(1)))
         self.pcd_obj_ids = torch.vstack((self.pcd_obj_ids, torch.ones((n_new, 1), device=self.device, dtype=torch.int32) * -1))
         self.pcd_colors = torch.vstack((self.pcd_colors, colors))
+        self.pcd_obs = torch.vstack((self.pcd_obs, torch.ones((n_new, 1), device=self.device, dtype=torch.int32)))
         self.max_id += n_new
 
     def _maybe_correct_at_end(self, frame_id: int) -> None:
@@ -226,8 +229,11 @@ class SimulatedSLAM(VanillaMapper):
         if self.correction_done or frame_id < len(self.trajectory) - self.map_every - 1:
             return
 
-        if (self.noise_enabled or self.jump_drift_enabled) and self.close_loops:
-            self.correct_map_globally()
+        if self.close_loops:
+            if self.noise_enabled or self.jump_drift_enabled:
+                self.correct_map_globally()
+            else:
+                self.map_updated = True
         else:
             self.map_updated = False
         self.correction_done = True
@@ -285,3 +291,6 @@ class SimulatedSLAM(VanillaMapper):
         pcd_slice = self.pcd[start:end]
         pcd_slice_hom = torch.cat([pcd_slice, torch.ones((pcd_slice.shape[0], 1), device=self.device)], dim=1)
         self.pcd[start:end] = (T @ pcd_slice_hom.T).T[:, :3]
+        # Rotate the slice's normals too (rotation part of T only).
+        if self.pcd_normals.shape[0] >= end:
+            self.pcd_normals[start:end] = (T[:3, :3] @ self.pcd_normals[start:end].T).T

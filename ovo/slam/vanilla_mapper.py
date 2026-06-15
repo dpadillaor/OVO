@@ -22,6 +22,11 @@ class VanillaMapper():
         self.pcd_ids = torch.empty((0,1), device = self.device,dtype=torch.int32 )
         self.pcd_obj_ids = torch.empty((0,1), device = self.device, dtype=torch.int32)
         self.pcd_colors = torch.empty((0,3), device = self.device, dtype = torch.uint8)
+        self.pcd_obs = torch.empty((0,1), device = self.device, dtype = torch.int32)
+        # Per-point surface normal (world frame), estimated from the depth when the
+        # point is first created. Like color, it is set on creation and not re-fused
+        # on re-observation; only obs accumulates over views.
+        self.pcd_normals = torch.empty((0,3), device = self.device, dtype = torch.float32)
         
         k_size = config["mapping"].get("k_pooling", 3)
         if k_size >1:
@@ -53,12 +58,18 @@ class VanillaMapper():
         y, x = torch.meshgrid(torch.arange(h, device=self.device), torch.arange(w, device=self.device), indexing="ij")
         depth  = torch.from_numpy(depth.astype(np.float32)).to(self.device)
         mask = depth > 0
+        # Estimate per-pixel normals (camera frame) from the full-res depth, before
+        # any masking/downscaling, so the central differences use true neighbours.
+        normal_map = geometry_utils.depth_to_normals(depth, self.cam_intrinsics)
         
         if self.max_id>0:
             camera_frustum_corners = geometry_utils.compute_camera_frustum_corners(depth, c2w, self.cam_intrinsics)
-            frustum_mask = geometry_utils.compute_frustum_point_ids(self.pcd, camera_frustum_corners, device=self.device)                    
-            _, matches = geometry_utils.match_3d_points_to_2d_pixels(depth, torch.linalg.inv(c2w), self.pcd[frustum_mask], self.cam_intrinsics, self.match_distance_th)
-            mask[matches[:,1], matches[:,0]] = False # Do not project depth on points alredy matched
+            # compute_frustum_point_ids already returns global pcd indices, not a bool mask.
+            frustum_indices = geometry_utils.compute_frustum_point_ids(self.pcd, camera_frustum_corners, device=self.device)
+            matched_mask, matches = geometry_utils.match_3d_points_to_2d_pixels(depth, torch.linalg.inv(c2w), self.pcd[frustum_indices], self.cam_intrinsics, self.match_distance_th)
+            global_idxs = frustum_indices[matched_mask]
+            self.pcd_obs.scatter_add_(0, global_idxs.unsqueeze(-1), torch.ones_like(global_idxs, dtype=torch.int32).unsqueeze(-1))
+            mask[matches[:,1], matches[:,0]] = False
             mask = self.pooling(mask)
 
         if mask.sum() == 0:
@@ -66,10 +77,12 @@ class VanillaMapper():
         
         y, x = self.downscale(y), self.downscale(x)
         depth, mask, image = self.downscale(depth), self.downscale(mask), self.downscale(image)
+        normal_map = self.downscale(normal_map)
 
         x = x[mask]
         y = y[mask]
         depth = depth[mask]
+        normals = normal_map[mask]  # (N,3) camera frame
         # convert to 3D
         x_3d = (x - self.cam_intrinsics[0, 2]) * depth / self.cam_intrinsics[0, 0]
         y_3d = (y - self.cam_intrinsics[1, 2]) * depth / self.cam_intrinsics[1, 1]
@@ -77,12 +90,17 @@ class VanillaMapper():
         
         points = torch.hstack((x_3d.reshape(-1, 1), y_3d.reshape(-1, 1), z_3d.reshape(-1, 1), torch.ones((x_3d.shape[0],1), device=self.device)))
         points = torch.einsum("ij,mj->mi",c2w, points)
+        # Rotate normals from camera to world frame (rotation only, no translation).
+        normals = torch.einsum("ij,mj->mi", c2w[:3, :3], normals)
 
+        n_new = points.shape[0]
         self.pcd = torch.vstack((self.pcd, points[:,:3]))
-        self.pcd_ids = torch.vstack((self.pcd_ids, torch.arange(self.max_id, self.max_id+points.shape[0], device=self.device, dtype=torch.int32).unsqueeze(1)))
-        self.pcd_obj_ids = torch.vstack((self.pcd_obj_ids, torch.ones((points.shape[0],1), device=self.device, dtype=torch.int32)*-1))
+        self.pcd_ids = torch.vstack((self.pcd_ids, torch.arange(self.max_id, self.max_id+n_new, device=self.device, dtype=torch.int32).unsqueeze(1)))
+        self.pcd_obj_ids = torch.vstack((self.pcd_obj_ids, torch.ones((n_new,1), device=self.device, dtype=torch.int32)*-1))
         self.pcd_colors = torch.vstack((self.pcd_colors, torch.from_numpy(image.astype(np.uint8)).to(self.device)[mask].reshape(-1,3)))
-        self.max_id += points.shape[0]
+        self.pcd_obs = torch.vstack((self.pcd_obs, torch.ones((n_new,1), device=self.device, dtype=torch.int32)))
+        self.pcd_normals = torch.vstack((self.pcd_normals, normals))
+        self.max_id += n_new
             
     def get_c2w(self, frame_id: int) -> torch.Tensor:
         c2w = self.estimated_c2ws.get(frame_id, None)
@@ -98,6 +116,14 @@ class VanillaMapper():
     def get_map(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Returns a reference to map tensors."""
         return self.pcd, self.pcd_ids, self.pcd_obj_ids.squeeze()
+
+    def get_point_observations(self) -> torch.Tensor:
+        """Returns per-point observation counts (squeezed)."""
+        return self.pcd_obs.squeeze()
+
+    def get_point_normals(self) -> torch.Tensor:
+        """Returns per-point surface normals (world frame), shape (N, 3)."""
+        return self.pcd_normals
     
     def get_kfs(self) -> Dict[int, Dict[str, Any]]:
         return self.kfs
@@ -128,16 +154,25 @@ class VanillaMapper():
             "xyz": self.pcd.clone().detach().cpu(),
             "obj_ids": self.pcd_obj_ids.clone().detach().cpu(),
             "ids": self.pcd_ids.clone().detach().cpu(),
+            "obs": self.pcd_obs.clone().detach().cpu(),
             "max_id": self.max_id,
-            "color": self.pcd_colors.clone().detach().cpu()
+            "color": self.pcd_colors.clone().detach().cpu(),
+            "normals": self.pcd_normals.clone().detach().cpu()
         }
-    
+
     def set_map_dict(self, map_dict: Dict[str, Any]) -> None:
         self.pcd = map_dict["xyz"].to(self.device)
         self.pcd_obj_ids = map_dict["obj_ids"].to(self.device)
         self.pcd_ids = map_dict["ids"].to(self.device)
+        self.pcd_obs = map_dict.get("obs", torch.empty((0,1), dtype=torch.int32)).to(self.device)
         self.max_id = map_dict["max_id"]
         self.pcd_colors = map_dict["color"].to(self.device)
+        # Backward-compat: older checkpoints have no normals -> zero-filled to match.
+        normals = map_dict.get("normals", None)
+        if normals is None:
+            self.pcd_normals = torch.zeros((self.pcd.shape[0], 3), device=self.device, dtype=torch.float32)
+        else:
+            self.pcd_normals = normals.to(self.device)
 
     def get_cam_dict(self) -> dict[str, Any]:
         out_dict = {}

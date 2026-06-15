@@ -89,6 +89,62 @@ def match_3d_points_to_2d_pixels(depth: torch.Tensor, w2c: torch.Tensor, points_
     return mask, matches
 
 
+def depth_to_normals(depth: torch.Tensor, intrinsics: torch.Tensor) -> torch.Tensor:
+    """Estimate per-pixel surface normals from a depth map, in the camera frame.
+
+    Back-projects every pixel to a 3D point (camera coordinates) using the rejection
+    grid as the neighbourhood — no kd-tree search needed. The normal is the cross
+    product of the local horizontal and vertical surface tangents (central
+    differences). Normals are oriented towards the camera. Pixels with invalid depth
+    (<=0) or a depth discontinuity at the neighbours get a zero normal.
+
+    Args:
+        depth (torch.Tensor): (H, W) depth map.
+        intrinsics (torch.Tensor): 3x3 camera intrinsics.
+    Returns:
+        torch.Tensor: (H, W, 3) unit normals in camera frame (0 where invalid).
+    """
+    h, w = depth.shape
+    device = depth.device
+    fx, fy = intrinsics[0, 0], intrinsics[1, 1]
+    cx, cy = intrinsics[0, 2], intrinsics[1, 2]
+
+    yy, xx = torch.meshgrid(
+        torch.arange(h, device=device, dtype=depth.dtype),
+        torch.arange(w, device=device, dtype=depth.dtype),
+        indexing="ij",
+    )
+    X = (xx - cx) * depth / fx
+    Y = (yy - cy) * depth / fy
+    P = torch.stack((X, Y, depth), dim=-1)  # (H, W, 3) camera-frame points
+
+    # Local surface tangents via central differences on the pixel grid.
+    dPdx = torch.zeros_like(P)
+    dPdy = torch.zeros_like(P)
+    dPdx[:, 1:-1, :] = P[:, 2:, :] - P[:, :-2, :]
+    dPdy[1:-1, :, :] = P[2:, :, :] - P[:-2, :, :]
+
+    n = torch.linalg.cross(dPdx, dPdy, dim=-1)
+    norm = n.norm(dim=-1, keepdim=True)
+    n = torch.where(norm > 1e-6, n / norm, torch.zeros_like(n))
+
+    # Orient towards the camera: camera sits at origin, point is at P (Z>0 in front),
+    # so the outward-to-camera direction is -P. Flip normals pointing away.
+    flip = (n * P).sum(dim=-1, keepdim=True) > 0
+    n = torch.where(flip, -n, n)
+
+    # Kill normals on invalid depth or where a neighbour had invalid depth (the
+    # central difference straddled a hole / discontinuity).
+    valid = depth > 0
+    valid_x = torch.zeros_like(valid)
+    valid_y = torch.zeros_like(valid)
+    valid_x[:, 1:-1] = valid[:, 2:] & valid[:, :-2]
+    valid_y[1:-1, :] = valid[2:, :] & valid[:-2, :]
+    valid = valid & valid_x & valid_y
+    n[~valid] = 0.0
+    return n
+
+
 def depth_filter(depth: torch.Tensor, k_size: int = 7,sigma: float= 2.5, th: float = 0.05) -> torch.Tensor:
     low_frequencies = gaussian_blur(depth[None], k_size, sigma)[0]
     high_frequencies = (depth-low_frequencies).abs()

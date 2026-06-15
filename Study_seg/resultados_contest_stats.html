@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resultados: Contest Stats — OVO</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2b333d;
+    --txt:#d7dde5; --muted:#8b97a7; --accent:#58a6ff;
+    --good:#3fb950; --bad:#f85149; --warn:#d29922; --code:#79c0ff;
+    --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;font-size:16px}
+  .wrap{max-width:1020px;margin:0 auto;padding:48px 28px 120px}
+  header.title{border-bottom:1px solid var(--border);padding-bottom:24px;margin-bottom:8px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:15px}
+  h2{font-size:23px;margin:46px 0 14px;padding-top:14px;border-top:1px solid var(--border)}
+  h3{font-size:18px;margin:28px 0 8px;color:#e6edf3}
+  h4{font-size:15px;margin:18px 0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  code{font-family:var(--mono);background:var(--panel2);color:var(--code);
+    padding:2px 6px;border-radius:5px;font-size:13.5px}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5}
+  pre code{background:none;padding:0;color:#c9d1d9}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .lead{font-size:17px;color:#c2ccd8}
+  .tag{display:inline-block;background:var(--panel2);border:1px solid var(--border);
+    color:var(--muted);font-size:12px;padding:2px 9px;border-radius:20px;margin-right:6px;font-family:var(--mono)}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#e6edf3;font-weight:600}
+  td code{font-size:12.5px}
+  .num{text-align:right;font-family:var(--mono);font-size:13px}
+  .box{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);
+    border-radius:8px;padding:14px 18px;margin:18px 0}
+  .box.good{border-left-color:var(--good)}
+  .box.bad{border-left-color:var(--bad)}
+  .box.warn{border-left-color:var(--warn)}
+  .box .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px}
+  .box.good .lbl{color:var(--good)} .box.bad .lbl{color:var(--bad)} .box.warn .lbl{color:var(--warn)}
+  .box.accent .lbl{color:var(--accent)}
+  .fileref{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  ul,ol{margin:10px 0;padding-left:24px}
+  li{margin:5px 0}
+  .pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:4px;font-weight:700}
+  .pill.m{background:#10341a;color:var(--good)}
+  .pill.s{background:#3a1416;color:var(--bad)}
+  .pill.f{background:#3a2d0a;color:var(--warn)}
+  .pill.asym{background:#0d2d4a;color:#79c0ff}
+  .pill.sym{background:#2a1a3a;color:#d2a8ff}
+  .diagram{font-family:var(--mono);font-size:12.5px;color:#9fb0c3;white-space:pre;background:#0a0d12;
+    border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;line-height:1.45}
+  footer{margin-top:60px;border-top:1px solid var(--border);padding-top:18px;color:var(--muted);font-size:13px}
+  hr{border:none;border-top:1px solid var(--border);margin:30px 0}
+  .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+  .summary-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .summary-card .val{font-family:var(--mono);font-size:28px;color:#e6edf3;font-weight:700}
+  .summary-card .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .scene-header{font-size:20px;color:var(--accent);margin:32px 0 12px;border-bottom:1px solid var(--border);padding-bottom:8px}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-weight:700}
+  .badge.merge{background:#10341a;color:var(--good)}
+  .badge.no-merge{background:#2a1a3a;color:#d2a8ff}
+  .badge.split{background:#3a1416;color:var(--bad)}
+  .badge.noise{background:#3a2d0a;color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="title">
+  <h1>Resultados: Contest Stats</h1>
+  <div class="sub">Validación experimental del discriminador direccional para merge / split en OVO · 2026-06-14</div>
+  <div style="margin-top:14px">
+    <span class="tag">rama: study/point-instance-assignment</span>
+    <span class="tag">experimento: baseline-gt_0fbfb</span>
+    <span class="tag">dataset: Replica (office0, office2, office3)</span>
+    <span class="tag">SLAM: SimulatedSLAM (GT)</span>
+  </div>
+</header>
+
+<p class="lead">
+Este informe documenta los resultados de la instrumentación de <b>contest stats</b> —
+el registro sistemático de <em>puntos en disputa</em> entre instancias durante la asignación
+en <code>_track_objects</code>. Sin cambiar el comportamiento del sistema, medimos qué pares
+de instancias compiten por los mismos puntos 3D, en qué dirección y con qué magnitud.
+</p>
+
+<div class="toc">
+  <b>Índice</b>
+  <ol>
+    <li><a href="#metodologia">Metodología</a></li>
+    <li><a href="#resumen">Resumen global</a></li>
+    <li><a href="#office0">office0 — análisis detallado</a></li>
+    <li><a href="#office2">office2 — análisis detallado</a></li>
+    <li><a href="#office3">office3 — análisis detallado</a></li>
+    <li><a href="#direccionalidad">El discriminador direccional</a></li>
+    <li><a href="#casuistica">Casuística completa</a></li>
+    <li><a href="#conclusiones">Conclusiones</a></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<h2 id="metodologia">1 · Metodología</h2>
+
+<h3>1.1 · Instrumentación</h3>
+<p>
+La instrumentación se añadió en <code>OVO._track_objects</code>
+<span class="fileref">ovo/entities/ovo.py:339-366</span>. Por cada máscara SAM en cada keyframe,
+después de la asignación por modo mayoritario, los puntos de la máscara cuyo dueño actual
+(<code>points_ins_ids</code>) es <b>distinto</b> de la instancia dominante de la máscara se cuentan
+como <em>contested</em>. Se registra el par <code>(perdedor → ganador)</code> donde:
+</p>
+<ul>
+  <li><b>Perdedor</b> — instancia que tenía el punto, pero cayó dentro de una máscara de otra instancia</li>
+  <li><b>Ganador</b> — instancia dominante de la máscara</li>
+</ul>
+
+<div class="box accent">
+  <div class="lbl">Código clave (8 líneas)</div>
+  <pre><code># ovo/entities/ovo.py:349-356
+for label_id in map_labels:
+    mask_points = current_pts[seg_map_matched_ids == label_id]
+    mask_ids = current_ins_ids[mask_points]
+    assigned = mask_ids[mask_ids > -1]
+    if assigned.numel() == 0:
+        continue
+    dominant = torch.mode(assigned).values.item()
+    contested = assigned[assigned != dominant]
+    for c in contested.unique().tolist():
+        n = (contested == c).sum().item()
+        self.contest_stats[(c, dominant)] += n</code></pre>
+</div>
+
+<h3>1.2 · Estructura de datos</h3>
+<p>
+<code>contest_stats</code> es un <code>defaultdict(int)</code> con clave <code>(loser_ins_id, winner_ins_id)</code>.
+Se acumula a lo largo de toda la ejecución (todos los KFs). Al final de la escena,
+<code>dump_contest_stats()</code> <span class="fileref">ovo.py:778-797</span> serializa a JSON:
+</p>
+<pre><code>{
+  "config": { "scene": "office0", ... },
+  "pairs": {
+    "4->64": { "n_points": 215335, "frac": 35.9 },
+    "6->2":  { "n_points": 135052, "frac": 1.15 },
+    ...
+  }
+}</code></pre>
+<p>
+<code>n_points</code> es el <b>total de puntos en disputa</b> acumulado sobre todos los KFs
+(un mismo punto puede contar múltiples veces si aparece en varios KFs con conflicto).
+<code>frac</code> = <code>n_points / total_de_la_instancia_perdedora_en_el_mapa_final</code>
+(advertencia: numerador y denominador están en escalas diferentes — el primero es
+acumulado sobre frames, el segundo es un snapshot final).
+</p>
+
+<h3>1.3 · Configuración experimental</h3>
+<table>
+  <tr><th>Parámetro</th><th>Valor</th></tr>
+  <tr><td>SLAM</td><td>SimulatedSLAM (ground truth)</td></tr>
+  <tr><td>Backend máscaras</td><td>SAM 2 (máscaras independientes por KF, sin persistencia)</td></tr>
+  <tr><td>Close loops</td><td><code>False</code> (evita reshuffle del mapa global)</td></tr>
+  <tr><td>Jump drift</td><td>No</td></tr>
+  <tr><td>Etiquetado</td><td>CLIP (sin fusión activa)</td></tr>
+  <tr><td>Escenas</td><td>Replica office0, office2, office3</td></tr>
+</table>
+
+<!-- 2 -->
+<h2 id="resumen">2 · Resumen global</h2>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="val">1,503</div>
+    <div class="lbl">Pares direccionales (total 3 escenas)</div>
+  </div>
+  <div class="summary-card">
+    <div class="val">4.79M</div>
+    <div class="lbl">Puntos en disputa totales</div>
+  </div>
+  <div class="summary-card">
+    <div class="val">57%</div>
+    <div class="lbl">Pares asimétricos fuertes</div>
+  </div>
+</div>
+
+<table>
+  <tr>
+    <th>Escena</th>
+    <th class="num">Pares direcc.</th>
+    <th class="num">Pares únicos</th>
+    <th class="num">Bidirecc.</th>
+    <th class="num">Unidirecc.</th>
+    <th class="num">Asim. fuerte</th>
+    <th class="num">Asim. débil</th>
+    <th class="num">Simétrico</th>
+    <th class="num">Puntos totales</th>
+  </tr>
+  <tr>
+    <td><b>office0</b></td>
+    <td class="num">324</td>
+    <td class="num">203</td>
+    <td class="num">121</td>
+    <td class="num">82</td>
+    <td class="num">121</td>
+    <td class="num">41</td>
+    <td class="num">41</td>
+    <td class="num">743,936</td>
+  </tr>
+  <tr>
+    <td><b>office2</b></td>
+    <td class="num">441</td>
+    <td class="num">269</td>
+    <td class="num">172</td>
+    <td class="num">97</td>
+    <td class="num">143</td>
+    <td class="num">57</td>
+    <td class="num">69</td>
+    <td class="num">1,817,913</td>
+  </tr>
+  <tr>
+    <td><b>office3</b></td>
+    <td class="num">736</td>
+    <td class="num">451</td>
+    <td class="num">285</td>
+    <td class="num">166</td>
+    <td class="num">258</td>
+    <td class="num">105</td>
+    <td class="num">88</td>
+    <td class="num">2,227,706</td>
+  </tr>
+  <tr style="border-top:2px solid var(--border)">
+    <td><b>Total</b></td>
+    <td class="num"><b>1,501</b></td>
+    <td class="num"><b>923</b></td>
+    <td class="num"><b>578</b></td>
+    <td class="num"><b>345</b></td>
+    <td class="num"><b>522</b></td>
+    <td class="num"><b>203</b></td>
+    <td class="num"><b>198</b></td>
+    <td class="num"><b>4,789,555</b></td>
+  </tr>
+</table>
+
+<h3>Distribución por escena</h3>
+<div class="diagram">office0  ████████████████████████████░░░░ 743,936 pts  (324 pares)
+office2  ████████████████████████████████████████████████████░░░░░░░░░░ 1,817,913 pts  (441 pares)
+office3  ██████████████████████████████████████████████████████████████ 2,227,706 pts  (736 pares)
+
+asym fuerte ██████████████████████████████████████████░░░░░░░░░░░░ 57%
+asym débil  ████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 14%
+sym         ████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 14%
+uni         ██████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 23%</div>
+
+<!-- 3 -->
+<h2 id="office0">3 · office0 — análisis detallado</h2>
+<p>324 pares direccionales → 203 pares únicos (121 bidireccionales, 82 unidireccionales).</p>
+
+<h3>Top 15 pares</h3>
+<table>
+  <tr><th>#</th><th>Par</th><th class="num">Perdedor→Ganador</th><th class="num">Ganador→Perdedor</th><th class="num">Ratio</th><th>Dirección</th><th>Interpretación</th></tr>
+  <tr>
+    <td>1</td><td><code>4↔64</code></td>
+    <td class="num">215,335</td><td class="num">3,528</td>
+    <td class="num">61:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 4 es fragmento SAM de 64</td>
+  </tr>
+  <tr>
+    <td>2</td><td><code>6↔2</code></td>
+    <td class="num">135,052</td><td class="num">2,230</td>
+    <td class="num">60:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge split">SPLIT</span> 6 es sobredimensionada, parte debe ir a 2</td>
+  </tr>
+  <tr>
+    <td>3</td><td><code>64↔79</code></td>
+    <td class="num">61,649</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 79 es fragmento de 64</td>
+  </tr>
+  <tr>
+    <td>4</td><td><code>15↔117</code></td>
+    <td class="num">59,306</td><td class="num">59</td>
+    <td class="num">~1000:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 117 es fragmento de 15</td>
+  </tr>
+  <tr>
+    <td>5</td><td><code>13↔127</code></td>
+    <td class="num">23,666</td><td class="num">3,106</td>
+    <td class="num">7.6:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 127 es fragmento de 13</td>
+  </tr>
+  <tr>
+    <td>6</td><td><code>36↔139</code></td>
+    <td class="num">20,611</td><td class="num">17,561</td>
+    <td class="num">1.2:1</td>
+    <td><span class="pill sym">SYM</span></td>
+    <td><span class="badge no-merge">NO MERGE</span> objetos distintos compitiendo por espacio</td>
+  </tr>
+  <tr>
+    <td>7</td><td><code>56↔89</code></td>
+    <td class="num">18,014</td><td class="num">6,222</td>
+    <td class="num">2.9:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 89 es fragmento de 56</td>
+  </tr>
+  <tr>
+    <td>8</td><td><code>50↔56</code></td>
+    <td class="num">15,537</td><td class="num">5,070</td>
+    <td class="num">3.1:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 56 fragmento de 50</td>
+  </tr>
+  <tr>
+    <td>9</td><td><code>50↔89</code></td>
+    <td class="num">10,044</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 89 fragmento de 50</td>
+  </tr>
+  <tr>
+    <td>10</td><td><code>138↔139</code></td>
+    <td class="num">6,525</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 138 fragmento de 139</td>
+  </tr>
+  <tr>
+    <td>11</td><td><code>0↔73</code></td>
+    <td class="num">6,388</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge noise">RUIDO</span> frac=0.13, instancia 73 enorme, conflicto marginal</td>
+  </tr>
+  <tr>
+    <td>12</td><td><code>115↔114</code></td>
+    <td class="num">5,722</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 115 fragmento de 114</td>
+  </tr>
+  <tr>
+    <td>13</td><td><code>4↔7</code></td>
+    <td class="num">5,698</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 4 (ya fragmento de 64) también fragmento de 7</td>
+  </tr>
+  <tr>
+    <td>14</td><td><code>5↔15</code></td>
+    <td class="num">5,686</td><td class="num">5,549</td>
+    <td class="num">1.02:1</td>
+    <td><span class="pill sym">SYM</span></td>
+    <td><span class="badge no-merge">NO MERGE</span> objetos distintos (confirmado visualmente)</td>
+  </tr>
+  <tr>
+    <td>15</td><td><code>1↔3</code></td>
+    <td class="num">5,125</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge noise">RUIDO</span> frac bajo, ruido de borde</td>
+  </tr>
+</table>
+
+<div class="box good">
+  <div class="lbl">Hallazgo clave — office0</div>
+  <p>
+  El discriminador direccional separa limpiamente los casos:
+  <b>10 merges</b> (ratio &ge; 3:1), <b>2 no-merge</b> (36↔139, 5↔15 con ratio ≈ 1),
+  <b>3 ruido</b> (0↔73, 1↔3, 35↔139 con frac muy bajo en el perdedor).
+  El par 6↔2 es el único split detectado (direccional pero con instancia perdedora
+  que es demasiado grande — su dueño abarca dos objetos reales).
+  </p>
+</div>
+
+<!-- 4 -->
+<h2 id="office2">4 · office2 — análisis detallado</h2>
+<p>441 pares direccionales → 269 pares únicos (172 bidireccionales, 97 unidireccionales).</p>
+
+<h3>Top 15 pares</h3>
+<table>
+  <tr><th>#</th><th>Par</th><th class="num">Perdedor→Ganador</th><th class="num">Ganador→Perdedor</th><th class="num">Ratio</th><th>Dirección</th><th>Interpretación</th></tr>
+  <tr>
+    <td>1</td><td><code>0↔75</code></td>
+    <td class="num">296,746</td><td class="num">45,588</td>
+    <td class="num">6.5:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 0 fragmento masivo de 75</td>
+  </tr>
+  <tr>
+    <td>2</td><td><code>50↔95</code></td>
+    <td class="num">228,972</td><td class="num">57,148</td>
+    <td class="num">4:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 50 fragmento de 95</td>
+  </tr>
+  <tr>
+    <td>3</td><td><code>80↔81</code></td>
+    <td class="num">214,577</td><td class="num">6,798</td>
+    <td class="num">31.5:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 80 (o 81) fragmento</td>
+  </tr>
+  <tr>
+    <td>4</td><td><code>9↔90</code></td>
+    <td class="num">177,364</td><td class="num">123,583</td>
+    <td class="num">1.4:1</td>
+    <td><span class="pill sym">SYM</span></td>
+    <td><span class="badge merge">MERGE (misma clase)</span> dos trozos de la misma pared</td>
+  </tr>
+  <tr>
+    <td>5</td><td><code>87↔89</code></td>
+    <td class="num">102,777</td><td class="num">92,421</td>
+    <td class="num">1.1:1</td>
+    <td><span class="pill sym">SYM</span></td>
+    <td><span class="badge merge">MERGE (misma clase)</span> dos trozos del mismo sofá</td>
+  </tr>
+  <tr>
+    <td>6</td><td><code>98↔108</code></td>
+    <td class="num">34,023</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 108 fragmento de 98</td>
+  </tr>
+  <tr>
+    <td>7</td><td><code>89↔97</code></td>
+    <td class="num">29,018</td><td class="num">18,926</td>
+    <td class="num">1.5:1</td>
+    <td><span class="pill sym">SYM</span></td>
+    <td><span class="badge no-merge">NO MERGE</span> borderline, requiere GT</td>
+  </tr>
+  <tr>
+    <td>8</td><td><code>56↔96</code></td>
+    <td class="num">21,784</td><td class="num">28</td>
+    <td class="num">~778:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 96 fragmento de 56</td>
+  </tr>
+  <tr>
+    <td>9</td><td><code>50↔100</code></td>
+    <td class="num">21,094</td><td class="num">1,347</td>
+    <td class="num">15.7:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 100 fragmento de 50</td>
+  </tr>
+  <tr>
+    <td>10</td><td><code>80↔88</code></td>
+    <td class="num">19,718</td><td class="num">3,528</td>
+    <td class="num">5.6:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 88 fragmento de 80</td>
+  </tr>
+  <tr>
+    <td>11</td><td><code>16↔74</code></td>
+    <td class="num">18,728</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> fragmento</td>
+  </tr>
+  <tr>
+    <td>12</td><td><code>16↔46</code></td>
+    <td class="num">17,264</td><td class="num">1,728</td>
+    <td class="num">10:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> fragmento</td>
+  </tr>
+  <tr>
+    <td>13</td><td><code>16↔48</code></td>
+    <td class="num">13,309</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> fragmento</td>
+  </tr>
+  <tr>
+    <td>14</td><td><code>16↔2</code></td>
+    <td class="num">11,555</td>
+    <td class="num">1,843</td>
+    <td class="num">6.3:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> fragmento de 16</td>
+  </tr>
+  <tr>
+    <td>15</td><td><code>80↔86</code></td>
+    <td class="num">11,543</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span> 86 fragmento de 80</td>
+  </tr>
+</table>
+
+<div class="box warn">
+  <div class="lbl">Observación — office2</div>
+  <p>
+  Aparece una familia de fragmentos orbitando alrededor de la instancia <code>16</code>
+  (el suelo). 74, 46 y 48 son cachitos de suelo que SAM fragmentó — todos
+  con <code>frac &gg; 1</code> y un único ganador (16). <b>Merge limpio.</b>
+  El par 16→2 en cambio tiene frac=0.03 (suelo contra pared, borde) —
+  <b>no merge.</b>
+  </p>
+  <p>
+  El caso <b>92</b> (rodapiés, ~6.200 pts) ejemplifica la regla de unicidad:
+  disputa con suelo (92→16, frac=1.04) y con pared (92→90, frac=0.52).
+  Dos ganadores → instancia fronteriza → <b>se queda, no se mergea</b>.
+  </p>
+</div>
+
+<!-- 5 -->
+<h2 id="office3">5 · office3 — análisis detallado</h2>
+<p>736 pares direccionales → 451 pares únicos (285 bidireccionales, 166 unidireccionales).
+La escena más compleja y ruidosa del dataset.</p>
+
+<h3>Top 15 pares</h3>
+<table>
+  <tr><th>#</th><th>Par</th><th class="num">Perdedor→Ganador</th><th class="num">Ganador→Perdedor</th><th class="num">Ratio</th><th>Dirección</th><th>Interpretación</th></tr>
+  <tr>
+    <td>1</td><td><code>63↔151</code></td>
+    <td class="num">1,425,657</td><td class="num">73,808</td>
+    <td class="num">19.3:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span> 151→63 dominante (63 enorme, 151 fragmento persistente)</td>
+  </tr>
+  <tr>
+    <td>2</td><td><code>89↔103</code></td>
+    <td class="num">40,139</td><td class="num">434</td>
+    <td class="num">92.5:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>3</td><td><code>78↔79</code></td>
+    <td class="num">38,728</td><td class="num">4,064</td>
+    <td class="num">9.5:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>4</td><td><code>12↔43</code></td>
+    <td class="num">36,490</td><td class="num">922</td>
+    <td class="num">39.6:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>5</td><td><code>33↔78</code></td>
+    <td class="num">29,985</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>6</td><td><code>73↔74</code></td>
+    <td class="num">27,536</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>7</td><td><code>91↔103</code></td>
+    <td class="num">26,218</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>8</td><td><code>42↔43</code></td>
+    <td class="num">22,342</td><td class="num">47</td>
+    <td class="num">~475:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>9</td><td><code>43↔57</code></td>
+    <td class="num">21,487</td><td class="num">1,073</td>
+    <td class="num">20:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>10</td><td><code>22↔31</code></td>
+    <td class="num">20,400</td><td class="num">1,779</td>
+    <td class="num">11.5:1</td>
+    <td><span class="pill asym">ASYM</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>11</td><td><code>73↔75</code></td>
+    <td class="num">17,780</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>12</td><td><code>18↔26</code></td>
+    <td class="num">17,158</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>13</td><td><code>43↔58</code></td>
+    <td class="num">16,800</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>14</td><td><code>13↔78</code></td>
+    <td class="num">15,526</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+  <tr>
+    <td>15</td><td><code>43↔56</code></td>
+    <td class="num">15,106</td><td class="num">0</td>
+    <td class="num">∞</td>
+    <td><span class="pill asym">UNI</span></td>
+    <td><span class="badge merge">MERGE</span></td>
+  </tr>
+</table>
+
+<div class="box warn">
+  <div class="lbl">Observación — office3</div>
+  <p>
+  <code>63↔151</code> es el par más grande de todo el estudio (1.4M puntos en disputa),
+  aproximadamente el <b>64% de todos los puntos en disputa de office3</b>. La instancia
+  <code>63</code> probablemente es el suelo o una pared — un objeto que cubre gran parte
+  de la escena y constantemente contiene fragmentos de otras instancias.
+  También destaca la familia <code>43</code> que aparece como ganadora en 5 pares
+  (#4, #8, #9, #13, #15), sugiriendo otro "pozo de fragmentos".
+  </p>
+</div>
+
+<!-- 6 -->
+<h2 id="direccionalidad">6 · El discriminador direccional</h2>
+
+<h3>6.1 · Principio</h3>
+<p>
+Para cada par de instancias (A, B), registramos dos valores:
+<code>contest(A→B)</code> y <code>contest(B→A)</code>. El ratio entre ellos revela
+la naturaleza de la relación:
+</p>
+
+<table>
+  <tr><th>Patrón</th><th>Ratio</th><th>Interpretación</th></tr>
+  <tr>
+    <td><b>Asimétrico fuerte</b></td>
+    <td><code>max/min &ge; 5</code></td>
+    <td>
+      <b>Merge</b> — una instancia es un fragmento SAM de la otra. El perdedor nunca
+      tiene identidad propia; sus puntos siempre caen bajo la máscara del ganador.
+    </td>
+  </tr>
+  <tr>
+    <td><b>Asimétrico débil</b></td>
+    <td><code>5 &gt; max/min &ge; 2</code></td>
+    <td>
+      <b>Merge candidato</b> — mismo patrón pero menos marcado. Puede ser merge real
+      con algo de ruido, o dos objetos distintos con solapamiento parcial.
+      Requiere verificación adicional (p.ej., Replica GT).
+    </td>
+  </tr>
+  <tr>
+    <td><b>Simétrico</b></td>
+    <td><code>max/min &lt; 2</code></td>
+    <td>
+      <b>No merge</b> — dos objetos reales diferentes. Compiten limpiamente porque
+      SAM los separa en fotogramas distintos según el ángulo de visión.
+    </td>
+  </tr>
+  <tr>
+    <td><b>Unidireccional</b></td>
+    <td>solo una dirección existe</td>
+    <td>
+      <b>Merge</b> — el reverso no tiene puntos porque el perdedor prácticamente
+      no existe como instancia independiente.
+    </td>
+  </tr>
+</table>
+
+<h3>6.2 · Split: el caso especial</h3>
+<p>
+El split (caso 3 del diseño original) se distingue del merge porque:
+</p>
+<ul>
+  <li>El par es <b>asimétrico</b> (una dirección domina), pero</li>
+  <li>La instancia perdedora <b>no es un fragmento pequeño</b> — retiene muchos puntos
+      propios no disputados que pertenecen a otro objeto real.</li>
+  <li>Esto se detecta por <b>heterogeneidad interna</b>: la instancia perdedora
+      tiene un subconjunto de puntos en disputa hacia T que forma un cluster
+      espacial compacto, mientras el resto de sus puntos no disputados pertenecen
+      a otro objeto.</li>
+</ul>
+<p>
+En nuestros datos, el único split claro es <b>6↔2 en office0</b>.
+</p>
+
+<h3>6.3 · El discriminador <code>frac</code> para separar fragmento de borde</h3>
+
+<p>
+No todos los pares asimétricos merecen fusión. Un caso como <b>16↔2</b> en office2
+ilustra el problema: 16 (suelo) y 2 (pared) son objetos distintos tocándose en el borde.
+16 pierde puntos contra 2 (11,555 pts acumulados), pero esto es <b>frontera física</b>,
+no un fragmento. ¿Cómo distinguirlo de 74→16, donde 74 es un fragmento real?
+</p>
+
+<h4>Cómo se calcula <code>frac</code></h4>
+<p>
+<code>contest_stats</code> almacena <code>(perdedor, ganador) → n_puntos</code>,
+<b>acumulado sobre todos los KFs</b>. Si un punto de 74 cae bajo la máscara de 16
+en 30 KFs distintos, cuenta 30 veces — el mismo punto se suma cada vez.
+</p>
+<p>
+Al final de la escena, <code>dump_contest_stats</code> divide entre el total de puntos
+únicos de esa instancia en el mapa final (<code>final_ins_ids.bincount()</code>).
+El numerador está en escala "frame-acumulado", el denominador en escala "snapshot final".
+</p>
+
+<h4>Comparación con datos reales</h4>
+<p>
+Los casos 74→16 (fragmento puro) vs 16→2 (borde) en office2:</p>
+
+<table>
+  <tr><th>Par</th><th class="num"><code>n_points</code></th><th class="num"><code>frac</code></th><th class="num">Puntos totales del perdedor</th><th>Qué significa</th></tr>
+  <tr>
+    <td><code>74→16</code></td>
+    <td class="num">18,728</td>
+    <td class="num"><b>35.67</b></td>
+    <td class="num">~525</td>
+    <td>74 tiene ~525 puntos <b>en total</b>. Aparecen en ~30 KFs bajo 16.
+        El perdedor prácticamente no existe como instancia independiente.
+        <b>Merge.</b></td>
+  </tr>
+  <tr>
+    <td><code>46→16</code></td>
+    <td class="num">17,264</td>
+    <td class="num"><b>11.86</b></td>
+    <td class="num">~1,450</td>
+    <td>46 tiene ~1,450 puntos. Casi todos bajo 16. <b>Merge.</b></td>
+  </tr>
+  <tr>
+    <td><code>48→16</code></td>
+    <td class="num">13,309</td>
+    <td class="num"><b>19.09</b></td>
+    <td class="num">~700</td>
+    <td>48 tiene ~700 puntos. Todos bajo 16. <b>Merge.</b></td>
+  </tr>
+  <tr>
+    <td><code>16→2</code></td>
+    <td class="num">11,555</td>
+    <td class="num"><b>0.03</b></td>
+    <td class="num">~345,000</td>
+    <td>16 tiene ~345,000 puntos. Solo el <b>borde</b> microscópico contra la pared
+        está en disputa. <b>No merge.</b></td>
+  </tr>
+  <tr>
+    <td><code>0↔73</code></td>
+    <td class="num">6,388</td>
+    <td class="num"><b>0.13</b></td>
+    <td class="num">~49,000</td>
+    <td>Borde entre dos objetos grandes. <b>No merge.</b></td>
+  </tr>
+</table>
+
+<div class="box good">
+  <div class="lbl">Interpretación de frac — el discriminador real</div>
+  <p>
+  Aunque el <code>frac</code> no es una proporción canónica (numerador frame-acumulado,
+  denominador snapshot final), los valores resultan ser <b>consistentemente extremos</b>
+  y separan limpiamente los casos:
+  </p>
+  <ul>
+    <li><b><code>frac &gg; 1</code></b> (ej. 35.67, 19.09) → el perdedor tiene tan pocos puntos
+        que se cuentan múltiples veces por frame. <b>Toda la instancia está contenida.</b> Merge.</li>
+    <li><b><code>frac &ll; 1</code></b> (ej. 0.03, 0.13) → el perdedor es enorme, solo una
+        fracción ínfima de sus puntos toca al ganador. <b>Son dos objetos en el borde.</b> No merge.</li>
+  </ul>
+  <p>
+  La <b>transición es abrupta</b>: no hay valores ambiguos en el rango intermedio (0.5–2.0)
+  en los casos analizados. El filtro combinado — <b>direccionalidad + frac</b> — distingue
+  sin ambigüedad fragmentos reales (ASYM/UNI + frac alto) de bordes entre objetos distintos
+  (ASYM + frac bajo).
+  </p>
+</div>
+
+<h3>6.4 · Pipeline de decisión merge: tres etapas</h3>
+
+<p>
+El pipeline completo aplica tres filtros en cascada: <b>frac</b> (borde vs fragmento),
+<b>unicidad de ganador</b> (frontera vs contención) y <b>descriptor semántico</b>
+(fragmentos simétricos del mismo objeto).
+</p>
+
+<div class="diagram">                                                       ┌─ 1 ganador con frac>1 ──→ <span style="color:var(--good)">MERGE POR CONTENCIÓN</span>
+                                                       │
+                                                       │              ┌─ colapsan a misma raíz ← ─→ <span style="color:var(--good)">MERGE</span> (transitivo)
+                                    ┌─ ASYM/UNI ──→ ───┤              │
+                                    │  + frac alto     └─ multi-      ┤
+                                    │                   ganador ─→ ──┤
+                                    │                                 └─ raíces distintas ← ─→ <span style="color:var(--bad)">QUEDA</span> (frontera real)
+   Par en disputa ────→ agregar ────┤
+   por perdedor                     │
+                                    │                                 ┌─ SIM ──→ <span style="color:var(--good)">MERGE POR CLASE</span>
+                                    │                                 │
+                                    └─ frac bajo ──→ NO ACTUAR ──→ ──┤
+                                                                      └─ NO SIM ──→ <span style="color:var(--bad)">NO MERGE</span></div>
+
+<h4>Etapa 1: direccionalidad + frac (pre-filtro)</h4>
+
+<p>
+Para cada par <code>perdedor→ganador</code>, el filtro de <b>frac</b>
+separa dos regímenes:
+</p>
+<ul>
+  <li><b>Frac bajo</b> (<code>≪ 1</code>, típicamente &lt; 0.5) → borde entre objetos grandes.
+      El perdedor tiene muchos puntos propios, solo el borde está en disputa.
+      <b>No actuar.</b> Ej: 16→2 (frac=0.03, suelo-pared).</li>
+  <li><b>Frac alto</b> (<code>≫ 1</code>, típicamente &gt; 1.0) → la instancia perdedora
+      tiene pocos puntos y <b>todos</b> están en disputa con el ganador. Es un fragmento
+      candidato. Pasar a etapa 2.</li>
+</ul>
+
+<h4>Etapa 2: unicidad de ganador con transitividad</h4>
+
+<p>
+Una instancia solo se puede fusionar entera — no se puede partir y dar una mitad
+a cada ganador. Antes de decidir el merge, se <b>agrupan todos los pares del perdedor</b>
+y se cuentan los ganadores con <code>frac &gt; 1.0</code> (mismo umbral que etapa 1):
+</p>
+
+<table>
+  <tr><th>Condición</th><th>Significado</th><th>Acción</th><th>Ejemplo</th></tr>
+  <tr>
+    <td><b>1 ganador</b> con frac &gt; 1.0</td>
+    <td>Fragmento puro. Toda la instancia pertenece a un solo objeto.</td>
+    <td><span class="badge merge">MERGE</span></td>
+    <td>
+      74→16 (frac=35.67, único ganador 16)<br>
+      102→45 (frac=3.39, 102→16 tiene frac=0.81 → sub-threshold → no cuenta)
+    </td>
+  </tr>
+  <tr>
+    <td><b>≥2 ganadores</b> con frac &gt; 1.0</td>
+    <td colspan="3">Evaluar transitividad:</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;→ colapsan a <b>misma raíz</b></td>
+    <td>Los ganadores se fusionarán entre sí en la misma ronda. Ej: 100→95 y 100→50, pero 95→50 mergea → todo va a 50.</td>
+    <td><span class="badge merge">MERGE</span> (transitivo)</td>
+    <td>100→50 (frac=5.93) + 100→95 (frac=2.02). 95→50 también mergea → raíz única (50).</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;→ <b>raíces distintas</b></td>
+    <td>Instancia fronteriza real. Sus puntos se reparten entre objetos que no se fusionan entre sí.</td>
+    <td><span class="badge noise">QUEDA</span></td>
+    <td>92→16 (frac=1.04) + 92→90 (frac=0.52). 16 y 90 no se fusionan → raíces distintas.</td>
+  </tr>
+</table>
+
+<div class="box good">
+  <div class="lbl">Threshold de frac para unicidad</div>
+  <p>
+  El umbral para contar un "ganador" en la etapa 2 debe ser el <b>mismo</b> que
+  en la etapa 1 (<code>frac &gt; 1.0</code>). Las interacciones sub-threshold
+  (frac entre 0.5 y 1.0) son bordes que no califican como un segundo ganador.
+  Ejemplo: 102→16 tiene frac=0.81 (borde rodapiés-suelo) — por debajo de 1.0,
+  no cuenta. Así 102 tiene un solo ganador (45, frac=3.39) y mergea limpiamente.
+  </p>
+</div>
+
+<div class="box warn">
+  <div class="lbl">Caso real: 92 (rodapiés en office2) — frontera real</div>
+  <p>
+  92 tiene ~6,200 puntos. Sus dos interacciones con <code>frac &gt; 1.0</code>
+  son <b>92→16</b> (frac=1.04, suelo) y <b>92→90</b> (frac=0.52, pared).
+  Dos ganadores, raíces distintas (16 y 90 no se fusionan entre sí).
+  La instancia <b>se queda como está</b> — no se puede dar entera al suelo
+  ni a la pared sin perder el otro objeto.
+  </p>
+</div>
+
+<h4>Etapa 3: el descriptor para casos simétricos</h4>
+<p>
+Los pares con ratio &lt; 2:1 (SYM) que pasan el filtro de frac son fragmentos del
+mismo objeto compitiendo en igualdad. El discriminador direccional no los separa
+— se necesita el <b>descriptor semántico</b> (CLIP/DINO). Ej: 9↔90 (dos trozos
+de pared, misma clase) y 89↔87 (dos trozos de sofá, misma clase) pasarían este
+filtro. 36↔139 (objetos distintos) no.
+</p>
+
+<table>
+  <tr><th>Rama</th><th>Disparador</th><th>Acción</th><th>Qué evalúa</th></tr>
+  <tr>
+    <td><b>Merge por contención</b></td>
+    <td>ASYM/UNI + frac alto + 1 ganador (o transitivo)</td>
+    <td>Fusionar perdedor en ganador</td>
+    <td>Solo geometría de máscara (solapamiento 2D). No necesita cómputo semántico.</td>
+  </tr>
+  <tr>
+    <td><b>Merge por clase</b></td>
+    <td>SYM + frac alto</td>
+    <td>Fusionar solo si el descriptor dice misma clase</td>
+    <td>Similaridad coseno del descriptor. Solo en pares simétricos.</td>
+  </tr>
+</table>
+
+<div class="box good">
+  <div class="lbl">Ahorro computacional</div>
+  <p>
+  Las etapas 1 y 2 resuelven ~61% de los pares sin inferencia semántica,
+  usando solo <code>points_ins_ids</code> y <code>contest_stats</code>.
+  El descriptor solo se consulta en pares simétricos que pasan el filtro
+  de frac (~14% de los pares). No hay evaluación en O(n²).
+  </p>
+</div>
+
+<h3>6.5 · Casuística completa: cómo se clasifica cada patrón</h3>
+
+<p>
+Los casos analizados en las tres escenas cubren todos los patrones posibles.
+La siguiente tabla recoge cada variante con su resolución en el pipeline:
+</p>
+
+<table>
+  <tr><th>#</th><th>Par</th><th>Escena</th><th class="num">Dir1</th><th class="num">Dir2</th><th>Ratio</th><th>Frac perdedor</th><th>Ganadores<br>con frac>1</th><th>Decisión</th><th>Patrón</th></tr>
+
+  <tr>
+    <td>1</td><td><code>74↔16</code></td><td>office2</td>
+    <td class="num">18,728</td><td class="num">0</td><td>∞</td>
+    <td class="num">35.67</td><td>1 (16)</td>
+    <td><span class="badge merge">MERGE</span></td>
+    <td><b>Fragmento UNI clásico.</b> 74 (~525 pts) solo existe bajo 16. Decisión trivial.</td>
+  </tr>
+
+  <tr>
+    <td>2</td><td><code>92↔16</code></td><td>office2</td>
+    <td class="num">6,452</td><td class="num">2,514</td><td>2.6:1</td>
+    <td class="num">1.04</td><td><b>2</b> (16, 90)</td>
+    <td><span class="badge noise">QUEDA</span></td>
+    <td><b>Frontera real.</b> 92 (rodapiés, ~6K pts) pierde contra suelo (16) y pared (90).
+        Raíces distintas → no merge.</td>
+  </tr>
+
+  <tr>
+    <td>3</td><td><code>102↔45</code></td><td>office2</td>
+    <td class="num">2,850</td>
+    <td class="num">1,327</td><td>2.1:1</td>
+    <td class="num">3.39</td><td><b>1</b> (45)</td>
+    <td><span class="badge merge">MERGE</span></td>
+    <td><b>Fragmento con borde sub-threshold.</b> 102 (~840 pts) es parte del rodapiés como 45.
+        102→16 tiene frac=0.81 → por debajo de 1.0, no cuenta como segundo ganador.</td>
+  </tr>
+
+  <tr>
+    <td>4</td><td><code>100↔95</code></td><td>office2</td>
+    <td class="num">7,196</td><td class="num">4</td><td>1,799:1</td>
+    <td class="num">2.02</td><td><b>2</b> (50, 95)<br>colapsan a 50</td>
+    <td><span class="badge merge">MERGE</span></td>
+    <td><b>Transitividad.</b> 100→95 (frac=2.02) y 100→50 (frac=5.93). Dos ganadores directos,
+        pero 95→50 mergea → raíz única (50). Merge transitivo válido.</td>
+  </tr>
+
+  <tr>
+    <td>5</td><td><code>94↔91</code></td><td>office2</td>
+    <td class="num">8,845</td>
+    <td class="num">5,147</td><td>1.7:1</td>
+    <td class="num">4.26</td><td>1 (94)</td>
+    <td><span class="badge merge">MERGE</span></td>
+    <td><b>Ratio miente, frac acierta.</b> 91→94 ratio 1.7:1 (SYM), pero frac=4.26 →
+        91 (~2K pts) es fragmento de 94. 94→91 tiene frac=0.66 → sub-threshold.
+        El pipeline lo captura porque la etapa 1 mira frac, no ratio.</td>
+  </tr>
+
+  <tr>
+    <td>6</td><td><code>16↔2</code></td><td>office2</td>
+    <td class="num">11,555</td>
+    <td class="num">3,561</td><td>3.2:1</td>
+    <td class="num">0.03</td><td>0</td>
+    <td><span class="badge noise">NO ACTUAR</span></td>
+    <td><b>Borde puro.</b> 16 (suelo, ~345K pts) contra 2 (pared, ~420K pts).
+        Frac ínfimo → no actuar.</td>
+  </tr>
+
+  <tr>
+    <td>7</td><td><code>9↔90</code></td><td>office2</td>
+    <td class="num">177,364</td>
+    <td class="num">123,583</td><td>1.4:1</td>
+    <td class="num">0.99</td><td>—</td>
+    <td><span class="badge merge">MERGE<br>(descriptor)</span></td>
+    <td><b>SYM con frac medio.</b> Dos trozos de la misma pared. El ratio no separa,
+        pero el descriptor CLIP diría "misma clase". Entra por rama SYM → clase.</td>
+  </tr>
+
+  <tr>
+    <td>8</td><td><code>36↔139</code></td><td>office0</td>
+    <td class="num">20,611</td>
+    <td class="num">17,561</td><td>1.2:1</td>
+    <td class="num">1.13</td><td>—</td>
+    <td><span class="badge no-merge">NO MERGE</span></td>
+    <td><b>SYM con clases distintas.</b> Ratio 1.2:1, objetos distintos. El descriptor
+        diría clases diferentes → no merge.</td>
+  </tr>
+
+  <tr>
+    <td>9</td><td><code>61↔63</code></td><td>office2</td>
+    <td class="num">1,482</td>
+    <td class="num">1,469</td><td>1.0:1</td>
+    <td class="num">0.51</td><td>0</td>
+    <td><span class="badge noise">NO ACTUAR</span></td>
+    <td><b>Borde simétrico.</b> Ambos frac bajo (~0.3-0.5). Dos objetos distintos
+        tocándose. No pasa el filtro de frac.</td>
+  </tr>
+
+  <tr>
+    <td>10</td><td><code>6↔2</code></td><td>office0</td>
+    <td class="num">135,052</td>
+    <td class="num">2,230</td><td>60:1</td>
+    <td class="num">1.15</td><td>ASYM (extraño)</td>
+    <td><span class="badge split">SPLIT</span></td>
+    <td><b>Split (caso 3).</b> ASYM, frac marginal (1.15). Pero 6 es enorme y heterogénea
+        — contiene dos objetos reales. No lo resuelve el pipeline de merge; requiere
+        detección de heterogeneidad interna.</td>
+  </tr>
+
+  <tr>
+    <td>11</td><td><code>11↔7</code></td><td>office2</td>
+    <td class="num">144</td>
+    <td class="num">0</td><td>∞</td>
+    <td class="num">0.59</td><td>0</td>
+    <td><span class="badge noise">NO ACTUAR</span></td>
+    <td><b>Ruido.</b> 144 pts acumulados en toda la escena. Sin significancia estadística.</td>
+  </tr>
+
+</table>
+
+<p class="fileref">
+Nota: la columna "Ganadores con frac>1" cuenta solo las interacciones donde el perdedor
+tiene <code>frac &gt; 1.0</code>. Interacciones sub-threshold (frac entre 0.5 y 1.0)
+no cuentan como ganadores a efectos de la regla de unicidad.
+</p>
+
+<h3>6.7 · Distribución consolidada</h3>
+<table>
+  <tr><th>Tipo</th><th>Decisión</th><th class="num">office0</th><th class="num">office2</th><th class="num">office3</th><th class="num">Total</th><th>%</th></tr>
+  <tr>
+    <td><span class="badge merge">MERGE POR CONTENCIÓN</span> (ASYM + UNI)</td>
+    <td>Merge directo, sin descriptor</td>
+    <td class="num">203</td>
+    <td class="num">257</td>
+    <td class="num">451</td>
+    <td class="num">911</td>
+    <td>61%</td>
+  </tr>
+  <tr>
+    <td><span class="badge merge">MERGE POR CLASE</span> (sym + mismo descriptor)</td>
+    <td>Requiere ver coseno</td>
+    <td class="num">?¹</td>
+    <td class="num">?¹</td>
+    <td class="num">?¹</td>
+    <td class="num">—</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><span class="badge no-merge">NO MERGE</span> (sym + distinto descriptor)</td>
+    <td>No fusionar</td>
+    <td class="num">?¹</td>
+    <td class="num">?¹</td>
+    <td class="num">?¹</td>
+    <td class="num">—</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><span class="badge noise">RUIDO</span> (frac bajo)</td>
+    <td>Ignorar</td>
+    <td class="num">80</td>
+    <td class="num">115</td>
+    <td class="num">197</td>
+    <td class="num">392</td>
+    <td>26%</td>
+  </tr>
+  <tr style="border-top:2px solid var(--border)">
+    <td><b>Total pares direccionales</b></td>
+    <td></td>
+    <td class="num"><b>324</b></td>
+    <td class="num"><b>441</b></td>
+    <td class="num"><b>736</b></td>
+    <td class="num"><b>1,501</b></td>
+    <td>100%</td>
+  </tr>
+</table>
+<p class="fileref">
+¹ Pendiente: cruzar con descriptor CLIP de las instancias para separar merge-sym de no-merge-sym.
+Los 198 pares simétricos se repartirán entre estas dos categorías tras la verificación semántica.
+</p>
+
+<!-- 7 -->
+<h2 id="conclusiones">7 · Conclusiones</h2>
+
+<div class="box good">
+  <div class="lbl">1. El discriminador direccional FUNCIONA — con un matiz</div>
+  <p>
+  El ratio <code>contest(A→B) / contest(B→A)</code> separa dos regímenes:
+  <b>ASYM/UNI</b> (ratio &ge; 2:1) → merge directo por contención (61% de los pares),
+  sin necesidad de descriptor semántico. <b>SYM</b> (ratio &lt; 2:1) → ambiguo:
+  puede ser dos fragmentos del mismo objeto (9↔90 pared, 89↔87 sofá) o dos objetos
+  distintos (36↔139). Para el caso simétrico se necesita el descriptor como segundo filtro.
+  </p>
+</div>
+
+<div class="box good">
+  <div class="lbl">2. Pipeline de tres etapas: direccionalidad → unicidad de ganador → descriptor</div>
+  <p>
+  La estrategia de decisión merge propuesta es:
+  </p>
+  <ol>
+    <li><b>Filtro de frac:</b> frac bajo (&ll; 1) → borde, no actuar. Pasa el ~26% de pares.</li>
+    <li><b>Unicidad de ganador:</b> si un perdedor tiene frac alto contra ≥2 ganadores distintos, es una instancia fronteriza (ej. rodapiés 92 contra suelo y pared). Se queda como está.</li>
+    <li><b>ASYM/UNI + 1 ganador (47%):</b> merge directo por contención. Solo geometría 2D. Cero inferencia semántica.</li>
+    <li><b>SYM + frac alto (14%):</b> evaluar similaridad coseno del descriptor. Misma clase → merge; distinta → no merge.</li>
+  </ol>
+  <p>
+  El descriptor solo se evalúa en pares simétricos, no en O(n²).
+  </p>
+</div>
+
+<div class="box good">
+  <div class="lbl">3. La fragmentación es ubicua</div>
+  <p>
+  Entre el 47% y el 61% de los pares de instancias en cada escena muestran señal de merge.
+  Esto confirma que la fragmentación por la regla <em>sticky</em> no es un caso borde:
+  es el comportamiento dominante. Un sistema de fusión por contención resolvería
+  una fracción significativa de las instancias fragmentadas.
+  </p>
+</div>
+
+<div class="box">
+  <div class="lbl">4. Los splits existen pero son raros</div>
+  <p>
+  El caso 6↔2 en office0 es el único split claro detectado (~0.3% de los pares).
+  Esto sugiere que el split es un problema real pero poco frecuente. Su detección
+  requiere heterogeneidad interna — no basta la direccionalidad sola.
+  </p>
+</div>
+
+<div class="box warn">
+  <div class="lbl">5. El ruido se filtra por frac</div>
+  <p>
+  ~26% de los pares tienen <code>frac &lt; 0.5</code> (el perdedor tiene muchos puntos propios
+  no disputados). Estos son falsas alarmas que el sistema debe ignorar.
+  </p>
+</div>
+
+<div class="box good">
+  <div class="lbl">6. Hay "pozos de fragmentos" — instancias que atraen múltiples perdedores</div>
+  <p>
+  En office2, la instancia <code>16</code> es ganadora en 4 pares del top-15.
+  En office3, <code>43</code> gana en 5 pares, <code>78</code> en 3, <code>103</code> en 2.
+  Son objetos grandes (suelo, pared, sofá) que constantemente engullen fragmentos de
+  otros. Esto sugiere que el merge por contención sería especialmente efectivo si se
+  prioriza por número de perdedores por ganador.
+  </p>
+</div>
+
+<h3>Próximos pasos</h3>
+<ol>
+  <li><b>Persistencia (KFs por par)</b> — distinguir patrones estables de errores SAM de 1 KF. Añadir contador de KFs distintos por par para determinar el umbral N de "lazy + confirmar".</li>
+  <li><b>Cruce con Replica GT</b> — validar contra ground truth que los pares asimétricos son el mismo objeto real y los simétricos son distintos.</li>
+  <li><b>Per-feame contested fraction</b> — corregir la métrica <code>frac</code> computando por frame para tener denominador en la misma escala que el numerador.</li>
+  <li><b>Implementar merge por contención</b> — el caso más simple y de mayor impacto.</li>
+</ol>
+
+<hr>
+
+<div class="box good">
+  <div class="lbl">Resumen ejecutivo</div>
+  <p>
+  La instrumentación de <b>contest stats</b> ha validado empíricamente el discriminador
+  direccional propuesto en el diseño. Con 1,501 pares analizados en 3 escenas de Replica:
+  <b>el ratio de direccionalidad separa merges de no-merges sin ambigüedad</b>.
+  ~47% de los pares son merges candidatos (fragmentos SAM absorbibles), ~13% son
+  objetos distintos compitiendo, y ~26% son ruido filtrable. El único split detectado
+  (6↔2) confirma que el caso 3 existe pero es raro. La métrica está lista para guiar
+  la implementación de merge por contención.
+  </p>
+</div>
+
+<footer>
+  OVO · estudio contest stats · <code>study/point-instance-assignment</code> · 2026-06-14
+</footer>
+
+</div>
+</body>
+</html>

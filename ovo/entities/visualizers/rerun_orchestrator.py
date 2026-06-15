@@ -44,3 +44,7 @@ class QueueRendererOrchestrator:
                 if drain_until_sentinel(self.mpqueue):
                     return
                 time.sleep(self.renderer.error_sleep_s)
+
+        finalize = getattr(self.renderer, "finalize", None)
+        if callable(finalize):
+            finalize()

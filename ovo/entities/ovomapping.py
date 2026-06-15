@@ -103,6 +103,7 @@ class OVOSemMap():
 
         # Semantic module and SLAM backend.
         self.ovo = OVO(config["semantic"], self.logger, config["data"]["scene_name"], cam_intrinsics, device=self.device)
+        self.ovo.contest.set_output_dir(self.output_path)
         self.slam_backbone = get_slam_backbone(config, self.dataset, cam_intrinsics)
 
         # Optional preprocessing for SAM masks.
@@ -141,6 +142,8 @@ class OVOSemMap():
         }
         io_utils.save_dict_to_ckpt(
             submap_ckpt, "ovo_map.ckpt", directory=self.output_path)    
+        self.ovo.contest.dump(str(self.output_path / "contest.json"))
+        self.ovo.contest.dump_verdicts(str(self.output_path / "contest_verdicts.csv"))
         if self.config["slam"].get("save_estimated_cam", False):
             c2w = self.slam_backbone.get_cam_dict()
             with open(self.output_path / "estimated_c2w.npy", "wb") as f:
@@ -246,6 +249,8 @@ class OVOSemMap():
 
         c2w_np = c2w.cpu().numpy().astype(np.float16)
         colors = self.slam_backbone.get_pcd_colors()
+        normals = self.slam_backbone.get_point_normals()
+        normals_np = normals.cpu().numpy().astype(np.float16) if normals is not None and normals.shape[0] == pcd.shape[0] else None
         visual_snapshot = self.ovo.get_last_visual_snapshot()
 
         rgb = None
@@ -275,6 +280,7 @@ class OVOSemMap():
                 "points": pcd.cpu().numpy().astype(np.float16),
                 "obj_ids": pcd_obj_ids.cpu().numpy().astype(np.int16),
                 "colors": colors,
+                "normals": normals_np,
                 "c2w": c2w_np,
                 "rgb": rgb,
                 "ins_map": ins_map,
@@ -394,6 +400,8 @@ class OVOSemMap():
         t_lc_i = time.time()
         map_data = self.slam_backbone.get_map()
         kfs = self.slam_backbone.get_kfs()
+        point_obs = self.slam_backbone.get_point_observations()
+        point_normals = self.slam_backbone.get_point_normals()
 
         # Send "before fusion" snapshot to stream visualizer
         self._send_stream_frame(frame_id, mpqueue)
@@ -402,7 +410,7 @@ class OVOSemMap():
         if noise_cfg.get("jump_drift_enabled", False) and noise_cfg.get("save_pre_fusion_checkpoint", False):
             self._save_pre_fusion_checkpoint(frame_id)
 
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)
@@ -529,7 +537,9 @@ class OVOSemMap():
         frame_id = ckpt["frame_id"]
 
         print(f"Running fusion from checkpoint (frame_id={frame_id})...")
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs)
+        point_obs = self.slam_backbone.get_point_observations()
+        point_normals = self.slam_backbone.get_point_normals()
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)

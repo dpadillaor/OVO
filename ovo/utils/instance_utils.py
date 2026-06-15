@@ -83,6 +83,61 @@ def compute_pcd_old_overlap(
       return (dists < th_points).astype(float).mean()
 
 
+def seam_normal_angle(
+    chunk_xyz: torch.Tensor,
+    chunk_normals: torch.Tensor,
+    w_xyz: torch.Tensor,
+    w_normals: torch.Tensor,
+    k: int = 15,
+    dmax: float = 0.05,
+) -> float | None:
+    """Mean surface-normal turn (degrees) across the A-W seam.
+
+    For each disputed point of A (the chunk), find its k nearest neighbours in W,
+    average W's normals there (sign-aligned to avoid cancelling normals seen from
+    opposite views), and take the |cos| angle between A's normal and W's patch
+    normal. Averaged over the chunk.
+
+    Low (~<10°) -> the chunk continues W's surface -> same object (real fragment).
+    High (~>20°) -> a kink/groove -> two objects touching -> not a fragment.
+
+    The k-neighbour patch (vs a single nearest point) keeps W's normal off its noisy
+    rim. Returns None if no seam point has W within `dmax`.
+    """
+    chunk_xyz = chunk_xyz.detach().cpu().numpy().astype(np.float64)
+    chunk_normals = chunk_normals.detach().cpu().numpy().astype(np.float64)
+    w_xyz_np = w_xyz.detach().cpu().numpy().astype(np.float64)
+    w_normals = w_normals.detach().cpu().numpy().astype(np.float64)
+    if len(chunk_xyz) == 0 or len(w_xyz_np) == 0:
+        return None
+
+    pcw = o3d.geometry.PointCloud()
+    pcw.points = o3d.utility.Vector3dVector(w_xyz_np)
+    kdw = o3d.geometry.KDTreeFlann(pcw)
+    k = min(k, len(w_xyz_np))
+
+    angles = []
+    for pa, na in zip(chunk_xyz, chunk_normals):
+        if np.linalg.norm(na) < 1e-6:
+            continue
+        _, nn, _ = kdw.search_knn_vector_3d(pa, k)
+        if np.linalg.norm(pa - w_xyz_np[nn[0]]) > dmax:
+            continue
+        nref = w_normals[nn[0]]
+        if np.linalg.norm(nref) < 1e-6:
+            continue
+        acc = np.zeros(3)
+        for j in nn:
+            nv = w_normals[j]
+            if np.linalg.norm(nv) < 1e-6:
+                continue
+            acc += -nv if np.dot(nv, nref) < 0 else nv
+        npar = acc / (np.linalg.norm(acc) + 1e-9)
+        angles.append(np.degrees(np.arccos(abs(np.clip(np.dot(na, npar), -1, 1)))))
+
+    return float(np.mean(angles)) if angles else None
+
+
 def same_instance(instance1, instance2, points_centroid1, points_centroid2, th_centroid, th_cossim, th_points):
     """
     Legacy function - kept for backward compatibility during migration.

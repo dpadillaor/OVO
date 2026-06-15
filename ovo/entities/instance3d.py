@@ -65,6 +65,14 @@ class Instance3D:
         """
         self.points_ids.extend(points_ids)
 
+    def remove_points_ids(self, points_ids: set) -> int:
+        """Remove specific points from this instance. Used for SPLIT.
+        Returns number of points actually removed.
+        """
+        before = len(self.points_ids)
+        self.points_ids = [p for p in self.points_ids if p not in points_ids]
+        return before - len(self.points_ids)
+
     def add_keyframes(self, kf_id: int) -> None:
         """If frame  no already in list, add to list of keyframes where the object has been observed.
         Args:

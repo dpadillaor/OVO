@@ -132,6 +132,7 @@ class StreamRenderer(BaseRerunRenderer):
 
     MAX_LIVE_POINTS = 80_000
     MAX_FILE_POINTS = 300_000
+    NORMAL_ARROW_LEN = 0.04  # metres; visual length of per-point normal arrows
 
     def post_setup(self):
         width = self.cam_intrinsic["width"]
@@ -148,6 +149,7 @@ class StreamRenderer(BaseRerunRenderer):
         self.step = 0
         self.trajectory = []
         self._known_instance_ids: dict[int, set[int]] = {}  # keyed by id(recording) or -1 for default
+        self._normals_cache = None  # (points, instance_ids, normals); logged once at finalize
 
     def _log_instances_3d(self, points: np.ndarray, instance_ids: np.ndarray, *, recording=None, static: bool = False):
         radii = np.full(len(points), 0.008, dtype=np.float32)
@@ -172,11 +174,38 @@ class StreamRenderer(BaseRerunRenderer):
 
         self._known_instance_ids[rec_key] = unique_ids
 
+    def _log_normals_final(self):
+        """Log per-instance surface normals once, at end of stream, as static arrows
+        under world/normals/obj_<id>. Hidden by default via the blueprint override."""
+        cache = getattr(self, "_normals_cache", None)
+        if cache is None:
+            return
+        points, instance_ids, normals = cache
+        for uid in (int(u) for u in np.unique(instance_ids)):
+            if uid < 0:
+                continue
+            mask = instance_ids == uid
+            pts = points[mask]
+            colors = np.tile(self.cmap[uid % len(self.cmap)], (len(pts), 1)).astype(np.uint8)
+            arrows = rr.Arrows3D(origins=pts, vectors=normals[mask] * self.NORMAL_ARROW_LEN, colors=colors)
+            self._log(f"world/normals/obj_{uid}", arrows, file_static=True)
+
+    def finalize(self):
+        """Called once when the stream closes (sentinel received)."""
+        self._log_normals_final()
+
     def build_blueprint(self):
         return rrb.Blueprint(
             rrb.Vertical(
                 rrb.Horizontal(
-                    rrb.Spatial3DView(name="Instances3D", contents="world/**"),
+                    rrb.Spatial3DView(
+                        name="Instances3D",
+                        contents="world/**",
+                        # Per-instance normals (world/normals/obj_<id>) are saved but
+                        # hidden by default; toggling the parent reveals them. The user
+                        # then toggles each object under it in the entity tree.
+                        overrides={"world/normals": rrb.EntityBehavior(visible=False)},
+                    ),
                 ),
                 rrb.Horizontal(
                     rrb.Spatial2DView(name="RGB", contents="frame/rgb"),
@@ -199,10 +228,12 @@ class StreamRenderer(BaseRerunRenderer):
         ins_map = None
         time_step = self.step
 
+        normals = None
         if is_stream_frame_message(data):
             points = data["points"]
             obj_ids = data["obj_ids"]
             colors = data["colors"]
+            normals = data.get("normals")
             c2w = data["c2w"]
             rgb = data["rgb"]
             ins_map = data["ins_map"]
@@ -218,12 +249,15 @@ class StreamRenderer(BaseRerunRenderer):
 
         points = points.astype(np.float32)
         c2w = c2w.astype(np.float32)
+        if normals is not None:
+            normals = normals.astype(np.float32)
 
         instance_ids = resolve_instance_ids(obj_ids, points.shape[0])
 
         mask = ceiling_mask(points)
         points_full = points[mask]
         instance_ids_full = instance_ids[mask]
+        normals_full = normals[mask] if normals is not None else None
 
         if corrected_trajectory is not None:
             self.trajectory = corrected_trajectory
@@ -244,9 +278,15 @@ class StreamRenderer(BaseRerunRenderer):
             idx.sort()
             points_file = points_full[idx]
             instance_ids_file = instance_ids_full[idx]
+            normals_file = normals_full[idx] if normals_full is not None else None
         else:
             points_file = points_full
             instance_ids_file = instance_ids_full
+            normals_file = normals_full
+
+        # Cache the latest (capped) normals; logged once at finalize, not per frame.
+        if normals_file is not None:
+            self._normals_cache = (points_file, instance_ids_file, normals_file)
 
         if self.live_rec is not None:
             rr.set_time("step", sequence=time_step, recording=self.live_rec)

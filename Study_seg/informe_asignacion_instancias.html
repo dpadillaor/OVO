@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estudio: Asignación de Instancias desde Puntos 3D — OVO</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2b333d;
+    --txt:#d7dde5; --muted:#8b97a7; --accent:#58a6ff;
+    --good:#3fb950; --bad:#f85149; --warn:#d29922; --code:#79c0ff;
+    --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;font-size:16px}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 28px 120px}
+  header.title{border-bottom:1px solid var(--border);padding-bottom:24px;margin-bottom:8px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:15px}
+  h2{font-size:23px;margin:46px 0 14px;padding-top:14px;border-top:1px solid var(--border)}
+  h3{font-size:18px;margin:28px 0 8px;color:#e6edf3}
+  h4{font-size:15px;margin:18px 0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  code{font-family:var(--mono);background:var(--panel2);color:var(--code);
+    padding:2px 6px;border-radius:5px;font-size:13.5px}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.5}
+  pre code{background:none;padding:0;color:#c9d1d9}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .lead{font-size:17px;color:#c2ccd8}
+  .tag{display:inline-block;background:var(--panel2);border:1px solid var(--border);
+    color:var(--muted);font-size:12px;padding:2px 9px;border-radius:20px;margin-right:6px;font-family:var(--mono)}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#e6edf3;font-weight:600}
+  td code{font-size:12.5px}
+  .box{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);
+    border-radius:8px;padding:14px 18px;margin:18px 0}
+  .box.good{border-left-color:var(--good)}
+  .box.bad{border-left-color:var(--bad)}
+  .box.warn{border-left-color:var(--warn)}
+  .box .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px}
+  .box.good .lbl{color:var(--good)} .box.bad .lbl{color:var(--bad)} .box.warn .lbl{color:var(--warn)}
+  .box.accent .lbl{color:var(--accent)}
+  .fileref{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  ul,ol{margin:10px 0;padding-left:24px}
+  li{margin:5px 0}
+  .toc{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 24px;margin:24px 0}
+  .toc ol{columns:2;column-gap:40px}
+  .toc a{color:var(--txt)}
+  .pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:4px;font-weight:700}
+  .pill.m{background:#10341a;color:var(--good)}
+  .pill.s{background:#3a1416;color:var(--bad)}
+  .pill.f{background:#3a2d0a;color:var(--warn)}
+  .case-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:16px 0}
+  .diagram{font-family:var(--mono);font-size:12.5px;color:#9fb0c3;white-space:pre;background:#0a0d12;
+    border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;line-height:1.45}
+  .kv{color:var(--code)}
+  footer{margin-top:60px;border-top:1px solid var(--border);padding-top:18px;color:var(--muted);font-size:13px}
+  .arrow{color:var(--accent);font-weight:700}
+  hr{border:none;border-top:1px solid var(--border);margin:30px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="title">
+  <h1>Asignación de instancias desde puntos 3D</h1>
+  <div class="sub">Estudio de fragmentación de instancias y mecanismo de reconciliación a nivel de punto · OVO</div>
+  <div style="margin-top:14px">
+    <span class="tag">rama: study/point-instance-assignment</span>
+    <span class="tag">fecha: 2026-06-14</span>
+    <span class="tag">dataset: Replica</span>
+  </div>
+</header>
+
+<p class="lead">Cómo OVO asigna puntos 3D a instancias hoy, por qué se fragmentan los objetos,
+y diseño de un mecanismo —dirigido por eventos y a nivel de punto— que resuelve los casos
+que la fusión genérica no puede tocar: <b>contención total (merge)</b> y <b>error de segmentación incorregible (split)</b>.</p>
+
+<div class="toc">
+  <b>Índice</b>
+  <ol>
+    <li><a href="#pipeline">Pipeline actual de asignación</a></li>
+    <li><a href="#assign">El núcleo: <code>_track_objects</code></a></li>
+    <li><a href="#fusion">La fusión actual y sus límites</a></li>
+    <li><a href="#problema">El problema: fragmentación</a></li>
+    <li><a href="#casos">Los tres casos</a></li>
+    <li><a href="#sustrato">El sustrato: puntos en disputa</a></li>
+    <li><a href="#regla">Regla unificada merge / split</a></li>
+    <li><a href="#alcance">Alcance y por qué mecanismo propio</a></li>
+    <li><a href="#abierto">Decisiones abiertas</a></li>
+    <li><a href="#plan">Plan: instrumentar primero</a></li>
+    <li><a href="#medir">Qué medir</a></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<h2 id="pipeline">1 · Pipeline actual de asignación</h2>
+<p>El estado del mapa es una tupla <code>(points_3d, points_ids, points_ins_ids)</code>:</p>
+<ul>
+  <li><code>points_3d</code> — coordenadas 3D que entrega el SLAM.</li>
+  <li><code>points_ids</code> — id permanente de cada punto (sobrevive a poda/reordenado).</li>
+  <li><code>points_ins_ids</code> — instancia dueña de cada punto. <code>-1</code> = sin asignar.</li>
+</ul>
+<p>Por cada keyframe, <code>OVO._match_and_track_instances</code>
+<span class="fileref">ovo/entities/ovo.py:268</span> hace:</p>
+<ol>
+  <li><b>Frustum cull</b> — <code>compute_frustum_point_ids</code> deja solo puntos dentro de cámara. <span class="fileref">ovo.py:295-297</span></li>
+  <li><b>Proyección + match</b> — <code>match_3d_points_to_2d_pixels</code> proyecta con intrínsecos y filtra por consistencia de profundidad: se queda el punto solo si <code>|prof_punto − prof_sensor[pixel]| &lt; match_distance_th</code>. <span class="fileref">geometry_utils.py:46</span></li>
+  <li><b>Píxel → máscara</b> — <code>matched_seg_idxs = seg_map[y,x]</code>: cada punto recibe el índice de máscara SAM donde cae. <span class="fileref">ovo.py:308</span></li>
+  <li><b>Asignar / track</b> — <code>_track_objects</code>. <span class="fileref">ovo.py:326</span></li>
+</ol>
+
+<!-- 2 -->
+<h2 id="assign">2 · El núcleo: <code>_track_objects</code></h2>
+<p>Por cada máscara <code>map_idx</code>, junta los puntos que caen en ella y mira a qué instancias pertenecen:</p>
+<pre><code>map_points        = puntos casados en esta máscara
+points_ins_ids[…] = [A, A, A, B, B, 30]   <-- VARIAS instancias en UNA máscara
+map_ins_id = torch.mode(...)               <-- se queda la mayoría, DESCARTA el resto</code></pre>
+<p class="fileref">ovo/entities/ovo.py:341-366</p>
+
+<h4>Tres desenlaces (todo condicionado a <code>track_th</code>)</h4>
+<table>
+  <tr><th>Caso</th><th>Condición</th><th>Acción</th></tr>
+  <tr><td><b>A — unir a instancia existente</b></td><td>nº puntos ya asignados &gt; <code>track_th</code></td>
+      <td><code>map_ins_id = mode(asignados)</code> (voto mayoría). Los puntos <code>-1</code> de la máscara se <b>absorben</b> a esa instancia.</td></tr>
+  <tr><td><b>B — nacer instancia</b></td><td>pocos asignados pero nº de <code>-1</code> &gt; <code>track_th</code></td>
+      <td>Nueva <code>Instance3D</code>; reclama los puntos <code>-1</code>.</td></tr>
+  <tr><td><b>C — ignorar</b></td><td>muy pocos puntos</td><td>máscara saltada, nada se asigna.</td></tr>
+</table>
+
+<div class="box bad">
+  <div class="lbl">Regla dura del sistema</div>
+  <b>Solo los puntos <code>-1</code> se (re)asignan por frame.</b> Una vez un punto tiene dueño,
+  ese frame no lo mueve — es <b>sticky</b>. Mover o reasignar puntos ya asignados solo ocurre
+  en la fusión posterior. Esta regla es el origen directo de la fragmentación.
+</div>
+
+<!-- 3 -->
+<h2 id="fusion">3 · La fusión actual y sus límites</h2>
+<p>Etapa global y periódica: <code>_fuse_overlapping_instances</code>
+<span class="fileref">ovo.py:543</span>. Compara <b>todos los pares</b> de instancias (O(n²),
+fuerza bruta) y aplica una cadena de criterios; <b>cualquiera que falle rechaza</b> el merge.</p>
+<p>Cadena por defecto <span class="fileref">fusion/factory.py:17</span>:</p>
+<pre><code>cooccurrence  ->  centroid  ->  cos_sim  ->  overlap</code></pre>
+<table>
+  <tr><th>Criterio</th><th>Qué mide</th><th>Falla cuando…</th></tr>
+  <tr><td><code>cooccurrence</code></td><td>nº de keyframes donde ambas instancias se vieron juntas</td><td>comparten &gt; umbral KFs → <b>veto</b> (asume "vistas juntas = distintas")</td></tr>
+  <tr><td><code>centroid</code></td><td>distancia entre centroides</td><td>&gt; <code>th_centroid</code> (1.5 m) — penaliza objetos grandes</td></tr>
+  <tr><td><code>cos_sim</code></td><td>similitud de descriptor (CLIP/PE/…)</td><td>&lt; <code>th_cossim</code></td></tr>
+  <tr><td><code>overlap</code></td><td>fracción de la nube pequeña cerca de la grande</td><td><code>p_dist</code> bajo</td></tr>
+</table>
+<div class="box warn">
+  <div class="lbl">Límite estructural</div>
+  La fusión decide por <b>geometría global</b> y solo sabe <b>fusionar instancias enteras</b>.
+  No tiene la información de <b>solapamiento de máscara 2D</b> (la tira en <code>torch.mode</code>),
+  y <b>nunca puede partir</b> una instancia. Eso deja dos casos fuera de su alcance.
+</div>
+
+<!-- 4 -->
+<h2 id="problema">4 · El problema: fragmentación por perspectiva</h2>
+<p>Un mismo objeto físico acaba como varias instancias:</p>
+<div class="diagram">KF temprano        KFs intermedios          KF tardío
+[ |  ]            [ |==  ]                 [ |======| ]
+ ve esquina       ve media parte            ve sofá entero
+ -> nace A        -> nace B (puntos -1)     -> mascara grande cubre A y B
+
+ A nunca se reasigna (sticky). Ahora A y B coexisten,
+ ambas son el mismo sofá, pero A nunca es parte de B.</div>
+<p>La máscara grande del KF tardío <b>contiene los puntos de A</b>, pero como A ya tiene dueño,
+el voto mayoría se queda B y A sobrevive intacta. La <b>evidencia 2D más fuerte</b>
+(una máscara = una cosa) se descarta en <code>ovo.py:350</code>.</p>
+
+<!-- 5 -->
+<h2 id="casos">5 · Los tres casos observados</h2>
+<p>Razonando a nivel de punto: para cada punto <code>p</code>, <code>owner(p)</code> = su instancia,
+y <code>obs(p)</code> = multiset de instancias dominantes de las máscaras donde cayó a lo largo de los KFs.</p>
+
+<div class="case-grid">
+
+  <div class="box good">
+    <div class="lbl"><span class="pill m">MERGE</span> &nbsp;Caso 1 — contención total</div>
+    <p>Vista parcial (A) → vista completa (B) que la engulle. Asumimos que los píxeles de A
+       siempre caen dentro de B.</p>
+    <ul>
+      <li>Puntos de A: <code>obs = {A, B}</code> — <b>todos</b> ven B.</li>
+      <li>Puntos de B fuera de A: <code>obs = {B}</code>.</li>
+    </ul>
+    <b>A uniformemente contenido en B. Asimétrico, limpio. → fusionar A en B.</b>
+  </div>
+
+  <div class="box accent">
+    <div class="lbl"><span class="pill f">FUSIÓN ACTUAL</span> &nbsp;Caso 2 — intersección a medias</div>
+    <p>Solo algunos píxeles de ambas coinciden. Contención parcial bidireccional, overlap 3D moderado.</p>
+    <b>Se delega a la fusión geométrica existente</b> (centroid + cos_sim + overlap).
+    Fuera del alcance de este estudio.
+  </div>
+
+  <div class="box bad">
+    <div class="lbl"><span class="pill s">SPLIT</span> &nbsp;Caso 3 — error de segmentación incorregible</div>
+    <p>Objeto entrando en escena mal segmentado: SAM une <b>pizarra + mesita</b> en una sola
+       instancia <code>X</code>. La mesa desaparece y al volver se segmenta bien como <code>T</code>.</p>
+    <ul>
+      <li>Puntos pizarra de X: <code>obs = {X}</code> — <b>nunca</b> ven T.</li>
+      <li>Puntos mesa de X: <code>obs = {X, T}</code> — ven T fuerte.</li>
+      <li>Puntos de T: <code>obs = {T, X}</code>.</li>
+    </ul>
+    <b>X es internamente heterogénea.</b> Fusionar T→X envenenaría la mesa con la pizarra
+    (irreversible). La solución correcta es <b>partir X</b> por los puntos en disputa
+    y soltar la mesa hacia T.
+  </div>
+
+</div>
+
+<div class="box">
+  <div class="lbl" style="color:var(--accent)">El insight</div>
+  El caso 3 <b>no es un problema de fusión, es de SPLIT</b>. La fusión solo mergea instancias
+  enteras → estructuralmente no puede arreglarlo. Y como T y X comparten puntos pero X es
+  mayormente otro objeto, ningún criterio geométrico debería (ni podría) unirlas con sentido.
+</div>
+
+<!-- 6 -->
+<h2 id="sustrato">6 · El sustrato común: puntos en disputa</h2>
+<p>Casos 1 y 3 son la <b>misma observación</b> —"puntos de una instancia vistos sistemáticamente
+bajo otra"— con una sola diferencia: <b>qué fracción de la instancia está en disputa</b>.
+Eso obliga a <b>resolución por punto</b>; los contadores instancia–instancia esconden la heterogeneidad de X.</p>
+
+<p>No hace falta guardar la historia de TODOS los puntos. Solo los <b>contested points</b>:
+aquellos que en algún KF caen en una máscara cuya instancia dominante ≠ su dueño.</p>
+<pre><code>contested[point_id] = Counter{ ins_id : veces visto bajo esa instancia }</code></pre>
+<p>De ahí se deriva todo:</p>
+<ul>
+  <li><b>conjunto en disputa A↔B</b> = puntos con <code>owner=A</code> cuyo <code>obs</code> incluye B → contención y dirección.</li>
+  <li><b>heterogeneidad de X</b> = ¿los puntos en disputa de X forman un sub-cluster coherente (mismo target + misma región 3D) frente al resto de X? → señal de split.</li>
+  <li><b>persistencia</b> = magnitud del Counter (no solo nº de KFs) → robustez ante una máscara SAM mala puntual.</li>
+</ul>
+<div class="box accent">
+  <div class="lbl">Reubicación de la idea previa</div>
+  El "co-mask graph" instancia–instancia que se barajó antes pasa a ser un <b>derivado</b>
+  de este registro, no la fuente. La fuente es <code>punto → instancias que lo reclaman</code>.
+</div>
+
+<!-- 7 -->
+<h2 id="regla">7 · Regla unificada merge / split</h2>
+<p>Para una instancia <code>A</code> con conjunto en disputa hacia un target <code>T</code>:</p>
+<pre><code>contested_fraction(A->T) = |puntos de A vistos bajo T| / |puntos de A|</code></pre>
+<table>
+  <tr><th><code>contested_fraction</code></th><th>Condición extra</th><th>Acción</th><th>Caso</th></tr>
+  <tr><td><b>≈ 1.0</b></td><td>—</td>
+      <td><span class="pill m">MERGE</span> A entera pertenece a otro → fusionar A en T</td><td>1</td></tr>
+  <tr><td><b>parcial</b></td><td>subconjunto en disputa espacialmente coherente + apunta consistente a un único T, y el resto de A limpio</td>
+      <td><span class="pill s">SPLIT</span> trocear ese subconjunto y reasignar a T</td><td>3</td></tr>
+  <tr><td><b>parcial</b></td><td>difuso / ruidoso</td>
+      <td><span class="pill f">NO ACTUAR</span> cae a fusión geométrica o se queda</td><td>2</td></tr>
+</table>
+<p><b>Una observación, una métrica</b> (fracción en disputa + coherencia del subconjunto),
+<b>dos operaciones</b>. Exactamente lo que la fusión genérica no puede hacer.</p>
+
+<!-- 8 -->
+<h2 id="alcance">8 · Alcance y por qué mecanismo propio (no parche de fusión)</h2>
+<ul>
+  <li><b>Dirigido por evento, no global.</b> La co-pertenencia a una máscara <i>es</i> el disparador;
+      ya sabemos <i>qué</i> dos instancias reconciliar. No hace falta barrer O(n²).</li>
+  <li><b>Caso 1 determinista.</b> Hoy la fusión a veces lo pilla (overlap de A⊂B da p_dist alto),
+      pero lo bloquean <code>centroid</code> (sofá grande → centroides lejos) y el <code>veto cooccurrence</code>.
+      La señal de contención por puntos es direccional y no hereda esos bloqueos.</li>
+  <li><b>Caso 3 = capacidad nueva.</b> Split no existe en el sistema. La fusión solo une instancias enteras.</li>
+  <li><b>Vive al lado de la fusión, no dentro.</b> La fusión sigue siendo el comparador genérico;
+      esto es un especialista que se activa solo cuando aparece la señal.</li>
+</ul>
+
+<!-- 9 -->
+<h2 id="abierto">9 · Decisiones abiertas (casos 1 y 3)</h2>
+<ol>
+  <li><b>Granularidad del registro</b> — ¿por punto (preciso, más memoria) o por cluster espacial
+      (barato, robusto a ruido)? El caso 3 necesita distinguir sub-clusters dentro de X;
+      clusters podrían bastar.</li>
+  <li><b>Coherencia del subconjunto en disputa</b> (clave del split) — ¿basta "mismo target + persistencia"
+      o se exige que el subconjunto sea un cluster espacial compacto (p.ej. DBSCAN/conectividad)
+      para no trocear por ruido?</li>
+  <li><b>Umbrales</b> — frontera merge (frac≈1) vs split (frac parcial) vs no-actuar. Probablemente empírico.</li>
+  <li><b>Mecánica del split</b> — partir <code>points_ins_ids[X]</code>, recalcular descriptores de los
+      dos trozos. ¿El trozo mesa se mergea a T al instante o nace instancia y deja que el merge lo recoja?</li>
+  <li><b>Timing (Fork 1, elegido)</b> — <b>lazy + confirmar</b>: acumular evidencia varios KFs y actuar
+      tras persistencia N. Robusto frente a máscaras SAM malas puntuales.</li>
+  <li><b>Ciclo de vida del registro</b> — podar en <code>merge</code>/<code>remove</code> como ya hace
+      <code>CooccurrenceGraph</code> <span class="fileref">cooccurrence_graph.py:27,39</span>; serializar con la escena.</li>
+</ol>
+
+<!-- 10 -->
+<h2 id="plan">10 · Plan: instrumentar antes de actuar</h2>
+<ol>
+  <li><b>Registrar contested points</b> en <code>_track_objects</code> sin cambiar comportamiento
+      (solo log): cuando una máscara abarca ≥2 instancias asignadas, anotar <code>(punto, owner, instancia_dominante, kf)</code>.</li>
+  <li><b>Sacar estadística en Replica</b>: ¿cuántos eventos son caso 1 / 3? ¿la <code>contested_fraction</code>
+      separa limpiamente merge vs split?</li>
+  <li><b>Validar el discriminador de pureza/heterogeneidad</b> antes de construir merge ni split.</li>
+  <li>Solo entonces: implementar primero <span class="pill m">MERGE</span> por contención (más simple),
+      luego <span class="pill s">SPLIT</span> (capacidad nueva).</li>
+</ol>
+
+<!-- 11 -->
+<h2 id="medir">11 · Qué medir</h2>
+<p>El objetivo de la instrumentación es producir <b>evidencia para decidir si el discriminador
+funciona antes de construir merge ni split</b>. Todo se registra sin cambiar comportamiento.</p>
+
+<h4>Materia prima — por evento de co-pertenencia</h4>
+<p>Cada vez que una máscara abarca ≥2 instancias asignadas, anotar:</p>
+<pre><code>(kf, mask_idx, owner_counts)
+owner_counts = { A: nA, B: nB, ... }   # puntos por instancia dentro de la máscara</code></pre>
+
+<h4>Estadísticas derivadas</h4>
+<table>
+  <tr><th>#</th><th>Métrica</th><th>Qué responde / decisión que informa</th></tr>
+  <tr>
+    <td><b>1</b></td>
+    <td><b>¿Existe la señal?</b> (sanity)<br>
+        nº de eventos co-máscara por escena; distribución de instancias por máscara (2, 3, ≥4)</td>
+    <td>Si es ~0 → no hay problema que resolver, parar.</td>
+  </tr>
+  <tr>
+    <td><b>2</b></td>
+    <td><b>Separación de casos</b> — histograma de <code>contested_fraction(A→T)</code> acumulada por par</td>
+    <td>Test clave. Hipótesis: <b>bimodal</b> (pico ≈1.0 = caso 1; masa intermedia = caso 3/2).
+        Bimodal limpio → el discriminador vale. Continuo difuso → un umbral único no separa, repensar.</td>
+  </tr>
+  <tr>
+    <td><b>3</b></td>
+    <td><b>Coherencia espacial del subconjunto en disputa</b> — para fracción parcial, ¿los puntos
+        en disputa forman un cluster compacto o están dispersos?<br>
+        métrica: extensión-cluster / extensión-total, o silhouette de DBSCAN</td>
+    <td>Valida el split (caso 3: mesa = cluster compacto dentro de pizarra).
+        Decide si "mismo target + persistencia" basta o hace falta clustering espacial
+        (Decisión abierta&nbsp;#2).</td>
+  </tr>
+  <tr>
+    <td><b>4</b></td>
+    <td><b>Persistencia</b> — distribución de "nº de KFs distintos" por arista de disputa</td>
+    <td>Valida lazy + N-frames. ¿Casos reales persistentes vs errores SAM de 1 KF?
+        Si separa → da el valor de <b>N</b>.</td>
+  </tr>
+  <tr>
+    <td><b>5</b></td>
+    <td><b>Direccionalidad</b> — <code>frac(A→T)</code> vs <code>frac(T→A)</code></td>
+    <td>Merge vs split por asimetría. Caso 1: <code>frac(A→T)≈1</code>, <code>frac(T→A)</code> bajo → merge.
+        Caso 3: T contenido solo en sub-cluster de X → asimetría + heterogeneidad.</td>
+  </tr>
+  <tr>
+    <td><b>6</b></td>
+    <td><b>Heterogeneidad / pureza de instancia</b> — ¿los puntos de una instancia se parten en grupos
+        con <code>obs</code> divergente?</td>
+    <td>Detector de instancia corrupta (X). Cuenta cuántas instancias en Replica son impuras
+        → tamaño real del problema caso 3.</td>
+  </tr>
+</table>
+
+<h4>Cierre del bucle — ground truth de Replica</h4>
+<p>Replica tiene GT de instancias. Cruzar para pasar de "creo que" a "los números dicen":</p>
+<ul>
+  <li>¿los pares con <code>frac≈1</code> son la <b>misma</b> instancia GT? → valida merge.</li>
+  <li>¿las instancias impuras abarcan <b>≥2</b> instancias GT? → valida split.</li>
+</ul>
+<div class="box accent">
+  <div class="lbl">Mínimo viable</div>
+  <b>#2 (histograma de fracción) + #4 (persistencia) + cruce con GT.</b>
+  Solo eso ya dice si merge-por-contención y el umbral N son reales.
+  #3 y #6 son para afinar el split después.
+</div>
+
+<div class="box good">
+  <div class="lbl">Resumen ejecutivo</div>
+  La fragmentación nace de la regla <i>sticky</i> en la asignación. La fusión genérica no la arregla
+  porque (a) descarta el solapamiento de máscara 2D y (b) no sabe partir instancias.
+  El mecanismo propuesto registra <b>puntos en disputa</b> y aplica una <b>regla unificada</b>:
+  fracción≈1 → <span class="pill m">merge</span> (caso 1), fracción parcial coherente →
+  <span class="pill s">split</span> (caso 3). Caso 2 queda en la fusión actual.
+  Primer paso: <b>instrumentar y medir</b>, sin tocar comportamiento.
+</div>
+
+<footer>
+  Documento de diseño · OVO · rama <code>study/point-instance-assignment</code> ·
+  Referencias de código verificadas contra el árbol en el worktree.
+  Pendiente: instrumentación de contested points y estadística sobre Replica.
+</footer>
+
+</div>
+</body>
+</html>

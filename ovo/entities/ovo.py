@@ -5,6 +5,7 @@ import pprint
 import torch
 import time
 
+
 from ..utils import geometry_utils, instance_utils
 from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
@@ -13,6 +14,7 @@ from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy
 from ..utils.cooccurrence_graph import CooccurrenceGraph
+from .contest import ContestManager
 from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter, SAM3FusionAdapter
 
 class OVO:
@@ -75,6 +77,9 @@ class OVO:
         
         self.next_ins_id = 0
         self.kf_id = 0
+
+        # Contest stats — counts points of instance A that fall under instance B's mask
+        self.contest = ContestManager(config)
 
         # Sem loop-closure parameters
         self.th_centroid = config.get("th_centroid", 1.5)
@@ -344,10 +349,14 @@ class OVO:
             if len(map_points)> track_th:
                 mask_area = (seg_map == map_idx).sum().item()
                 assigned_mask = points_ins_ids[map_points] > -1                    
-                unassigned_points_ids = points_ids[map_points[~assigned_mask]].cpu().tolist()
+                unassigned_points_ids = points_ids[map_points[~assigned_mask]].flatten().cpu().tolist()
                 #Assign points to 3D instance, or create a new instance
                 if assigned_mask.sum().item() > track_th:
                     map_ins_id = torch.mode(points_ins_ids[map_points[assigned_mask]]).values.item()
+                    assigned_idx = map_points[assigned_mask]
+                    contested = points_ins_ids[assigned_idx] != map_ins_id
+                    if contested.any():
+                        self.contest.record(points_ids[assigned_idx[contested]].flatten(), map_ins_id)
                     self.objects[map_ins_id].update(unassigned_points_ids, kf_id, mask_area)
                     if map_ins_id in matched_ins_info.keys():
                         matched_ins_info[map_ins_id].append((map_idx, mask_area))  
@@ -504,11 +513,12 @@ class OVO:
             else:
                 objects_to_del.append(self.objects[ins_id])
                 self.cooccurrence.remove(ins_id)
+                self.contest.on_remove(ins_id)
 
-    def update_map(self, map_data, kfs):
+    def update_map(self, map_data, kfs, point_obs=None, point_normals=None):
         # 0. clean the queue
         self.complete_semantic_info()
-        points_3d, _, points_ins_ids = map_data
+        points_3d, points_ids_all, points_ins_ids = map_data
 
         # 0.1 Remove deleted_kfs :
         self._remove_deleted_keyframes(kfs)
@@ -518,12 +528,62 @@ class OVO:
         objects_to_del = []
         self._remove_missing_instances(points_ins_ids, objects_list, objects_to_del)
 
-        # 2. Fuse 3D instances that fulfill a condition.
-        new_objects, fused_objects, points_ins_ids, fusion_decisions, t_fusion, criterion_times = self._fuse_overlapping_instances(
-            objects_list, points_3d, map_data
-        )
+        # descriptor (cos-sim CLIP) para desempatar merge/split en la franja parcial
+        def _contest_sim(a: int, w: int):
+            oa = self.objects.get(a)
+            ow = self.objects.get(w)
+            if oa is None or ow is None or oa.clip_feature is None or ow.clip_feature is None:
+                return None
+            return float(torch.nn.functional.cosine_similarity(
+                oa.clip_feature[0], ow.clip_feature[0], dim=0))
 
-        print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
+        # señal geométrica: giro de la normal de superficie a través de la costura
+        # chunk<->W. Distingue fragmento real (transferir) de objeto en contacto (no).
+        ids_flat = points_ids_all.flatten()
+
+        def _contest_seam(loser: int, winner: int, chunk_ids: tuple):
+            if point_normals is None or not chunk_ids:
+                return None
+            chunk_t = torch.as_tensor(list(chunk_ids), device=ids_flat.device)
+            chunk_mask = torch.isin(ids_flat, chunk_t)
+            w_mask = points_ins_ids == winner
+            if chunk_mask.sum() == 0 or w_mask.sum() == 0:
+                return None
+            return instance_utils.seam_normal_angle(
+                points_3d[chunk_mask], point_normals[chunk_mask],
+                points_3d[w_mask], point_normals[w_mask],
+            )
+
+        verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam)
+        print("contest:", self.contest.summarize(verdicts))
+
+        contest_mode = self.config.get("contest_fusion", "observe")  # observe | only | both
+
+        if contest_mode in ("only", "both"):
+            points_ins_ids, contest_fused = self._apply_contest_merges(verdicts, objects_list, points_ins_ids, map_data)
+        else:
+            contest_fused = {}
+
+        if contest_mode == "only":
+            new_objects = {k: v for k, v in self.objects.items() if k not in contest_fused}
+            fused_objects = contest_fused
+            fusion_decisions = []
+            t_fusion = 0.0
+            criterion_times = {}
+        elif contest_mode == "both":
+            objects_list = [obj for obj in self.objects.values() if obj.id not in contest_fused]
+            new_objects, fused_objects2, points_ins_ids, fusion_decisions, t_fusion, criterion_times = self._fuse_overlapping_instances(
+                objects_list, points_3d, map_data
+            )
+            fused_objects = {**contest_fused, **fused_objects2}
+        else:
+            new_objects, fused_objects, points_ins_ids, fusion_decisions, t_fusion, criterion_times = self._fuse_overlapping_instances(
+                objects_list, points_3d, map_data
+            )
+
+        n_fused = len(fused_objects)
+
+        print(f"Semantic Map update: removed {len(objects_to_del)}, fused {n_fused} instances")
 
         # 3. Updated saved info
         criterion_times["t_descriptor_update"] = round(self._update_descriptors_after_fusion(fused_objects), 4)
@@ -539,6 +599,64 @@ class OVO:
             self.update_objects_pe()
 
         return points_ins_ids, fusion_decisions, t_fusion, criterion_times
+
+    def _apply_contest_merges(self, verdicts, objects_list, points_ins_ids, map_data):
+        """
+        Ejecuta los veredictos MERGE_CONTAINMENT y SPLIT del contest.
+        Retorna (points_ins_ids, fused_objects).
+        """
+        _, points_ids, _ = map_data
+        fused_objects = {}
+        for v in verdicts:
+            if v.decision.name == "MERGE_CONTAINMENT" and v.winner is not None:
+                loser_id = v.loser
+                winner_id = v.winner
+                if loser_id not in self.objects or winner_id not in self.objects:
+                    continue
+                if loser_id in fused_objects:
+                    continue
+                winner = self.objects[winner_id]
+                loser = self.objects[loser_id]
+                winner, points_ins_ids = instance_utils.fuse_instances(winner, loser, map_data)
+                self.cooccurrence.merge(target=winner_id, source=loser_id)
+                self.contest.on_merge(target=winner_id, source=loser_id)
+                fused_objects[loser_id] = winner_id
+                self.objects[winner_id] = winner
+
+        split_mode = self.config.get("contest_split_mode", "off")
+        split_count = 0
+        if split_mode != "off":
+            for v in verdicts:
+                if v.decision.name != "SPLIT" or v.winner is None or not v.subset:
+                    continue
+                is_partial = "parcial" in v.reason
+                is_dominance = "dominancia" in v.reason
+                if split_mode == "partial" and not is_partial:
+                    continue
+                if split_mode == "dominance" and not is_dominance:
+                    continue
+                loser_id = v.loser
+                winner_id = v.winner
+                # skip if either side was already consumed by a merge in this batch
+                # (e.g. contradictory MERGE+SPLIT verdicts on the same pair) -> avoids
+                # reassigning points to an instance that is about to be deleted.
+                if loser_id in fused_objects or winner_id in fused_objects:
+                    continue
+                if loser_id not in self.objects or winner_id not in self.objects:
+                    continue
+                subset_set = set(v.subset)
+                loser = self.objects[loser_id]
+                winner = self.objects[winner_id]
+                removed = loser.remove_points_ids(subset_set)
+                if removed > 0:
+                    winner.add_points_ids(list(subset_set))
+                    subset_t = torch.as_tensor(list(subset_set), device=points_ins_ids.device)
+                    points_ins_ids[torch.isin(points_ids.flatten(), subset_t)] = v.winner
+                    split_count += 1
+        if split_count:
+            print(f"  contest splits ({split_mode}): {split_count}")
+
+        return points_ins_ids, fused_objects
 
     def _fuse_overlapping_instances(
         self,
@@ -578,6 +696,7 @@ class OVO:
                 ):
                     instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, map_data)
                     self.cooccurrence.merge(target=instance1.id, source=instance2.id)
+                    self.contest.on_merge(target=instance1.id, source=instance2.id)
                     fused_objects[instance2.id] = instance1.id
             objects[instance1.id] = instance1
 
@@ -772,6 +891,7 @@ class OVO:
         scene_dict = {
             "ins_3d_ids": np.asarray(list(self.objects.keys())),
             "cooccurrence_graph": self.cooccurrence.to_dict(),
+            "contest": self.contest.to_dict(),
         }
         for obj in self.objects.values():
             scene_dict.update(obj.export(debug_info))
@@ -809,6 +929,7 @@ class OVO:
         if "cooccurrence_graph" in scene_dict:
             self.cooccurrence = CooccurrenceGraph.from_dict(scene_dict["cooccurrence_graph"])
             self.fusion_strategy = create_fusion_strategy(self.config, self.cooccurrence)
+        self.contest.load_dict(scene_dict.get("contest", {}))
         if debug_info:
             self.keyframes["frame_id"] = list(scene_dict["frame_id"])
             self.keyframes["ins_maps"] = [x.squeeze() for x in np.split(scene_dict["ins_map"], len(self.keyframes["frame_id"]))]

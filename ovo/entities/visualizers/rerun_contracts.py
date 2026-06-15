@@ -34,6 +34,7 @@ class StreamFrameMessage(TypedDict):
     points: np.ndarray
     obj_ids: np.ndarray
     colors: Any
+    normals: np.ndarray | None
     c2w: np.ndarray
     rgb: np.ndarray | None
     ins_map: np.ndarray | None
