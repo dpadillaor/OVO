@@ -342,6 +342,18 @@ coste despreciable. Opciones de implementación:
 
 ---
 
+## 5b. Lo que importa para defender el método
+
+De las 3 condiciones, **la de ORB-SLAM2 es la realista** — es el régimen en el que se
+usaría el sistema. Ahí el contest **aguanta**: empata en AP estricto y gana en AP50/AP25,
+con semántica plana. El +34% del light es el techo (geometría perfecta) y el −22% del
+aggressive es un estrés sintético extremo (30 cm de salto) que no representa un SLAM real.
+Conclusión defendible: bajo SLAM real el mecanismo es **competitivo, sin coste semántico**,
+y mejora las fronteras de instancia a umbrales laxos. El crossover no invalida el método;
+acota su dependencia de la calidad geométrica.
+
+---
+
 ## 6. Próximos pasos
 
 - Implementar la separación de superficie (opción 1 rápida para validar señal, opción 2
