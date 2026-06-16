@@ -1,0 +1,316 @@
+{
+  "meta": {
+    "date": "2026-06-14",
+    "commit": "5fb61fe",
+    "dataset": "Replica",
+    "scenes": 8,
+    "fusion_method": "clip",
+    "deterministic": true,
+    "phases_run": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "6"
+    ],
+    "phases_skipped": [
+      "5 (Sobol)"
+    ]
+  },
+  "baselines": {
+    "light": {
+      "mIoU": 0.2663235017641644,
+      "AP_agnostic": 0.154,
+      "mAcc": 0.39971465458992234,
+      "Num_Instances": 68.0
+    },
+    "aggressive": {
+      "mIoU": 0.22802881402867137,
+      "AP_agnostic": 0.095,
+      "mAcc": 0.3429130318444699,
+      "Num_Instances": 83.0
+    }
+  },
+  "findings": [
+    {
+      "rq": "RQ1",
+      "claim": "overlap(nuevo) vs overlap_old en light: ΔmIoU medio=0.0013",
+      "evidence": {
+        "mean_delta_mIoU_new_vs_old": 0.001331935974353271,
+        "mean_delta_AP_agnostic_new_vs_old": 0.009666666666666662,
+        "n_pairs": 6
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "RQ1",
+      "claim": "overlap(nuevo) vs overlap_old en aggressive: ΔmIoU medio=-0.0002",
+      "evidence": {
+        "mean_delta_mIoU_new_vs_old": -0.00018615072753793335,
+        "mean_delta_AP_agnostic_new_vs_old": -0.002666666666666669,
+        "n_pairs": 6
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "RQ1",
+      "claim": "activar cooccurrence en jump drift (light) NO degrada: ΔmIoU=0.0006 (neutro) pero ΔAP_agnostic=0.0490 (+31.8%) — sube pureza de instancia, contradice la hipótesis a priori del playbook",
+      "evidence": {
+        "mean_delta_mIoU_on_vs_off": 0.0005556477667162015,
+        "mean_delta_AP_agnostic_on_vs_off": 0.04900000000000001,
+        "mean_pct_AP_agnostic_gain": 31.818181818181824,
+        "n_pairs": 6
+      },
+      "confidence": "alta"
+    },
+    {
+      "rq": "RQ1",
+      "claim": "activar cooccurrence en jump drift (aggressive) NO degrada: ΔmIoU=0.0040 (neutro) pero ΔAP_agnostic=0.0090 (+9.5%) — sube pureza de instancia, contradice la hipótesis a priori del playbook",
+      "evidence": {
+        "mean_delta_mIoU_on_vs_off": 0.003968374350438082,
+        "mean_delta_AP_agnostic_on_vs_off": 0.008999999999999994,
+        "mean_pct_AP_agnostic_gain": 9.47368421052631,
+        "n_pairs": 6
+      },
+      "confidence": "alta"
+    },
+    {
+      "rq": "RQ1",
+      "claim": "cadena ganadora (media combinada): abl-cooccurrence-aabb-cossim-overlap",
+      "evidence": {
+        "aggregate_ranking_top3": [
+          {
+            "label": "abl-cooccurrence-aabb-cossim-overlap",
+            "mean_mIoU": 0.2517706340253203,
+            "mean_AP_agnostic": 0.1585,
+            "combined": 0.41027063402532027
+          },
+          {
+            "label": "abl-cooccurrence-centroid-aabb-cossim-overlap",
+            "mean_mIoU": 0.25084590681839763,
+            "mean_AP_agnostic": 0.1575,
+            "combined": 0.40834590681839766
+          },
+          {
+            "label": "abl-cooccurrence-centroid-cossim-overlap",
+            "mean_mIoU": 0.25084590681839763,
+            "mean_AP_agnostic": 0.1575,
+            "combined": 0.40834590681839766
+          }
+        ]
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "RQ3",
+      "claim": "parámetros relevantes (Morris mu*): ['cooccurrence_veto_threshold', 'th_cossim', 'th_points', 'th_overlap_ratio', 'th_overlap_cos', 'th_overlap_ratio_low']",
+      "evidence": {
+        "normalized_importance": {
+          "cooccurrence_veto_threshold": 0.6009675387503202,
+          "th_aabb": 0.019607843136742294,
+          "th_cossim": 0.9999999999810019,
+          "th_points": 0.9999999999748428,
+          "th_overlap_ratio": 0.2961031975650548,
+          "th_overlap_cos": 0.5196078431236705,
+          "th_overlap_ratio_low": 0.9999999999738562
+        }
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "RQ2",
+      "claim": "θ* (knee) light: mIoU=0.2745 AP_agn=0.2230",
+      "evidence": {
+        "theta": {
+          "fusion_criteria": [
+            "cooccurrence",
+            "aabb",
+            "cos_sim",
+            "overlap"
+          ],
+          "cooccurrence_veto_threshold": 9,
+          "th_cossim": 0.7009442786285183,
+          "th_points": 0.02711735548834665,
+          "th_overlap_ratio": 0.3738508717482608,
+          "th_overlap_cos": 0.927322451389549,
+          "th_overlap_ratio_low": 0.27220801836397585
+        }
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "RQ2",
+      "claim": "θ* (knee) aggressive: mIoU=0.2353 AP_agn=0.1120",
+      "evidence": {
+        "theta": {
+          "fusion_criteria": [
+            "cooccurrence",
+            "aabb",
+            "cos_sim",
+            "overlap"
+          ],
+          "cooccurrence_veto_threshold": 3,
+          "th_cossim": 0.580146338133027,
+          "th_points": 0.03821444603587826,
+          "th_overlap_ratio": 0.6844640930984376,
+          "th_overlap_cos": 0.9276162969382312,
+          "th_overlap_ratio_low": 0.1394220566903776
+        }
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "RQ4",
+      "claim": "consistencia entre condiciones: True",
+      "evidence": {
+        "light_knee_on_aggressive": {
+          "mIoU": 0.23114514845288037,
+          "AP_agnostic": 0.125,
+          "Num_Instances": 89.0
+        },
+        "aggressive_knee_on_light": {
+          "mIoU": 0.27514056497524214,
+          "AP_agnostic": 0.216,
+          "Num_Instances": 78.0
+        },
+        "light_knee_on_light": {
+          "mIoU": 0.2745189761589006,
+          "AP_agnostic": 0.223,
+          "Num_Instances": 78.0
+        },
+        "aggressive_knee_on_aggressive": {
+          "mIoU": 0.2352966139660894,
+          "AP_agnostic": 0.112,
+          "Num_Instances": 93.0
+        },
+        "light_knee_rel_drop_on_aggressive": -0.017643541244530308,
+        "aggressive_knee_rel_drop_on_light": 0.00226428360268166
+      },
+      "confidence": "media"
+    },
+    {
+      "rq": "VALIDACION-EXTERNA",
+      "claim": "El hallazgo NO transfiere a ORB-SLAM real: el mecanismo cooccurrence que mejoraba AP_agnostic en jump-drift sintético lo DEGRADA bajo drift real. En ORB-SLAM real, el mecanismo cooccurrence cambia AP_agnostic en -0.0286 (-15.6%, Wilcoxon p=0.102, n=8) y mIoU en -0.0047 (-1.6%). NO transfiere el hallazgo del estudio sim.",
+      "evidence": {
+        "orb-B-mechanism_vs_A": {
+          "n": 8,
+          "delta_mIoU_mean": -0.004694194279006927,
+          "pct_mIoU": -1.5944025830146769,
+          "wilcoxon_p_mIoU": 0.9453125,
+          "delta_AP_agnostic_mean": -0.028625,
+          "pct_AP_agnostic": -15.620736698499316,
+          "wilcoxon_p_AP_agnostic": 0.1015625
+        },
+        "orb-C-tuned_vs_A": {
+          "n": 8,
+          "delta_mIoU_mean": -0.006872570851673601,
+          "pct_mIoU": -2.3342972332576513,
+          "wilcoxon_p_mIoU": 0.4609375,
+          "delta_AP_agnostic_mean": -0.024750000000000005,
+          "pct_AP_agnostic": -13.506139154160984,
+          "wilcoxon_p_AP_agnostic": 0.09375
+        },
+        "orb-D-nocooc_vs_A": {
+          "n": 8,
+          "delta_mIoU_mean": 0.002164366583667948,
+          "pct_mIoU": 0.7351360992926078,
+          "wilcoxon_p_mIoU": 0.84375,
+          "delta_AP_agnostic_mean": -0.013000000000000006,
+          "pct_AP_agnostic": -7.094133697135064,
+          "wilcoxon_p_AP_agnostic": 0.3828125
+        },
+        "B_vs_D_cooccurrence_isolation": {
+          "n": 8,
+          "delta_mIoU_mean": -0.006858560862674876,
+          "pct_mIoU": -2.312538377881482,
+          "wilcoxon_p_mIoU": 0.9453125,
+          "delta_AP_agnostic_mean": -0.015624999999999993,
+          "pct_AP_agnostic": -9.177679882525695,
+          "wilcoxon_p_AP_agnostic": 0.078125
+        }
+      },
+      "confidence": "alta"
+    }
+  ],
+  "best_config": {
+    "light": {
+      "theta": {
+        "fusion_criteria": [
+          "cooccurrence",
+          "aabb",
+          "cos_sim",
+          "overlap"
+        ],
+        "cooccurrence_veto_threshold": 9,
+        "th_cossim": 0.7009442786285183,
+        "th_points": 0.02711735548834665,
+        "th_overlap_ratio": 0.3738508717482608,
+        "th_overlap_cos": 0.927322451389549,
+        "th_overlap_ratio_low": 0.27220801836397585
+      },
+      "mIoU": 0.2745189761589006,
+      "AP_agnostic": 0.223
+    },
+    "aggressive": {
+      "theta": {
+        "fusion_criteria": [
+          "cooccurrence",
+          "aabb",
+          "cos_sim",
+          "overlap"
+        ],
+        "cooccurrence_veto_threshold": 3,
+        "th_cossim": 0.580146338133027,
+        "th_points": 0.03821444603587826,
+        "th_overlap_ratio": 0.6844640930984376,
+        "th_overlap_cos": 0.9276162969382312,
+        "th_overlap_ratio_low": 0.1394220566903776
+      },
+      "mIoU": 0.2352966139660894,
+      "AP_agnostic": 0.112
+    },
+    "recommended_overall": {
+      "theta": {
+        "fusion_criteria": [
+          "cooccurrence",
+          "aabb",
+          "cos_sim",
+          "overlap"
+        ],
+        "cooccurrence_veto_threshold": 3,
+        "th_cossim": 0.580146338133027,
+        "th_points": 0.03821444603587826,
+        "th_overlap_ratio": 0.6844640930984376,
+        "th_overlap_cos": 0.9276162969382312,
+        "th_overlap_ratio_low": 0.1394220566903776
+      },
+      "rationale": "knee de 'aggressive' generaliza mejor (menor caída relativa al cruzar de condición)"
+    }
+  },
+  "robustness": {
+    "consistent_across_conditions": true,
+    "light_mIoU_std_across_scenes": 0.0896177454976437,
+    "aggressive_mIoU_std_across_scenes": 0.08115083876381911,
+    "light_loso_std_mIoU": 0.01280253507109195,
+    "aggressive_loso_std_mIoU": 0.011592976966259877
+  },
+  "caveats": [
+    "VALIDACIÓN EXTERNA: el óptimo sim NO transfiere a ORB-SLAM real (cooccurrence degrada AP_agnostic ~-15%); baseline gana en SLAM real",
+    "solo fusion_method=clip",
+    "óptimo condicionado a jump_seed=42",
+    "backend SimulatedSLAM/GTJump determinista",
+    "covisibilidad NO evaluada: no implementada en el código actual",
+    "Fase 5 (Sobol) omitida por coste; interacción vía Morris σ",
+    "presupuestos Optuna/Morris reducidos por coste de replay (~6 min/config)"
+  ],
+  "artifacts": {
+    "master_table": "study/runs_master.parquet",
+    "optuna": [
+      "study/optuna_light.db",
+      "study/optuna_aggressive.db"
+    ],
+    "dashboard": "study/results_dashboard.html",
+    "manifest_index": "study/manifest_index.csv"
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "chain": [
+    "cooccurrence",
+    "aabb",
+    "cos_sim",
+    "overlap"
+  ],
+  "active_params": [
+    "cooccurrence_veto_threshold",
+    "th_cossim",
+    "th_points",
+    "th_overlap_ratio",
+    "th_overlap_cos",
+    "th_overlap_ratio_low"
+  ],
+  "n_trials_target": 35,
+  "by_condition": {
+    "light": {
+      "n_complete": 35,
+      "pareto": [
+        {
+          "number": 5,
+          "mIoU": 0.2762928261391497,
+          "AP_agnostic": 0.218,
+          "params": {
+            "cooccurrence_veto_threshold": 10,
+            "th_cossim": 0.580146338133027,
+            "th_points": 0.03821444603587826,
+            "th_overlap_ratio": 0.769331322352,
+            "th_overlap_cos": 0.9720953676071487,
+            "th_overlap_ratio_low": 0.4137788066524075
+          },
+          "Num_Instances": 76.0
+        },
+        {
+          "number": 19,
+          "mIoU": 0.2745189761589006,
+          "AP_agnostic": 0.223,
+          "params": {
+            "cooccurrence_veto_threshold": 9,
+            "th_cossim": 0.7009442786285183,
+            "th_points": 0.02711735548834665,
+            "th_overlap_ratio": 0.3738508717482608,
+            "th_overlap_cos": 0.927322451389549,
+            "th_overlap_ratio_low": 0.27220801836397585
+          },
+          "Num_Instances": 78.0
+        },
+        {
+          "number": 24,
+          "mIoU": 0.2742710962839171,
+          "AP_agnostic": 0.226,
+          "params": {
+            "cooccurrence_veto_threshold": 13,
+            "th_cossim": 0.7009442786285183,
+            "th_points": 0.02711735548834665,
+            "th_overlap_ratio": 0.2647348561959827,
+            "th_overlap_cos": 0.8862553508382698,
+            "th_overlap_ratio_low": 0.3363846850687012
+          },
+          "Num_Instances": 78.0
+        },
+        {
+          "number": 31,
+          "mIoU": 0.274606490879673,
+          "AP_agnostic": 0.219,
+          "params": {
+            "cooccurrence_veto_threshold": 10,
+            "th_cossim": 0.5544584579768109,
+            "th_points": 0.05081453886774949,
+            "th_overlap_ratio": 0.769331322352,
+            "th_overlap_cos": 0.9720953676071487,
+            "th_overlap_ratio_low": 0.07860125762871065
+          },
+          "Num_Instances": 80.0
+        }
+      ],
+      "knee": {
+        "number": 19,
+        "mIoU": 0.2745189761589006,
+        "AP_agnostic": 0.223,
+        "theta": {
+          "fusion_criteria": [
+            "cooccurrence",
+            "aabb",
+            "cos_sim",
+            "overlap"
+          ],
+          "cooccurrence_veto_threshold": 9,
+          "th_cossim": 0.7009442786285183,
+          "th_points": 0.02711735548834665,
+          "th_overlap_ratio": 0.3738508717482608,
+          "th_overlap_cos": 0.927322451389549,
+          "th_overlap_ratio_low": 0.27220801836397585
+        },
+        "Num_Instances": 78.0
+      }
+    },
+    "aggressive": {
+      "n_complete": 35,
+      "pareto": [
+        {
+          "number": 11,
+          "mIoU": 0.23581657338984166,
+          "AP_agnostic": 0.1,
+          "params": {
+            "cooccurrence_veto_threshold": 3,
+            "th_cossim": 0.8770325809543986,
+            "th_points": 0.04087418023033583,
+            "th_overlap_ratio": 0.7921321619603106,
+            "th_overlap_cos": 0.9276162969382312,
+            "th_overlap_ratio_low": 0.1394220566903776
+          },
+          "Num_Instances": 121.0
+        },
+        {
+          "number": 12,
+          "mIoU": 0.23592070372123278,
+          "AP_agnostic": 0.094,
+          "params": {
+            "cooccurrence_veto_threshold": 2,
+            "th_cossim": 0.883266871373772,
+            "th_points": 0.21792005627733277,
+            "th_overlap_ratio": 0.6374043008245924,
+            "th_overlap_cos": 0.9273921797377676,
+            "th_overlap_ratio_low": 0.08332009328034067
+          },
+          "Num_Instances": 115.0
+        },
+        {
+          "number": 16,
+          "mIoU": 0.23261852664886645,
+          "AP_agnostic": 0.123,
+          "params": {
+            "cooccurrence_veto_threshold": 9,
+            "th_cossim": 0.7009442786285183,
+            "th_points": 0.02711735548834665,
+            "th_overlap_ratio": 0.2647348561959827,
+            "th_overlap_cos": 0.7572287127079489,
+            "th_overlap_ratio_low": 0.3363846850687012
+          },
+          "Num_Instances": 84.0
+        },
+        {
+          "number": 19,
+          "mIoU": 0.23114514845288037,
+          "AP_agnostic": 0.125,
+          "params": {
+            "cooccurrence_veto_threshold": 9,
+            "th_cossim": 0.7009442786285183,
+            "th_points": 0.02711735548834665,
+            "th_overlap_ratio": 0.3738508717482608,
+            "th_overlap_cos": 0.927322451389549,
+            "th_overlap_ratio_low": 0.27220801836397585
+          },
+          "Num_Instances": 89.0
+        },
+        {
+          "number": 23,
+          "mIoU": 0.2371055249904179,
+          "AP_agnostic": 0.091,
+          "params": {
+            "cooccurrence_veto_threshold": 13,
+            "th_cossim": 0.883266871373772,
+            "th_points": 0.21792005627733277,
+            "th_overlap_ratio": 0.6374043008245924,
+            "th_overlap_cos": 0.8956828639973974,
+            "th_overlap_ratio_low": 0.442157265584473
+          },
+          "Num_Instances": 110.0
+        },
+        {
+          "number": 27,
+          "mIoU": 0.2352966139660894,
+          "AP_agnostic": 0.112,
+          "params": {
+            "cooccurrence_veto_threshold": 3,
+            "th_cossim": 0.580146338133027,
+            "th_points": 0.03821444603587826,
+            "th_overlap_ratio": 0.6844640930984376,
+            "th_overlap_cos": 0.9276162969382312,
+            "th_overlap_ratio_low": 0.1394220566903776
+          },
+          "Num_Instances": 93.0
+        }
+      ],
+      "knee": {
+        "number": 27,
+        "mIoU": 0.2352966139660894,
+        "AP_agnostic": 0.112,
+        "theta": {
+          "fusion_criteria": [
+            "cooccurrence",
+            "aabb",
+            "cos_sim",
+            "overlap"
+          ],
+          "cooccurrence_veto_threshold": 3,
+          "th_cossim": 0.580146338133027,
+          "th_points": 0.03821444603587826,
+          "th_overlap_ratio": 0.6844640930984376,
+          "th_overlap_cos": 0.9276162969382312,
+          "th_overlap_ratio_low": 0.1394220566903776
+        },
+        "Num_Instances": 93.0
+      }
+    }
+  }
+}

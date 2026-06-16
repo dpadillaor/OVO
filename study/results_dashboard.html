@@ -1,0 +1,102 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>OVO Fusion Study — Results</title><style>
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#cdd9ff;line-height:1.6;max-width:1000px;margin:0 auto;padding:2rem}
+h1{color:#fff}h2{color:#74c0fc;border-bottom:1px solid #2e3350;padding-bottom:.4rem;margin-top:2.5rem}
+h3{color:#5c7cfa}table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.88rem}
+th{background:#22263a;color:#74c0fc;text-align:left;padding:.5rem .7rem;border-bottom:2px solid #2e3350}
+td{padding:.45rem .7rem;border-bottom:1px solid #2e3350}code{background:#141824;padding:.1em .4em;border-radius:3px;color:#c3e88d}
+.card{background:#1a1d27;border:1px solid #2e3350;border-radius:8px;padding:1rem 1.3rem;margin:1rem 0}
+.good{color:#51cf66}.bad{color:#ff6b6b}.muted{color:#7885b0}img{max-width:100%;border:1px solid #2e3350;border-radius:6px;margin:.6rem 0}
+.badge{display:inline-block;padding:.15em .5em;border-radius:4px;font-size:.75rem;background:#1a2a4a;color:#74c0fc;margin-right:.3rem}
+</style></head><body>
+<h1>OVO — Estudio de Fusión · Resultados</h1>
+<p class='muted'>Replica 8 escenas · fusion_method=clip · GTJump determinista · commit 5fb61fe · 2026-06-14</p>
+<h2>Resumen ejecutivo</h2><div class='card'>
+<p>Fases ejecutadas: 0, 1, 2, 3, 4, 6. Omitidas: 5 (Sobol).</p>
+<p><b>Config recomendada:</b> <code>{"fusion_criteria": ["cooccurrence", "aabb", "cos_sim", "overlap"], "cooccurrence_veto_threshold": 3, "th_cossim": 0.580146338133027, "th_points": 0.03821444603587826, "th_overlap_ratio": 0.6844640930984376, "th_overlap_cos": 0.9276162969382312, "th_overlap_ratio_low": 0.1394220566903776}</code><br>knee de 'aggressive' generaliza mejor (menor caída relativa al cruzar de condición)</p>
+<ul>
+<li><span class='badge'>RQ1</span>overlap(nuevo) vs overlap_old en light: ΔmIoU medio=0.0013</li>
+<li><span class='badge'>RQ1</span>overlap(nuevo) vs overlap_old en aggressive: ΔmIoU medio=-0.0002</li>
+<li><span class='badge'>RQ1</span>activar cooccurrence en jump drift (light) NO degrada: ΔmIoU=0.0006 (neutro) pero ΔAP_agnostic=0.0490 (+31.8%) — sube pureza de instancia, contradice la hipótesis a priori del playbook</li>
+<li><span class='badge'>RQ1</span>activar cooccurrence en jump drift (aggressive) NO degrada: ΔmIoU=0.0040 (neutro) pero ΔAP_agnostic=0.0090 (+9.5%) — sube pureza de instancia, contradice la hipótesis a priori del playbook</li>
+<li><span class='badge'>RQ1</span>cadena ganadora (media combinada): abl-cooccurrence-aabb-cossim-overlap</li>
+<li><span class='badge'>RQ3</span>parámetros relevantes (Morris mu*): ['cooccurrence_veto_threshold', 'th_cossim', 'th_points', 'th_overlap_ratio', 'th_overlap_cos', 'th_overlap_ratio_low']</li>
+</ul></div>
+<h2>Baselines</h2><table><tr><th>Condición</th><th>mIoU</th><th>AP_agn</th><th>mAcc</th><th>Num_Instances</th></tr>
+<tr><td>light</td><td>0.2663</td><td>0.1540</td><td>0.3997</td><td>68</td></tr>
+<tr><td>aggressive</td><td>0.2280</td><td>0.0950</td><td>0.3429</td><td>83</td></tr>
+</table>
+<h2>Fase 2 · Ablación de mecanismos (RQ1)</h2>
+<h3>light</h3><table><tr><th>cadena</th><th>mIoU</th><th>AP_agn</th><th>Num_Inst</th><th>ΔmIoU vs base</th><th>Wilcoxon p</th></tr>
+<tr><td><code>cooccurrence-aabb-cossim-overlap</code></td><td>0.2685</td><td>0.2130</td><td>74</td><td class='bad'>-0.0025</td><td>0.945</td></tr>
+<tr><td><code>cooccurrence-centroid-cossim-overlap</code></td><td>0.2688</td><td>0.2100</td><td>75</td><td class='bad'>-0.0018</td><td>0.742</td></tr>
+<tr><td><code>cooccurrence-centroid-aabb-cossim-overlap</code></td><td>0.2688</td><td>0.2100</td><td>75</td><td class='bad'>-0.0018</td><td>0.742</td></tr>
+<tr><td><code>cooccurrence-aabb-cossim-overlapold</code></td><td>0.2665</td><td>0.1960</td><td>82</td><td class='bad'>-0.0068</td><td>0.312</td></tr>
+<tr><td><code>cooccurrence-centroid-cossim-overlapold</code></td><td>0.2665</td><td>0.1950</td><td>83</td><td class='bad'>-0.0068</td><td>0.312</td></tr>
+<tr><td><code>cooccurrence-centroid-aabb-cossim-overlapold</code></td><td>0.2665</td><td>0.1950</td><td>83</td><td class='bad'>-0.0068</td><td>0.312</td></tr>
+<tr><td><code>aabb-cossim-overlap</code></td><td>0.2690</td><td>0.1600</td><td>66</td><td class='bad'>-0.0001</td><td>0.547</td></tr>
+<tr><td><code>centroid-cossim-overlap</code></td><td>0.2663</td><td>0.1540</td><td>68</td><td class=''>—</td><td>—</td></tr>
+<tr><td><code>centroid-aabb-cossim-overlap</code></td><td>0.2663</td><td>0.1540</td><td>68</td><td class=''>+0.0000</td><td>1.000</td></tr>
+<tr><td><code>aabb-cossim-overlapold</code></td><td>0.2666</td><td>0.1530</td><td>77</td><td class='bad'>-0.0007</td><td>1.000</td></tr>
+<tr><td><code>centroid-cossim-overlapold</code></td><td>0.2669</td><td>0.1520</td><td>78</td><td class='bad'>-0.0009</td><td>1.000</td></tr>
+<tr><td><code>centroid-aabb-cossim-overlapold</code></td><td>0.2669</td><td>0.1520</td><td>78</td><td class='bad'>-0.0009</td><td>1.000</td></tr>
+</table>
+<h3>aggressive</h3><table><tr><th>cadena</th><th>mIoU</th><th>AP_agn</th><th>Num_Inst</th><th>ΔmIoU vs base</th><th>Wilcoxon p</th></tr>
+<tr><td><code>cooccurrence-centroid-cossim-overlapold</code></td><td>0.2327</td><td>0.1070</td><td>106</td><td class='good'>+0.0009</td><td>1.000</td></tr>
+<tr><td><code>cooccurrence-centroid-aabb-cossim-overlapold</code></td><td>0.2327</td><td>0.1070</td><td>106</td><td class='good'>+0.0009</td><td>1.000</td></tr>
+<tr><td><code>cooccurrence-aabb-cossim-overlapold</code></td><td>0.2331</td><td>0.1060</td><td>104</td><td class='good'>+0.0010</td><td>0.844</td></tr>
+<tr><td><code>cooccurrence-aabb-cossim-overlap</code></td><td>0.2350</td><td>0.1040</td><td>90</td><td class='good'>+0.0010</td><td>0.547</td></tr>
+<tr><td><code>cooccurrence-centroid-cossim-overlap</code></td><td>0.2329</td><td>0.1050</td><td>93</td><td class='good'>+0.0003</td><td>0.742</td></tr>
+<tr><td><code>cooccurrence-centroid-aabb-cossim-overlap</code></td><td>0.2329</td><td>0.1050</td><td>93</td><td class='good'>+0.0003</td><td>0.742</td></tr>
+<tr><td><code>aabb-cossim-overlapold</code></td><td>0.2299</td><td>0.0990</td><td>96</td><td class='good'>+0.0003</td><td>0.945</td></tr>
+<tr><td><code>centroid-cossim-overlapold</code></td><td>0.2298</td><td>0.0980</td><td>97</td><td class='good'>+0.0008</td><td>0.641</td></tr>
+<tr><td><code>centroid-aabb-cossim-overlapold</code></td><td>0.2298</td><td>0.0980</td><td>97</td><td class='good'>+0.0008</td><td>0.641</td></tr>
+<tr><td><code>aabb-cossim-overlap</code></td><td>0.2300</td><td>0.0950</td><td>81</td><td class='good'>+0.0003</td><td>0.742</td></tr>
+<tr><td><code>centroid-cossim-overlap</code></td><td>0.2280</td><td>0.0950</td><td>83</td><td class=''>—</td><td>—</td></tr>
+<tr><td><code>centroid-aabb-cossim-overlap</code></td><td>0.2280</td><td>0.0950</td><td>83</td><td class=''>+0.0000</td><td>1.000</td></tr>
+</table>
+<img src="figs/phase2_delta_heatmap.png" alt="phase2_delta_heatmap.png"><p class="muted">Δ mIoU de cada cadena vs baseline.</p>
+<p>Daño de cooccurrence: <code>{"light": {"mean_delta_mIoU_on_vs_off": 0.0005556477667162015, "mean_delta_AP_agnostic_on_vs_off": 0.04900000000000001, "mean_pct_AP_agnostic_gain": 31.818181818181824, "n_pairs": 6}, "aggressive": {"mean_delta_mIoU_on_vs_off": 0.003968374350438082, "mean_delta_AP_agnostic_on_vs_off": 0.008999999999999994, "mean_pct_AP_agnostic_gain": 9.47368421052631, "n_pairs": 6}}</code><br>overlap nuevo vs old: <code>{"light": {"mean_delta_mIoU_new_vs_old": 0.001331935974353271, "mean_delta_AP_agnostic_new_vs_old": 0.009666666666666662, "n_pairs": 6}, "aggressive": {"mean_delta_mIoU_new_vs_old": -0.00018615072753793335, "mean_delta_AP_agnostic_new_vs_old": -0.002666666666666669, "n_pairs": 6}}</code></p>
+<h2>Fase 1 · Rangos guiados por datos</h2>
+<img src="figs/phase1_reject_attribution.png" alt="phase1_reject_attribution.png"><p class="muted">Atribución de REJECTs por criterio.</p>
+<img src="figs/phase1_ctx_distributions.png" alt="phase1_ctx_distributions.png"><p class="muted">Distribuciones ctx ACCEPT vs REJECT.</p>
+<h2>Fase 3 · Cribado Morris (RQ3)</h2>
+<p>Params activos: <code>['cooccurrence_veto_threshold', 'th_aabb', 'th_cossim', 'th_points', 'th_overlap_ratio', 'th_overlap_cos', 'th_overlap_ratio_low']</code> → reducidos: <code>['cooccurrence_veto_threshold', 'th_cossim', 'th_points', 'th_overlap_ratio', 'th_overlap_cos', 'th_overlap_ratio_low']</code></p>
+<img src="figs/phase3_morris.png" alt="phase3_morris.png"><p class="muted">μ* (importancia) vs σ (interacción) por condición y objetivo.</p>
+<h2>Fase 4 · Optuna multi-objetivo (RQ2)</h2>
+<h3>light · Pareto (4 pts, 35 trials)</h3>
+<div class='card'><b>knee θ*:</b> <code>{"fusion_criteria": ["cooccurrence", "aabb", "cos_sim", "overlap"], "cooccurrence_veto_threshold": 9, "th_cossim": 0.7009442786285183, "th_points": 0.02711735548834665, "th_overlap_ratio": 0.3738508717482608, "th_overlap_cos": 0.927322451389549, "th_overlap_ratio_low": 0.27220801836397585}</code><br>mIoU=0.2745 · AP_agn=0.2230 · Num_Instances=78.0</div>
+<img src="figs/phase4_pareto_light.png" alt="phase4_pareto_light.png"><p class="muted">Frente de Pareto light (color=Num_Instances).</p>
+<h3>aggressive · Pareto (6 pts, 35 trials)</h3>
+<div class='card'><b>knee θ*:</b> <code>{"fusion_criteria": ["cooccurrence", "aabb", "cos_sim", "overlap"], "cooccurrence_veto_threshold": 3, "th_cossim": 0.580146338133027, "th_points": 0.03821444603587826, "th_overlap_ratio": 0.6844640930984376, "th_overlap_cos": 0.9276162969382312, "th_overlap_ratio_low": 0.1394220566903776}</code><br>mIoU=0.2353 · AP_agn=0.1120 · Num_Instances=93.0</div>
+<img src="figs/phase4_pareto_aggressive.png" alt="phase4_pareto_aggressive.png"><p class="muted">Frente de Pareto aggressive (color=Num_Instances).</p>
+<h2>Fase 6 · Robustez (RQ4)</h2><div class='card'>
+<p>Consistente entre condiciones: <b class='good'>True</b></p>
+<p>Cruce: <code>{"light_knee_on_aggressive": {"mIoU": 0.23114514845288037, "AP_agnostic": 0.125, "Num_Instances": 89.0}, "aggressive_knee_on_light": {"mIoU": 0.27514056497524214, "AP_agnostic": 0.216, "Num_Instances": 78.0}, "light_knee_on_light": {"mIoU": 0.2745189761589006, "AP_agnostic": 0.223, "Num_Instances": 78.0}, "aggressive_knee_on_aggressive": {"mIoU": 0.2352966139660894, "AP_agnostic": 0.112, "Num_Instances": 93.0}, "light_knee_rel_drop_on_aggressive": -0.017643541244530308, "aggressive_knee_rel_drop_on_light": 0.00226428360268166}</code></p>
+</div>
+<img src="figs/phase6_scene_consistency.png" alt="phase6_scene_consistency.png"><p class="muted">Consistencia por escena del θ*.</p>
+<h2>Validación externa · ORB-SLAM2 (drift real)</h2><div class='card'>
+<p>Sin checkpoints, pipeline completo. ¿Transfiere el hallazgo del estudio (SimulatedSLAM/jump-drift) a SLAM real?</p>
+<table><tr><th>Config</th><th>mIoU</th><th>AP_agnostic</th><th>Num_Instances</th></tr>
+<tr><td>A · baseline [centroid,cos_sim,overlap]</td><td>0.2577</td><td>0.1860</td><td>71</td></tr>
+<tr><td>B · mecanismo [cooccurrence,aabb,cos_sim,overlap]</td><td>0.2412</td><td>0.1580</td><td>76</td></tr>
+<tr><td>C · θ* tuneado (sim)</td><td>0.2476</td><td>0.1620</td><td>71</td></tr>
+<tr><td>D · sin cooccurrence [aabb,cos_sim,overlap]</td><td>0.2586</td><td>0.1750</td><td>66</td></tr>
+</table>
+<p>orb-B-mechanism_vs_A: ΔAP_agn=<b class='bad'>-0.0286 (-15.6%)</b> (Wilcoxon p=0.102, n=8); ΔmIoU=-0.0047 (-1.6%)</p>
+<p>orb-C-tuned_vs_A: ΔAP_agn=<b class='bad'>-0.0248 (-13.5%)</b> (Wilcoxon p=0.094, n=8); ΔmIoU=-0.0069 (-2.3%)</p>
+<p>orb-D-nocooc_vs_A: ΔAP_agn=<b class='bad'>-0.0130 (-7.1%)</b> (Wilcoxon p=0.383, n=8); ΔmIoU=+0.0022 (+0.7%)</p>
+<p>B_vs_D_cooccurrence_isolation: ΔAP_agn=<b class='bad'>-0.0156 (-9.2%)</b> (Wilcoxon p=0.078, n=8); ΔmIoU=-0.0069 (-2.3%)</p>
+<p><b>Veredicto:</b> el hallazgo del estudio simulado <b class='bad'>NO TRANSFIERE</b> a ORB-SLAM real. En ORB-SLAM real, el mecanismo cooccurrence cambia AP_agnostic en -0.0286 (-15.6%, Wilcoxon p=0.102, n=8) y mIoU en -0.0047 (-1.6%). NO transfiere el hallazgo del estudio sim.</p>
+</div>
+<img src="figs/orbslam_compare.png" alt="orbslam_compare.png"><p class="muted">Baseline vs mecanismo vs tuneado en ORB-SLAM real.</p>
+<h2>Limitaciones</h2><ul>
+<li>VALIDACIÓN EXTERNA: el óptimo sim NO transfiere a ORB-SLAM real (cooccurrence degrada AP_agnostic ~-15%); baseline gana en SLAM real</li>
+<li>solo fusion_method=clip</li>
+<li>óptimo condicionado a jump_seed=42</li>
+<li>backend SimulatedSLAM/GTJump determinista</li>
+<li>covisibilidad NO evaluada: no implementada en el código actual</li>
+<li>Fase 5 (Sobol) omitida por coste; interacción vía Morris σ</li>
+<li>presupuestos Optuna/Morris reducidos por coste de replay (~6 min/config)</li>
+</ul>
+<p class='muted'>Memoria machine-readable: <code>study/conclusions.json</code> · tabla maestra: <code>study/runs_master.parquet</code></p>
+</body></html>

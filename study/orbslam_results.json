@@ -1,0 +1,72 @@
+{
+  "configs": {
+    "orb-A-baseline": {
+      "mIoU": 0.2577426792583104,
+      "AP_agnostic": 0.186,
+      "mAcc": 0.39014322523954553,
+      "Num_Instances": 71.0,
+      "n_scenes": 8
+    },
+    "orb-B-mechanism": {
+      "mIoU": 0.24118780175423554,
+      "AP_agnostic": 0.158,
+      "mAcc": 0.37792971580531415,
+      "Num_Instances": 76.0,
+      "n_scenes": 8
+    },
+    "orb-C-tuned": {
+      "mIoU": 0.24758757445591068,
+      "AP_agnostic": 0.162,
+      "mAcc": 0.38214397752845336,
+      "Num_Instances": 71.0,
+      "n_scenes": 8
+    },
+    "orb-D-nocooc": {
+      "mIoU": 0.2585693746582062,
+      "AP_agnostic": 0.175,
+      "mAcc": 0.3918448283953091,
+      "Num_Instances": 66.0,
+      "n_scenes": 8
+    }
+  },
+  "comparisons": {
+    "orb-B-mechanism_vs_A": {
+      "n": 8,
+      "delta_mIoU_mean": -0.004694194279006927,
+      "pct_mIoU": -1.5944025830146769,
+      "wilcoxon_p_mIoU": 0.9453125,
+      "delta_AP_agnostic_mean": -0.028625,
+      "pct_AP_agnostic": -15.620736698499316,
+      "wilcoxon_p_AP_agnostic": 0.1015625
+    },
+    "orb-C-tuned_vs_A": {
+      "n": 8,
+      "delta_mIoU_mean": -0.006872570851673601,
+      "pct_mIoU": -2.3342972332576513,
+      "wilcoxon_p_mIoU": 0.4609375,
+      "delta_AP_agnostic_mean": -0.024750000000000005,
+      "pct_AP_agnostic": -13.506139154160984,
+      "wilcoxon_p_AP_agnostic": 0.09375
+    },
+    "orb-D-nocooc_vs_A": {
+      "n": 8,
+      "delta_mIoU_mean": 0.002164366583667948,
+      "pct_mIoU": 0.7351360992926078,
+      "wilcoxon_p_mIoU": 0.84375,
+      "delta_AP_agnostic_mean": -0.013000000000000006,
+      "pct_AP_agnostic": -7.094133697135064,
+      "wilcoxon_p_AP_agnostic": 0.3828125
+    },
+    "B_vs_D_cooccurrence_isolation": {
+      "n": 8,
+      "delta_mIoU_mean": -0.006858560862674876,
+      "pct_mIoU": -2.312538377881482,
+      "wilcoxon_p_mIoU": 0.9453125,
+      "delta_AP_agnostic_mean": -0.015624999999999993,
+      "pct_AP_agnostic": -9.177679882525695,
+      "wilcoxon_p_AP_agnostic": 0.078125
+    }
+  },
+  "finding_transfers": false,
+  "finding_summary": "En ORB-SLAM real, el mecanismo cooccurrence cambia AP_agnostic en -0.0286 (-15.6%, Wilcoxon p=0.102, n=8) y mIoU en -0.0047 (-1.6%). NO transfiere el hallazgo del estudio sim."
+}
