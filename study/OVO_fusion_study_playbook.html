@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OVO — Playbook del Estudio de Fusión (CLIP · GTJump · determinista)</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #5c7cfa;
+    --accent2: #74c0fc;
+    --green: #51cf66;
+    --yellow: #ffd43b;
+    --red: #ff6b6b;
+    --orange: #fd7e14;
+    --purple: #b197fc;
+    --text: #cdd9ff;
+    --muted: #7885b0;
+    --code-bg: #141824;
+    --maxw: 920px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .layout { display: grid; grid-template-columns: 250px 1fr; gap: 0; align-items: start; }
+  /* ---- Sidebar TOC ---- */
+  nav.toc {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: #0c0e14; border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem; font-size: 0.82rem;
+  }
+  nav.toc .brand { color: #fff; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem; letter-spacing: 0.5px; }
+  nav.toc .brand span { color: var(--accent); }
+  nav.toc .brandsub { color: var(--muted); font-size: 0.72rem; margin-bottom: 1.2rem; }
+  nav.toc a { display: block; color: var(--muted); text-decoration: none; padding: 0.28rem 0.5rem; border-radius: 5px; border-left: 2px solid transparent; }
+  nav.toc a:hover { color: var(--text); background: var(--surface); }
+  nav.toc a.active { color: var(--accent2); border-left-color: var(--accent); background: var(--surface); }
+  nav.toc a.ph { font-weight: 600; color: #aab6e0; margin-top: 0.5rem; }
+  nav.toc .sep { height: 1px; background: var(--border); margin: 0.8rem 0; }
+  /* ---- Main ---- */
+  main { padding: 2.5rem 2.5rem 6rem; max-width: var(--maxw); }
+  h1 { font-size: 1.9rem; color: #fff; margin-bottom: 0.3rem; line-height: 1.2; }
+  h2 { font-size: 1.3rem; color: var(--accent2); margin: 3rem 0 0.8rem; border-bottom: 1px solid var(--border); padding-bottom: 0.45rem; scroll-margin-top: 1rem; }
+  h3 { font-size: 1.05rem; color: var(--accent); margin: 1.6rem 0 0.5rem; }
+  h4 { font-size: 0.95rem; color: var(--yellow); margin: 1.1rem 0 0.35rem; }
+  p { margin-bottom: 0.8rem; }
+  a { color: var(--accent2); }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .lede { font-size: 1.02rem; color: #dfe6ff; }
+  strong { color: #eef2ff; }
+
+  .phase-head {
+    display: flex; align-items: baseline; gap: 0.8rem;
+    border-bottom: 1px solid var(--border); padding-bottom: 0.45rem; margin: 3rem 0 0.8rem;
+    scroll-margin-top: 1rem;
+  }
+  .phase-head .pn {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 700;
+    color: #0c0e14; background: var(--accent); padding: 0.15rem 0.55rem; border-radius: 5px; flex-shrink: 0;
+  }
+  .phase-head h2 { border: none; margin: 0; padding: 0; }
+  .phase-head .opt { font-size: 0.72rem; color: var(--purple); border: 1px solid var(--purple); border-radius: 4px; padding: 0.05rem 0.4rem; }
+
+  .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px; font-size: 0.76rem; font-weight: 600; margin-right: 0.3rem; }
+  .badge-green  { background: #1a3a20; color: var(--green); }
+  .badge-blue   { background: #1a2a4a; color: var(--accent2); }
+  .badge-yellow { background: #3a2a00; color: var(--yellow); }
+  .badge-red    { background: #3a1a1a; color: var(--red); }
+  .badge-orange { background: #3a2000; color: var(--orange); }
+  .badge-purple { background: #281a3a; color: var(--purple); }
+
+  code { font-family: 'JetBrains Mono','Fira Code',monospace; background: var(--code-bg); padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.85em; color: #e0e0ff; }
+  pre { position: relative; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 0.8rem; line-height: 1.6; margin: 0.75rem 0 1.25rem; color: #c9d4ff; white-space: pre; }
+  pre .cm { color: #546e7a; font-style: italic; }
+  pre .kw { color: #82aaff; }
+  pre .str { color: #c3e88d; }
+  pre .key { color: #74c0fc; }
+  .copybtn { position: absolute; top: 0.4rem; right: 0.4rem; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer; font-family: inherit; }
+  .copybtn:hover { color: var(--accent2); border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.85rem; }
+  th { background: var(--surface2); color: var(--accent2); font-weight: 600; text-align: left; padding: 0.55rem 0.8rem; border-bottom: 2px solid var(--border); }
+  td { padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: var(--surface2); }
+  td code, th code { background: #0c0e14; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.4rem; margin: 1rem 0; }
+  .card.highlight { border-color: var(--accent); }
+  .card h4:first-child, .card h3:first-child { margin-top: 0; }
+
+  .agent { background: #14122a; border-left: 3px solid var(--accent); padding: 0.7rem 1.1rem; border-radius: 0 6px 6px 0; margin: 0.9rem 0; font-size: 0.9rem; }
+  .agent::before { content: "▶ ACCIÓN DEL AGENTE"; display: block; font-size: 0.68rem; letter-spacing: 1px; color: var(--accent); font-weight: 700; margin-bottom: 0.3rem; }
+  .produces { background: #0d2417; border-left: 3px solid var(--green); padding: 0.7rem 1.1rem; border-radius: 0 6px 6px 0; margin: 0.9rem 0; font-size: 0.9rem; }
+  .produces::before { content: "■ ARTEFACTO QUE PRODUCE"; display: block; font-size: 0.68rem; letter-spacing: 1px; color: var(--green); font-weight: 700; margin-bottom: 0.3rem; }
+  .warn-box { background: #2a1a00; border-left: 3px solid var(--orange); padding: 0.7rem 1.1rem; border-radius: 0 6px 6px 0; margin: 0.9rem 0; font-size: 0.9rem; }
+  .warn-box::before { content: "⚠ ATENCIÓN"; display: block; font-size: 0.68rem; letter-spacing: 1px; color: var(--orange); font-weight: 700; margin-bottom: 0.3rem; }
+  .note { background: #1a2a1a; border-left: 3px solid var(--green); padding: 0.6rem 1rem; border-radius: 0 5px 5px 0; margin: 0.75rem 0; font-size: 0.88rem; }
+
+  .criteria-chain { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.75rem 0; }
+  .criterion { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 0.3rem 0.7rem; font-size: 0.82rem; }
+  .criterion.swap { border-color: var(--yellow); color: var(--yellow); }
+  .criterion.accept { border-color: var(--green); color: var(--green); }
+  .arrow { color: var(--muted); }
+
+  ul, ol { padding-left: 1.4rem; margin-bottom: 0.85rem; }
+  li { margin-bottom: 0.35rem; }
+  .muted { color: var(--muted); font-size: 0.88rem; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  .check { list-style: none; padding-left: 0; }
+  .check li { position: relative; padding-left: 1.8rem; margin-bottom: 0.5rem; }
+  .check li::before { content: "☐"; position: absolute; left: 0; color: var(--accent); font-size: 1.05rem; }
+
+  .objgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  @media (max-width: 760px) { .objgrid { grid-template-columns: 1fr; } main { padding: 1.5rem 1.2rem 4rem; } .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; } }
+
+  .kbd { font-family: 'JetBrains Mono',monospace; font-size: 0.75rem; background: var(--surface2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0.1rem 0.4rem; }
+  .footer { color: var(--muted); font-size: 0.82rem; border-top: 1px solid var(--border); margin-top: 3rem; padding-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" id="toc">
+  <div class="brand">OVO · <span>Fusion Study</span></div>
+  <div class="brandsub">Playbook autoejecutable</div>
+  <a href="#tldr" class="ph">Resumen para el agente</a>
+  <a href="#context">1 · Contexto del sistema</a>
+  <a href="#rq">2 · Preguntas y objetivo</a>
+  <a href="#principles">3 · Principios de método</a>
+  <div class="sep"></div>
+  <a href="#p0" class="ph">Fase 0 · Arnés</a>
+  <a href="#p1" class="ph">Fase 1 · Rangos por datos</a>
+  <a href="#p2" class="ph">Fase 2 · Ablación</a>
+  <a href="#p3" class="ph">Fase 3 · Cribado (Morris)</a>
+  <a href="#p4" class="ph">Fase 4 · Optuna (Pareto)</a>
+  <a href="#p5" class="ph">Fase 5 · Sobol</a>
+  <a href="#p6" class="ph">Fase 6 · Robustez</a>
+  <a href="#p7" class="ph">Fase 7 · Reporte y memoria</a>
+  <div class="sep"></div>
+  <a href="#runbook">Runbook / checklist</a>
+  <a href="#naming">Nombres y carpetas</a>
+  <a href="#appendix">Apéndice · rangos</a>
+</nav>
+
+<main>
+
+<h1>OVO — Playbook del Estudio de Fusión de Instancias</h1>
+<div class="subtitle">
+  Protocolo autoejecutable para una sesión de Claude Code · Dataset: Replica (8 escenas) ·
+  Backend: SimulatedSLAM (GTJump, determinista) · fusion_method: CLIP · TFM
+</div>
+
+<div class="card highlight">
+  <p class="lede" style="margin-bottom:0.6rem;"><strong>Cómo usar este documento.</strong> Es un encargo completo para un agente. Entrégaselo a una sesión de Claude Code con acceso al repo OVO y dile: <em>"ejecuta el estudio descrito en este playbook de principio a fin"</em>. El agente sigue las fases en orden, lanza todos los experimentos, analiza los resultados y deja en disco un dashboard y unas conclusiones que cualquier sesión futura puede consultar. No necesita supervisión humana salvo en las paradas marcadas con <span class="badge badge-orange">STOP</span>.</p>
+  <p class="muted" style="margin-bottom:0;">El playbook es autocontenido: toda la información del sistema OVO necesaria para ejecutarlo está dentro. El agente <em>puede</em> leer el código del repo para verificar detalles, pero no depende de ningún otro fichero para entender qué hacer.</p>
+</div>
+
+<!-- ============================ TL;DR ============================ -->
+<h2 id="tldr">Resumen para el agente (léelo primero)</h2>
+
+<p><strong>Misión.</strong> Encontrar qué configuración del algoritmo de fusión de OVO produce el mejor mapa semántico bajo <em>jump drift</em>, y cuantificar por qué. "Mejor" = maximizar a la vez <strong>mIoU</strong> y <strong>AP class-agnostic</strong> (frente de Pareto), reportando mAcc y <code>Num_Instances</code> como métricas de control de over/under-merge.</p>
+
+<p><strong>Por qué es barato.</strong> Las dos baselines (light, aggressive) ya están generadas y guardaron <code>pre_fusion.ckpt</code> por escena. Cada experimento del estudio es un <em>replay de fusión</em> desde el checkpoint: re-ejecuta solo la fusión final + segment + eval, saltándose SLAM y SAM2. Es determinista (seed fijo), así que <strong>no hay seeds ni repeticiones</strong>: cada θ da siempre el mismo resultado. La unidad estadística es la <strong>escena</strong> (n=8).</p>
+
+<p><strong>Restricciones del estudio (fijadas, no las cambies):</strong></p>
+<ul>
+  <li>Solo <code>fusion_method: clip</code>. No se comparan descriptores (PE/SAM3/DINO).</li>
+  <li>Las 8 escenas de Replica, ambas condiciones (light y aggressive), siempre.</li>
+  <li>Reutiliza <code>ovo/utils/results_utils.py</code> para parsear y graficar. No reimplementes el parseo.</li>
+  <li>Registra <strong>θ completo + commit</strong> de cada run. Sin esto el estudio no es reproducible.</li>
+</ul>
+
+<p><strong>Orden de ejecución</strong> (cada fase tiene su sección con detalle y código):</p>
+<table>
+  <tr><th>Fase</th><th>Qué hace</th><th>Coste</th><th>Produce</th></tr>
+  <tr><td><a href="#p0">0 · Arnés</a></td><td>Verifica entorno, localiza checkpoints, monta el <em>launcher</em> y la tabla maestra</td><td>nulo</td><td><code>launcher.py</code>, <code>runs_master.parquet</code></td></tr>
+  <tr><td><a href="#p1">1 · Rangos por datos</a></td><td>Histogramas de <code>fusion_decisions.csv</code> → rangos informados por umbral</td><td>0 runs</td><td><code>ranges.json</code></td></tr>
+  <tr><td><a href="#p2">2 · Ablación</a></td><td>Factorial de mecanismos (geometría × overlap × cooccurrence)</td><td>~24 cfg × 2 cond</td><td>cadena(s) ganadora(s)</td></tr>
+  <tr><td><a href="#p3">3 · Cribado</a></td><td>Morris: qué umbrales importan e interactúan</td><td>decenas de runs</td><td>θ reducido</td></tr>
+  <tr><td><a href="#p4">4 · Optuna</a></td><td>BO multi-objetivo [mIoU, AP-agn] → frente de Pareto por condición</td><td>~100–200 trials</td><td><code>optuna_*.db</code>, Pareto</td></tr>
+  <tr><td><a href="#p5">5 · Sobol</a> <span class="badge badge-purple">opcional</span></td><td>Sensibilidad global: interacción ST−S1</td><td>alto</td><td>índices Sobol</td></tr>
+  <tr><td><a href="#p6">6 · Robustez</a></td><td>Consistencia light↔aggressive + LOSO</td><td>0 runs extra</td><td>veredicto de robustez</td></tr>
+  <tr><td><a href="#p7">7 · Reporte</a></td><td>Dashboard HTML + conclusiones consultables</td><td>nulo</td><td><code>results_dashboard.html</code>, <code>conclusions.json</code></td></tr>
+</table>
+
+<!-- ============================ CONTEXT ============================ -->
+<h2 id="context">1 · Contexto del sistema (autocontenido)</h2>
+
+<h3>1.1 Cuándo ocurre la fusión</h3>
+<p>OVO construye un mapa 3D semántico. Con SimulatedSLAM + jump drift, la fusión se dispara <strong>una sola vez</strong>, al final de la secuencia, tras la corrección global (loop closure simulada que superpone físicamente los duplicados creados por los saltos). En ese momento <code>_fuse_overlapping_instances()</code> compara por fuerza bruta O(N²) cada par de instancias vivas. <strong>No hay fusión incremental.</strong></p>
+
+<h3>1.2 La cadena de criterios (early-exit)</h3>
+<p>Cada par pasa por una cadena ordenada de criterios. Cada criterio devuelve <code>REJECT</code> (corta, no fusiona), <code>ACCEPT</code> (corta y fusiona) o <code>PASS</code> (sigue al siguiente). Si se agota la cadena sin <code>ACCEPT</code>, no se fusiona. Los criterios comparten un <code>ctx</code>: <code>cos_sim</code> calculado antes lo usa <code>overlap</code> después. <strong>Esto acopla los parámetros</strong> (ver §3).</p>
+
+<div class="criteria-chain">
+  <span class="criterion">cooccurrence</span><span class="arrow">→</span>
+  <span class="criterion swap">centroid / aabb</span><span class="arrow">→</span>
+  <span class="criterion">cos_sim</span><span class="arrow">→</span>
+  <span class="criterion accept">overlap / overlap_old</span>
+</div>
+<p class="muted">Cadena por defecto del repo: <code>[cooccurrence, centroid, cos_sim, overlap]</code>. Las baselines usan <code>[centroid, cos_sim, overlap]</code> (sin cooccurrence, ver §1.5). Solo <code>overlap</code>/<code>overlap_old</code> pueden dar ACCEPT; el resto solo REJECT o PASS.</p>
+
+<table>
+  <tr><th>Criterio</th><th>Lógica</th><th>Veredicto</th></tr>
+  <tr><td><code>cooccurrence</code></td><td>Pares vistos juntos en &gt; N keyframes = objetos distintos co-visibles</td><td>REJECT si <code>shared_kfs &gt; veto</code>, sino PASS</td></tr>
+  <tr><td><code>centroid</code></td><td>Distancia entre centroides de las dos nubes</td><td>REJECT si <code>&gt; th_centroid</code>, sino PASS</td></tr>
+  <tr><td><code>aabb</code></td><td>Distancia entre bounding boxes (mejor para objetos alargados)</td><td>REJECT si <code>&gt; th_aabb</code>, sino PASS</td></tr>
+  <tr><td><code>cos_sim</code></td><td>Similitud coseno de los embeddings CLIP</td><td>REJECT si <code>&lt; th_cossim</code>, sino PASS</td></tr>
+  <tr><td><code>overlap</code> <span class="badge badge-green">nuevo</span></td><td>Simétrico: fracción de la nube <em>pequeña</em> con vecino en la grande dentro de <code>th_points</code> (corregido por tamaño)</td><td>ACCEPT si <code>ratio &gt; th_overlap_ratio</code>, o si <code>cos_sim &gt; th_overlap_cos AND ratio &gt; th_overlap_ratio_low</code>; sino REJECT</td></tr>
+  <tr><td><code>overlap_old</code> <span class="badge badge-yellow">legacy</span></td><td>Asimétrico: fracción de pcd1 dentro de pcd2, <em>sin</em> normalizar por tamaño. Mismos umbrales que <code>overlap</code></td><td>igual que overlap</td></tr>
+</table>
+
+<h3>1.3 Inventario de parámetros (vector θ)</h3>
+<table>
+  <tr><th>Parámetro</th><th>Default</th><th>Criterio</th><th>Efecto al ↑</th></tr>
+  <tr><td><code>cooccurrence_veto_threshold</code></td><td>5 (int)</td><td>cooccurrence</td><td>más permisivo (menos vetos)</td></tr>
+  <tr><td><code>th_centroid</code></td><td>1.5 m</td><td>centroid</td><td>más permisivo</td></tr>
+  <tr><td><code>th_aabb</code></td><td>0.3 m</td><td>aabb</td><td>más permisivo</td></tr>
+  <tr><td><code>th_cossim</code></td><td>0.81</td><td>cos_sim</td><td>más estricto</td></tr>
+  <tr><td><code>th_points</code></td><td>0.1 m</td><td>overlap</td><td>más permisivo (radio mayor)</td></tr>
+  <tr><td><code>th_overlap_ratio</code></td><td>0.5</td><td>overlap</td><td>más estricto</td></tr>
+  <tr><td><code>th_overlap_cos</code></td><td>0.9</td><td>overlap (camino condicional)</td><td>activa menos el camino condicional</td></tr>
+  <tr><td><code>th_overlap_ratio_low</code></td><td>0.2</td><td>overlap (camino condicional)</td><td>más estricto</td></tr>
+</table>
+<p>Ejes <strong>estructurales</strong> (categóricos): composición y orden de <code>fusion_criteria</code>, y el filtro de <strong>covisibilidad</strong> (<code>covisibility.enabled</code> + <code>min_overlap_ratio</code>, <code>max_distance</code>, <code>min_covisibility_overlap</code>).</p>
+
+<h3>1.4 El mecanismo de replay (lo que abarata todo)</h3>
+<div class="card">
+<div class="criteria-chain">
+  <span class="criterion swap">pre_fusion.ckpt</span><span class="arrow">→</span>
+  <span class="criterion">restore_pre_fusion_checkpoint</span><span class="arrow">→</span>
+  <span class="criterion accept">_fuse_overlapping_instances(θ)</span><span class="arrow">→</span>
+  <span class="criterion">segment + eval + eval_instances</span>
+</div>
+<p style="margin-bottom:0;">El checkpoint contiene la nube ya corregida, las instancias con descriptores CLIP y el grafo de co-ocurrencia. Al restaurarlo, el stage <code>run</code> <strong>salta SLAM por completo</strong> y solo re-ejecuta la fusión con el θ nuevo. Por eso podemos permitirnos cientos de evaluaciones.</p>
+</div>
+
+<h3>1.5 Las dos baselines (condiciones de perturbación)</h3>
+<div class="objgrid">
+  <div class="card"><h4 style="color:var(--green)">🟢 Light baseline</h4>
+    2 jumps en KF 50 y 100 · traslación <strong>0.03 m</strong> · dirección aleatoria (seed 42) · sin rotación.<br>
+    Solape geométrico post-corrección alto → fusión fácil. Referencia de caso ideal.</div>
+  <div class="card"><h4 style="color:var(--red)">🔴 Aggressive baseline</h4>
+    2 jumps en KF 50 y 100 · traslación <strong>0.30 m</strong> en eje forward · sin rotación.<br>
+    Separación grande en profundidad → solape bajo. Aquí <code>cos_sim</code> y los umbrales pesan más.</div>
+</div>
+<p>Config compartida: <code>fusion_method: clip</code>, cadena baseline <code>[centroid, cos_sim, overlap]</code> con defaults, <code>save_pre_fusion_checkpoint: true</code>, <code>close_loops: true</code>, las 8 escenas.</p>
+<div class="note"><strong>El caso especial de la co-ocurrencia.</strong> En jump drift, los duplicados <em>sí</em> se vieron en los mismos keyframes antes del salto (son el mismo objeto físico). Activar el veto de co-ocurrencia los protegería <em>erróneamente</em> de fusionarse. Por eso las baselines lo excluyen. En este estudio la co-ocurrencia se trata como <strong>variable a estudiar</strong> (cuánto daño hace activarla), no como una mejora a adoptar.</div>
+
+<h3>1.6 De dónde salen las métricas</h3>
+<p><code>results_utils.py</code> ya entrega todo en DataFrames. No parsees ficheros a mano.</p>
+<table>
+  <tr><th>Función</th><th>Devuelve</th></tr>
+  <tr><td><code>load_experiments(output_dir)</code></td><td>1 fila por experimento: <code>mIoU, mAcc, Head/Common/Tail_mIoU, Num_Instances, AP, AP_50, AP_25, AP_agnostic, Fusion_Total/Accepted/Reject_*, Th_Centroid, Th_AABB, Th_CosSim, Th_Points, Cooccurrence_Veto, Fusion_Method, …</code></td></tr>
+  <tr><td><code>load_scene_results(output_dir)</code></td><td>Igual + columna <code>Scene</code> (desglose por escena)</td></tr>
+  <tr><td><code>parse_fusion_decisions()</code></td><td><code>fusion_decisions.csv</code>: por par → <code>result, reason, centroid_dist, aabb_dist, cos_sim, p_dist, shared_kfs</code></td></tr>
+  <tr><td><code>parse_instance_ap_file()</code></td><td>AP / AP_50 / AP_25 / AP_agnostic (agregado y por escena)</td></tr>
+  <tr><td><code>load_timing_stats()</code></td><td><code>logger/*.log</code>: <code>t_fusion, t_crit_*, sc_*, n_instances_alive, n_pairs_evaluated</code></td></tr>
+  <tr><td><code>filter_experiments()</code> / <code>filter_scene_results()</code></td><td>filtro AND por fecha, método, ids, criterios…</td></tr>
+  <tr><td><code>plot_bar_metrics, plot_delta_heatmap, plot_instance_counts, plot_fusion_compare, plot_class_heatmap, plot_compare_scene_bars, plot_radar_chart, plot_line_metrics, plot_confusion_matrix</code></td><td>gráficas listas para el dashboard</td></tr>
+</table>
+
+<!-- ============================ RQ ============================ -->
+<h2 id="rq">2 · Preguntas de investigación y objetivo</h2>
+
+<h3>2.1 Preguntas</h3>
+<ol>
+  <li><strong>RQ1 — Mecanismos.</strong> ¿Qué decisiones estructurales mejoran la fusión? Concretamente: <code>overlap</code> (nuevo, corregido por tamaño) vs <code>overlap_old</code>; <code>centroid</code> vs <code>aabb</code> como criterio geométrico; añadir/quitar el veto de <code>cooccurrence</code>; y el filtro de covisibilidad on/off.</li>
+  <li><strong>RQ2 — Umbrales.</strong> Para la(s) cadena(s) ganadora(s), ¿qué valores de θ optimizan el compromiso mIoU ↔ AP-agnostic?</li>
+  <li><strong>RQ3 — Acoplamiento.</strong> ¿Cuánto de la influencia de cada umbral pasa por <em>interacción</em> con los demás? (justifica tratar θ como vector, no eje a eje).</li>
+  <li><strong>RQ4 — Robustez.</strong> ¿El óptimo de la condición suave sigue siéndolo en la agresiva, y es consistente entre escenas? Si diverge, ¿qué criterio es el cuello de botella?</li>
+</ol>
+
+<h3>2.2 Objetivo (multi-objetivo)</h3>
+<div class="card highlight">
+  <p>Optimización <strong>multi-objetivo</strong>, maximizando simultáneamente, agregado como <em>media sobre las 8 escenas</em>:</p>
+  <div class="objgrid">
+    <div><span class="badge badge-blue">Objetivo 1</span> <strong>mIoU</strong> — calidad semántica (métrica headline del proyecto).</div>
+    <div><span class="badge badge-blue">Objetivo 2</span> <strong>AP class-agnostic</strong> — pureza de instancia, independiente de clasificar bien. Es el termómetro honesto de over/under-merge.</div>
+  </div>
+  <p style="margin-bottom:0;">No se colapsan en un escalar con λ arbitrario (indefendible en un TFM). Se reporta el <strong>frente de Pareto</strong> y se elige un <strong>knee point</strong>. <span class="badge badge-yellow">control</span> <code>mAcc</code> y <code>Num_Instances</code> se monitorizan: caída brusca de <code>Num_Instances</code> + caída de AP-agn = over-merge; <code>Num_Instances</code> inflado = under-merge (fantasmas sin fusionar).</p>
+</div>
+<p>Se ejecutan <strong>dos optimizaciones independientes</strong> (una por condición). Comparar sus dos frentes de Pareto responde a RQ4.</p>
+
+<!-- ============================ PRINCIPLES ============================ -->
+<h2 id="principles">3 · Principios de método (por qué se hace así)</h2>
+<ul>
+  <li><strong>OFAT está mal aquí.</strong> Fijar todo menos un parámetro y barrerlo solo funciona si la superficie es separable. En OVO los criterios comparten <code>ctx</code> y se cortan entre sí (early-exit): cambiar <code>th_cossim</code> cambia <em>qué pares llegan vivos a <code>overlap</code></em>, y la rama <code>cos_sim &gt; th_overlap_cos</code> interactúa con el ratio de solape. Hay interacción <em>estructural</em>. Por eso θ se optimiza como vector (Fase 4) y se mide la interacción (Fase 5).</li>
+  <li><strong>Separar estructura de valores.</strong> Primero qué mecanismos (Fase 2, categórico), luego qué umbrales (Fases 3–4, continuo). Mezclarlo explota el espacio de búsqueda.</li>
+  <li><strong>Determinismo ⇒ la escena es la unidad.</strong> Sin estocasticidad, cada θ es reproducible. Para comparar dos configuraciones se usa un test pareado por escena (<strong>Wilcoxon signed-rank</strong>, n=8), no "subió 0.3 de mIoU".</li>
+  <li><strong>Generalización &gt; pico.</strong> El θ final se elige por buena media + baja dispersión entre escenas y consistencia entre condiciones, no por el pico en una escena. La validación LOSO (Fase 6) lo comprueba.</li>
+  <li><strong>Reproducibilidad.</strong> Cada run guarda su θ completo + commit en la tabla maestra. El <em>study</em> de Optuna se persiste en SQLite (auditable y reanudable).</li>
+</ul>
+
+<!-- ============================ FASE 0 ============================ -->
+<div class="phase-head" id="p0"><span class="pn">FASE 0</span><h2>Arnés: entorno, checkpoints y launcher</h2></div>
+<p>Fase barata pero crítica. No lances ningún experimento del estudio hasta completarla.</p>
+
+<h3>0.1 Entorno y raíz</h3>
+<p>Trabaja desde la raíz del repo (por defecto <code>/home/padidavid/repos/OVO</code>; si la tarea vive en un worktree, usa su raíz). Todos los comandos van con <code>conda run -n ovo2</code>.</p>
+
+<h3>0.2 Verificaciones previas <span class="badge badge-orange">STOP si fallan</span></h3>
+<div class="agent">
+<pre><span class="cm"># 1) Dataset y GT de instancias presentes</span>
+ls data/input/Datasets/Replica
+ls data/input/Datasets/Replica/instance_gt   <span class="cm"># office0..4, room0..2 → AP usable</span>
+
+<span class="cm"># 2) Localiza los checkpoints de las DOS baselines (anota el nombre EXACTO con su UID)</span>
+ls data/checkpoints/Replica/ | grep -i light-baseline
+ls data/checkpoints/Replica/ | grep -i agressive-baseline
+ls data/checkpoints/Replica/&lt;baseline_folder&gt;/   <span class="cm"># confirma 1 carpeta por escena con pre_fusion.ckpt</span>
+
+<span class="cm"># 3) commit actual (se registra en cada run)</span>
+git rev-parse --short HEAD</pre>
+</div>
+<div class="warn-box">Verifica además que los knobs funcionan por config en este código: que <code>fusion_criteria</code> acepta <code>overlap_old</code>, <code>aabb</code> y <code>cooccurrence</code>, y que existen <code>th_overlap_ratio</code>, <code>th_overlap_cos</code>, <code>th_overlap_ratio_low</code> como overrides en <code>ovo_config.semantic</code> (mira <code>ovo/entities/fusion/factory.py</code> y <code>criteria.py</code>). Si alguno está hardcodeado y no es configurable, <strong>PÁRATE y repórtalo</strong>: el estudio asume que todos son seleccionables por manifest.</div>
+<div class="warn-box"><strong>Comportamiento del replay multi-escena.</strong> Comprueba si <code>restore_pre_fusion_checkpoint</code> sustituye <code>&lt;scene&gt;</code> al usar <code>scenes_list</code>, o si hay que generar <strong>una entrada de experimento por escena</strong> con su path explícito. Ante la duda, usa una entrada por escena (robusto). Decide aquí y úsalo en el launcher.</div>
+
+<h3>0.3 El launcher (núcleo de la autonomía)</h3>
+<p>Escribe <code>study/launcher.py</code>: dado <code>(condition, theta, label)</code>, genera un manifest de replay, lo lanza, espera, parsea con <code>results_utils.py</code> y devuelve métricas, registrando una fila en la tabla maestra. <strong>Todas las fases llaman a esta única función.</strong></p>
+<div class="agent">
+<pre><span class="kw">import</span> subprocess, json, time, uuid, datetime <span class="kw">as</span> dt
+<span class="kw">import</span> yaml, pandas <span class="kw">as</span> pd
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+<span class="kw">from</span> ovo.utils <span class="kw">import</span> results_utils <span class="kw">as</span> ru
+
+ROOT = Path(<span class="str">"/home/padidavid/repos/OVO"</span>)          <span class="cm"># o la raíz del worktree</span>
+OUT  = ROOT / <span class="str">"data/output/Replica"</span>
+COMMIT = subprocess.check_output([<span class="str">"git"</span>,<span class="str">"-C"</span>,str(ROOT),<span class="str">"rev-parse"</span>,<span class="str">"--short"</span>,<span class="str">"HEAD"</span>]).decode().strip()
+SCENES = [<span class="str">"office0"</span>,<span class="str">"office1"</span>,<span class="str">"office2"</span>,<span class="str">"office3"</span>,<span class="str">"office4"</span>,<span class="str">"room0"</span>,<span class="str">"room1"</span>,<span class="str">"room2"</span>]
+
+<span class="cm"># Carpetas EXACTAS de las baselines (rellenar tras Fase 0.2)</span>
+CKPT = {
+  <span class="str">"light"</span>:      <span class="str">"20260613_GTJump-J2-T0p03-R0p0_CLIP_light-baseline_XXXXX"</span>,
+  <span class="str">"aggressive"</span>: <span class="str">"20260613_GTJump-J2-T0p3-R0p0_CLIP_agressive-baseline_XXXXX"</span>,
+}
+MASTER = ROOT / <span class="str">"study/runs_master.parquet"</span>
+
+<span class="kw">def</span> build_manifest(condition, theta, label):
+    base = CKPT[condition]
+    exps = []
+    <span class="kw">for</span> sc <span class="kw">in</span> SCENES:                       <span class="cm"># una entrada por escena (robusto, ver 0.2)</span>
+        sem = {<span class="str">"fusion_method"</span>: <span class="str">"clip"</span>,
+               <span class="str">"fusion_criteria"</span>: theta[<span class="str">"fusion_criteria"</span>]}
+        <span class="kw">for</span> k <span class="kw">in</span> [<span class="str">"th_centroid"</span>,<span class="str">"th_aabb"</span>,<span class="str">"th_cossim"</span>,<span class="str">"th_points"</span>,
+                  <span class="str">"th_overlap_ratio"</span>,<span class="str">"th_overlap_cos"</span>,<span class="str">"th_overlap_ratio_low"</span>,
+                  <span class="str">"cooccurrence_veto_threshold"</span>]:
+            <span class="kw">if</span> k <span class="kw">in</span> theta: sem[k] = theta[k]
+        <span class="kw">if</span> theta.get(<span class="str">"covisibility"</span>): sem[<span class="str">"covisibility"</span>] = theta[<span class="str">"covisibility"</span>]
+        exps.append({
+          <span class="str">"label"</span>: label, <span class="str">"scenes_id"</span>: sc,
+          <span class="str">"stages"</span>: [<span class="str">"run"</span>,<span class="str">"segment"</span>,<span class="str">"eval"</span>,<span class="str">"eval_instances"</span>],
+          <span class="str">"restore_pre_fusion_checkpoint"</span>: f<span class="str">"data/checkpoints/Replica/{base}/{sc}/pre_fusion.ckpt"</span>,
+          <span class="str">"ovo_config"</span>: {<span class="str">"semantic"</span>: sem,
+                          <span class="str">"vis"</span>: {<span class="str">"stream"</span>: <span class="kw">True</span>,<span class="str">"type"</span>:<span class="str">"rerun"</span>,<span class="str">"rerun_visual_mode"</span>:<span class="str">"off"</span>,<span class="str">"save_rrd"</span>: <span class="kw">False</span>}},
+        })
+    mani = {<span class="str">"default_dataset"</span>: <span class="str">"Replica"</span>, <span class="str">"experiments"</span>: exps}
+    p = ROOT / f<span class="str">"manifests/{dt.date.today():%Y%m%d}_replay_{condition}_{label}.yaml"</span>
+    p.write_text(yaml.safe_dump(mani, sort_keys=<span class="kw">False</span>))
+    <span class="kw">return</span> p
+
+<span class="kw">def</span> run_fusion_config(condition, theta, label):
+    mani = build_manifest(condition, theta, label)
+    subprocess.run([<span class="str">"conda"</span>,<span class="str">"run"</span>,<span class="str">"-n"</span>,<span class="str">"ovo2"</span>,<span class="str">"python"</span>,
+                    <span class="str">"scripts/run_experiments_batch.py"</span>,<span class="str">"--manifest"</span>,str(mani.relative_to(ROOT)),<span class="str">"--verbose"</span>],
+                   cwd=ROOT, check=<span class="kw">True</span>)
+    <span class="cm"># Parseo vía la capa existente — NO reparsear a mano</span>
+    exp = ru.load_experiments(str(OUT)); sc = ru.load_scene_results(str(OUT))
+    exp = ru.filter_experiments(exp, experiment_ids=[label])   <span class="cm"># filtra a ESTE run (ajusta al id real)</span>
+    sc  = ru.filter_scene_results(sc, experiment_ids=[label])
+    row = {<span class="str">"condition"</span>: condition, <span class="str">"label"</span>: label, <span class="str">"commit"</span>: COMMIT,
+           <span class="str">"ts"</span>: dt.datetime.now().isoformat(), **theta,
+           <span class="str">"mIoU"</span>: float(exp[<span class="str">"mIoU"</span>].mean()), <span class="str">"mAcc"</span>: float(exp[<span class="str">"mAcc"</span>].mean()),
+           <span class="str">"AP_agnostic"</span>: float(exp[<span class="str">"AP_agnostic"</span>].mean()),
+           <span class="str">"Num_Instances"</span>: float(exp[<span class="str">"Num_Instances"</span>].mean()),
+           <span class="str">"per_scene"</span>: sc[[<span class="str">"Scene"</span>,<span class="str">"mIoU"</span>,<span class="str">"AP_agnostic"</span>,<span class="str">"Num_Instances"</span>]].to_dict(<span class="str">"records"</span>)}
+    _append_master(row)
+    <span class="kw">return</span> row
+
+<span class="kw">def</span> _append_master(row):
+    df = pd.read_parquet(MASTER) <span class="kw">if</span> MASTER.exists() <span class="kw">else</span> pd.DataFrame()
+    df = pd.concat([df, pd.DataFrame([{k:(json.dumps(v) <span class="kw">if</span> isinstance(v,(list,dict)) <span class="kw">else</span> v)
+                                       <span class="kw">for</span> k,v <span class="kw">in</span> row.items()}])], ignore_index=<span class="kw">True</span>)
+    df.to_parquet(MASTER); df.to_csv(MASTER.with_suffix(<span class="str">".csv"</span>), index=<span class="kw">False</span>)</pre>
+</div>
+<div class="warn-box">El filtro por <code>experiment_ids</code> debe casar con el id real que el runner asigna (incluye <code>{DATE}_{SLAM}_{FUSION}_{label}_{UID}</code>). En Fase 0 lanza <strong>un</strong> replay de prueba con θ=default sobre <code>office0</code>, mira cómo aparece en <code>load_experiments</code>, y ajusta el filtrado (por <code>label</code> único + fecha) para que <code>run_fusion_config</code> recupere siempre la fila correcta.</div>
+<div class="produces"><code>study/launcher.py</code> · <code>study/runs_master.parquet</code> (+ <code>.csv</code>): una fila por run con θ completo, commit, métricas agregadas y desglose por escena. Es la <strong>memoria numérica</strong> de todo el estudio.</div>
+
+<h3>0.4 Sanity check de determinismo</h3>
+<p>Lanza el mismo θ=default dos veces sobre <code>office0</code>. Si mIoU y <code>Num_Instances</code> coinciden bit a bit, el determinismo está confirmado y se puede saltar cualquier repetición en el resto del estudio. Si no coinciden, <span class="badge badge-orange">STOP</span> y repórtalo: el diseño asume determinismo.</p>
+
+<!-- ============================ FASE 1 ============================ -->
+<div class="phase-head" id="p1"><span class="pn">FASE 1</span><h2>Rangos guiados por datos (0 runs nuevos)</h2></div>
+<p>Antes de optimizar a ciegas, explota los <code>fusion_decisions.csv</code> que las dos baselines ya generaron. Esto fija rangos sensatos por umbral y a veces revela el separador directamente.</p>
+<div class="agent">
+<pre><span class="kw">from</span> ovo.utils <span class="kw">import</span> results_utils <span class="kw">as</span> ru
+<span class="cm"># Para cada condición y escena, carga las decisiones par-a-par del baseline</span>
+dec = ru.parse_fusion_decisions(<span class="str">".../&lt;baseline_folder&gt;/&lt;scene&gt;/fusion_decisions.csv"</span>)
+<span class="cm"># 1) Histograma de motivos de rechazo: ¿qué criterio domina los REJECT?</span>
+<span class="cm">#    Si el 90% se decide en 'centroid', th_centroid manda y los demás casi no se ejercitan.</span>
+dec[dec.result==<span class="str">"REJECTED"</span>].reason.value_counts(normalize=<span class="kw">True</span>)
+<span class="cm"># 2) Distribuciones de los valores del ctx para ACCEPT vs REJECT:</span>
+<span class="cm">#    histogramas de cos_sim, centroid_dist, p_dist, shared_kfs.</span>
+<span class="cm">#    El solape entre las dos poblaciones sugiere el umbral separador.</span></pre>
+</div>
+<p>Deriva, por umbral, un rango <code>[min, max]</code> centrado en la zona donde se separan los pares "deberían fusionarse" de "no". Acota con sentido físico: <code>th_cossim, th_overlap_* ∈ [0,1]</code>, <code>th_centroid, th_aabb, th_points</code> en metros razonables para la escena, <code>cooccurrence_veto_threshold</code> entero pequeño. Guarda estos rangos; los usan Morris, Optuna y Sobol.</p>
+<div class="produces"><code>study/ranges.json</code> (rango por parámetro) + figuras de atribución de rechazos e histogramas del <code>ctx</code> (entran en el dashboard y en el TFM como "tuning guiado por datos").</div>
+
+<!-- ============================ FASE 2 ============================ -->
+<div class="phase-head" id="p2"><span class="pn">FASE 2</span><h2>Ablación de mecanismos (RQ1)</h2></div>
+<p>Factorial sobre las decisiones estructurales con los <strong>umbrales en sus defaults</strong>. Responde "¿nuevo mejor que viejo?" antes de tunear nada.</p>
+<table>
+  <tr><th>Eje</th><th>Niveles</th></tr>
+  <tr><td>Geometría</td><td><code>centroid</code> · <code>aabb</code> · <code>centroid+aabb</code></td></tr>
+  <tr><td>Overlap</td><td><code>overlap</code> (nuevo) · <code>overlap_old</code> (legacy)</td></tr>
+  <tr><td>Co-ocurrencia</td><td>off · on (veto=5)</td></tr>
+  <tr><td>Covisibilidad <span class="badge badge-purple">opc.</span></td><td>off · on (defaults)</td></tr>
+</table>
+<p><code>cos_sim</code> está siempre (es la puerta semántica). Orden: criterios baratos primero → <code>[cooccurrence?, geometría, cos_sim, overlap]</code>. Son 3×2×2 = <strong>12</strong> cadenas (×2 si incluyes covisibilidad = 24), cada una × 2 condiciones × 8 escenas, todas vía <code>run_fusion_config</code>.</p>
+<div class="agent">
+<pre><span class="kw">import</span> itertools, scipy.stats <span class="kw">as</span> st
+geom   = [[<span class="str">"centroid"</span>],[<span class="str">"aabb"</span>],[<span class="str">"centroid"</span>,<span class="str">"aabb"</span>]]
+ov     = [<span class="str">"overlap"</span>,<span class="str">"overlap_old"</span>]
+cooc   = [<span class="kw">False</span>,<span class="kw">True</span>]
+<span class="kw">for</span> g,o,c <span class="kw">in</span> itertools.product(geom,ov,cooc):
+    chain = ([<span class="str">"cooccurrence"</span>] <span class="kw">if</span> c <span class="kw">else</span> []) + g + [<span class="str">"cos_sim"</span>, o]
+    theta = {<span class="str">"fusion_criteria"</span>: chain}          <span class="cm"># umbrales = defaults</span>
+    label = <span class="str">"abl-"</span> + <span class="str">"-"</span>.join(chain).replace(<span class="str">"_"</span>,<span class="str">""</span>)  <span class="cm"># sin underscores (regla de label)</span>
+    <span class="kw">for</span> cond <span class="kw">in</span> [<span class="str">"light"</span>,<span class="str">"aggressive"</span>]:
+        run_fusion_config(cond, theta, label)
+<span class="cm"># Comparación honesta vs baseline [centroid,cos_sim,overlap]: Wilcoxon pareado por escena (n=8)</span>
+<span class="cm"># st.wilcoxon(mIoU_cfg_por_escena, mIoU_baseline_por_escena)  → p-valor</span></pre>
+</div>
+<p><strong>Análisis:</strong> ranking por (mIoU, AP-agn); delta vs baseline por escena (<code>plot_delta_heatmap</code>); Wilcoxon por escena para cada cadena vs baseline; conteos <code>sc_*</code> y tiempos <code>t_crit_*</code> (<code>plot_fusion_compare</code>) para ver coste del early-exit. Cuantifica explícitamente el daño de activar <code>cooccurrence</code> en jump drift (RQ1).</p>
+<div class="produces">Tabla de ablación rankeada + p-valores → selecciona la(s) <strong>1–2 cadena(s) ganadora(s)</strong> que pasan a la Fase 3. Regla: gana la que no es significativamente peor que la mejor en ninguna condición.</div>
+
+<!-- ============================ FASE 3 ============================ -->
+<div class="phase-head" id="p3"><span class="pn">FASE 3</span><h2>Cribado: ¿qué umbrales importan? (Morris)</h2></div>
+<p>Sobre la cadena ganadora, antes de gastar presupuesto de optimización, el método de Morris (<em>elementary effects</em>) dice baratamente qué umbrales mueven la métrica y cuáles interactúan. Coste ~ <code>r·(k+1)</code> evaluaciones (decenas).</p>
+<div class="agent">
+<pre><span class="kw">from</span> SALib.sample.morris <span class="kw">import</span> sample <span class="kw">as</span> morris_sample
+<span class="kw">from</span> SALib.analyze.morris <span class="kw">import</span> analyze <span class="kw">as</span> morris_analyze
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+names = [<span class="str">"th_centroid"</span>,<span class="str">"th_cossim"</span>,<span class="str">"th_points"</span>,
+         <span class="str">"th_overlap_ratio"</span>,<span class="str">"th_overlap_cos"</span>,<span class="str">"th_overlap_ratio_low"</span>]  <span class="cm"># los activos en la cadena</span>
+problem = {<span class="str">"num_vars"</span>: len(names), <span class="str">"names"</span>: names,
+           <span class="str">"bounds"</span>: [ranges[n] <span class="kw">for</span> n <span class="kw">in</span> names]}        <span class="cm"># de Fase 1</span>
+X = morris_sample(problem, N=10)                          <span class="cm"># ~ r=10 trayectorias</span>
+<span class="kw">for</span> cond <span class="kw">in</span> [<span class="str">"light"</span>,<span class="str">"aggressive"</span>]:
+    Y = np.array([run_fusion_config(cond, {**winner_chain, **dict(zip(names,x))},
+                                    f<span class="str">"morris-{cond}-{i}"</span>)[<span class="str">"mIoU"</span>] <span class="kw">for</span> i,x <span class="kw">in</span> enumerate(X)])
+    res = morris_analyze(problem, X, Y)   <span class="cm"># mu_star (importancia), sigma (interacción/no-linealidad)</span></pre>
+</div>
+<p><code>μ*</code> alto = el parámetro mueve la salida; <code>σ</code> alto = su efecto depende de los demás (interacción). <strong>Fija a su default</strong> los de <code>μ*</code> bajo y quédate con el subconjunto relevante para la Fase 4. Repite por objetivo (mIoU y AP-agnostic) para no descartar un parámetro que importa solo a uno.</p>
+<div class="produces"><code>study/morris.json</code> + plot μ*–σ por condición y objetivo. θ reducido para Optuna.</div>
+
+<!-- ============================ FASE 4 ============================ -->
+<div class="phase-head" id="p4"><span class="pn">FASE 4</span><h2>Optimización bayesiana multi-objetivo (RQ2)</h2></div>
+<p>Sobre el θ reducido, Optuna construye un modelo de la superficie y elige inteligentemente el siguiente θ. <strong>Dos studies independientes</strong> (light, aggressive), persistidos en SQLite. Direcciones <code>maximize</code> para los dos objetivos → frente de Pareto nativo (NSGA-II o MOTPE).</p>
+<div class="agent">
+<pre><span class="kw">import</span> optuna
+<span class="kw">from</span> optuna.samplers <span class="kw">import</span> NSGAIISampler
+
+<span class="kw">def</span> make_objective(cond):
+    <span class="kw">def</span> objective(trial):
+        theta = dict(winner_chain)
+        <span class="kw">for</span> n <span class="kw">in</span> active_params:                 <span class="cm"># del cribado Morris</span>
+            lo,hi = ranges[n]
+            theta[n] = (trial.suggest_int(n,int(lo),int(hi)) <span class="kw">if</span> n==<span class="str">"cooccurrence_veto_threshold"</span>
+                        <span class="kw">else</span> trial.suggest_float(n,lo,hi))
+        r = run_fusion_config(cond, theta, f<span class="str">"opt-{cond}-{trial.number}"</span>)
+        <span class="kw">return</span> r[<span class="str">"mIoU"</span>], r[<span class="str">"AP_agnostic"</span>]      <span class="cm"># multi-objetivo</span>
+    <span class="kw">return</span> objective
+
+<span class="kw">for</span> cond <span class="kw">in</span> [<span class="str">"light"</span>,<span class="str">"aggressive"</span>]:
+    study = optuna.create_study(directions=[<span class="str">"maximize"</span>,<span class="str">"maximize"</span>],
+              sampler=NSGAIISampler(seed=42),
+              storage=f<span class="str">"sqlite:///study/optuna_{cond}.db"</span>,
+              study_name=f<span class="str">"fusion_{cond}"</span>, load_if_exists=<span class="kw">True</span>)
+    study.optimize(make_objective(cond), n_trials=150)
+    pareto = study.best_trials                          <span class="cm"># frente de Pareto</span></pre>
+</div>
+<p><strong>Selección del knee point:</strong> sobre el frente, normaliza ambos objetivos a [0,1] y elige el punto más cercano a la esquina ideal (1,1) (mínima distancia euclídea), o el de máxima suma normalizada. Documenta el criterio. Ese θ* es el candidato de la condición.</p>
+<div class="warn-box">El <em>pruning</em> de Optuna necesita valores intermedios; aquí cada trial es una fusión completa sin etapas intermedias reportables, así que <strong>no uses pruning</strong>. Como los replays son baratos y deterministas, un presupuesto de 100–200 trials por condición es razonable. Si el tiempo lo permite, súbelo; si no, bájalo y dilo en las conclusiones.</div>
+<div class="produces"><code>study/optuna_light.db</code>, <code>study/optuna_aggressive.db</code> (reanudables) + Pareto por condición + θ* (knee) por condición. Plots: <code>optuna.visualization</code> (Pareto, param importances) y scatter mIoU↔AP-agn coloreado por <code>Num_Instances</code>.</div>
+
+<!-- ============================ FASE 5 ============================ -->
+<div class="phase-head" id="p5"><span class="pn">FASE 5</span><h2>Sensibilidad global: el acoplamiento (RQ3)</h2><span class="opt">opcional · alto coste</span></div>
+<p>Cuantifica cuánta influencia de cada umbral pasa por interacción. Es la prueba numérica y publicable de "esto es una cadena, no parámetros independientes". Sobre el θ reducido (Sobol escala con k, por eso va después del cribado).</p>
+<div class="agent">
+<pre><span class="kw">from</span> SALib.sample <span class="kw">import</span> saltelli
+<span class="kw">from</span> SALib.analyze <span class="kw">import</span> sobol
+X = saltelli.sample(problem, 256)         <span class="cm"># N·(2k+2) evaluaciones — ojo al coste</span>
+<span class="kw">for</span> cond <span class="kw">in</span> [<span class="str">"light"</span>,<span class="str">"aggressive"</span>]:
+    Y = np.array([run_fusion_config(cond, {**winner_chain, **dict(zip(names,x))},
+                                    f<span class="str">"sobol-{cond}-{i}"</span>)[<span class="str">"mIoU"</span>] <span class="kw">for</span> i,x <span class="kw">in</span> enumerate(X)])
+    Si = sobol.analyze(problem, Y)        <span class="cm"># S1 (solo), ST (con interacciones)</span>
+    <span class="cm"># ST - S1 &gt; 0  cuantifica EXACTAMENTE la interacción de ese parámetro</span></pre>
+</div>
+<div class="produces"><code>study/sobol.json</code> + barras S1 vs ST por parámetro. La diferencia <code>ST−S1</code> es el resultado de RQ3.</div>
+<div class="note">Si el coste de Sobol resulta prohibitivo, esta fase puede omitirse: Morris (Fase 3) ya da una señal cualitativa de interacción vía <code>σ</code>. Decláralo en las conclusiones si la saltas.</div>
+
+<!-- ============================ FASE 6 ============================ -->
+<div class="phase-head" id="p6"><span class="pn">FASE 6</span><h2>Consistencia y robustez (RQ4) — 0 runs extra</h2></div>
+<ul>
+  <li><strong>Light ↔ aggressive.</strong> Cruza el θ* de cada condición sobre la otra (2 runs) y compara los dos frentes de Pareto. Si el mismo θ lidera en ambas → robusto. Si divergen → identifica qué criterio cae (mira <code>sc_*</code> y la atribución de rechazos): típicamente en aggressive el solape geométrico baja y <code>overlap</code> deja de aceptar, recayendo el peso en <code>cos_sim</code>.</li>
+  <li><strong>Consistencia entre escenas.</strong> Para θ*, reporta media ± desviación de mIoU/AP-agn entre las 8 escenas (<code>plot_compare_scene_bars</code>). Baja dispersión = generaliza.</li>
+  <li><strong>LOSO sin coste.</strong> Como ya tienes el desglose por escena de θ* almacenado, la validación leave-one-scene-out es un <em>resampling</em> de esos 8 valores (no requiere lanzar nada): para cada escena excluida, recalcula la agregada con las otras 7 y comprueba que θ* sigue siendo el mejor o casi.</li>
+</ul>
+<div class="produces">Veredicto de robustez por RQ4 + tabla de consistencia entre condiciones y escenas. Selección final del θ por <strong>generalización</strong>, no por pico.</div>
+
+<!-- ============================ FASE 7 ============================ -->
+<div class="phase-head" id="p7"><span class="pn">FASE 7</span><h2>Reporte y memoria consultable</h2></div>
+<p>El agente genera los artefactos finales. Reutiliza las funciones <code>plot_*</code> de <code>results_utils.py</code> y añade solo los plots que no existen (Pareto, Morris μ*–σ, Sobol S1/ST).</p>
+
+<h3>7.1 Dashboard humano</h3>
+<div class="produces"><code>study/results_dashboard.html</code> — autocontenido, mismo estilo que este playbook. Secciones: resumen ejecutivo · ablación (barras + delta-heatmap + Wilcoxon) · Pareto por condición · θ* y su desglose por escena · tiempos por criterio · sensibilidad (Morris/Sobol) · robustez light↔aggressive. Cada figura con 1–2 frases de lectura. Se regenera al final de cada fase para poder mirarlo a medio camino.</div>
+
+<h3>7.2 Memoria machine-readable (para "¿qué pasó?")</h3>
+<p>Para que una <strong>sesión futura de Claude</strong> responda preguntas sin re-correr nada, escribe un JSON estructurado con esquema fijo:</p>
+<div class="agent">
+<pre><span class="cm"># study/conclusions.json</span>
+{
+  <span class="key">"meta"</span>: {<span class="key">"date"</span>:..., <span class="key">"commit"</span>:..., <span class="key">"dataset"</span>:<span class="str">"Replica"</span>, <span class="key">"scenes"</span>:8,
+           <span class="key">"fusion_method"</span>:<span class="str">"clip"</span>, <span class="key">"deterministic"</span>:<span class="kw">true</span>, <span class="key">"phases_run"</span>:[...], <span class="key">"phases_skipped"</span>:[...]},
+  <span class="key">"baselines"</span>: {<span class="key">"light"</span>:{<span class="key">"mIoU"</span>:..,<span class="key">"AP_agnostic"</span>:..,<span class="key">"Num_Instances"</span>:..},
+                 <span class="key">"aggressive"</span>:{...}},
+  <span class="key">"findings"</span>: [
+    {<span class="key">"rq"</span>:<span class="str">"RQ1"</span>, <span class="key">"claim"</span>:<span class="str">"overlap (nuevo) supera a overlap_old en aggressive"</span>,
+     <span class="key">"evidence"</span>:{<span class="key">"delta_mIoU"</span>:.., <span class="key">"wilcoxon_p"</span>:.., <span class="key">"n"</span>:8}, <span class="key">"confidence"</span>:<span class="str">"alta"</span>},
+    {<span class="key">"rq"</span>:<span class="str">"RQ1"</span>, <span class="key">"claim"</span>:<span class="str">"activar cooccurrence degrada la fusión en jump drift"</span>, <span class="key">"evidence"</span>:{...}},
+    {<span class="key">"rq"</span>:<span class="str">"RQ3"</span>, <span class="key">"claim"</span>:<span class="str">"th_cossim interactúa fuertemente con th_overlap_ratio"</span>,
+     <span class="key">"evidence"</span>:{<span class="key">"ST_minus_S1"</span>:..}}
+  ],
+  <span class="key">"best_config"</span>: {<span class="key">"light"</span>:{<span class="key">"theta"</span>:{...},<span class="key">"mIoU"</span>:..,<span class="key">"AP_agnostic"</span>:..},
+                  <span class="key">"aggressive"</span>:{...},
+                  <span class="key">"recommended_overall"</span>:{<span class="key">"theta"</span>:{...}, <span class="key">"rationale"</span>:<span class="str">"..."</span>}},
+  <span class="key">"robustness"</span>: {<span class="key">"consistent_across_conditions"</span>:<span class="kw">true</span>|<span class="kw">false</span>, <span class="key">"loso_std_mIoU"</span>:.., <span class="key">"notes"</span>:<span class="str">"..."</span>},
+  <span class="key">"caveats"</span>: [<span class="str">"solo CLIP"</span>, <span class="str">"óptimo condicionado a jump_seed=42"</span>, ...],
+  <span class="key">"artifacts"</span>: {<span class="key">"master_table"</span>:<span class="str">"study/runs_master.parquet"</span>,
+                <span class="key">"optuna"</span>:[<span class="str">"study/optuna_light.db"</span>,<span class="str">"study/optuna_aggressive.db"</span>],
+                <span class="key">"dashboard"</span>:<span class="str">"study/results_dashboard.html"</span>,
+                <span class="key">"manifest_index"</span>:<span class="str">"study/manifest_index.csv"</span>}
+}</pre>
+</div>
+<p>Acompáñalo de <code>study/conclusions.md</code>: la misma historia en prosa (qué se probó, qué ganó, por qué, limitaciones). Y <code>study/manifest_index.csv</code> que enlaza cada <code>experiment_id → θ → manifest → carpeta de salida</code>, para trazabilidad total.</p>
+<div class="note"><strong>Contrato de memoria.</strong> Una sesión futura responde "¿qué pasó?" cargando <code>conclusions.json</code> (resumen + hallazgos con evidencia) y, si hace falta detalle, <code>runs_master.parquet</code> (todos los runs) o los <code>optuna_*.db</code>. No hace falta re-ejecutar nada.</div>
+
+<!-- ============================ RUNBOOK ============================ -->
+<h2 id="runbook">Runbook / checklist del agente</h2>
+<p>Ejecuta en orden. Marca cada ítem. Ante <span class="badge badge-orange">STOP</span>, detente y reporta al humano.</p>
+<ul class="check">
+  <li><strong>F0</strong> · Verificar entorno, dataset, GT, checkpoints de las 2 baselines, commit. <span class="badge badge-orange">STOP</span> si falta algo.</li>
+  <li><strong>F0</strong> · Confirmar knobs configurables (overlap_old, aabb, cooccurrence, th_overlap_*). <span class="badge badge-orange">STOP</span> si hay hardcodes.</li>
+  <li><strong>F0</strong> · Escribir y probar <code>launcher.py</code> con 1 replay de prueba; ajustar el filtrado por id; confirmar determinismo (doble run idéntico).</li>
+  <li><strong>F1</strong> · Histogramas de <code>fusion_decisions.csv</code> → <code>ranges.json</code>.</li>
+  <li><strong>F2</strong> · Lanzar el factorial de mecanismos (12–24 cfg × 2 cond); Wilcoxon vs baseline; elegir cadena(s) ganadora(s).</li>
+  <li><strong>F3</strong> · Morris sobre la ganadora → θ reducido (por objetivo).</li>
+  <li><strong>F4</strong> · Optuna multi-objetivo × 2 condiciones (≤150 trials c/u); extraer Pareto + knee θ*.</li>
+  <li><strong>F5</strong> · <span class="badge badge-purple">opc.</span> Sobol → ST−S1. Omitir si el coste no cabe (declararlo).</li>
+  <li><strong>F6</strong> · Cruce light↔aggressive, consistencia por escena, LOSO. Selección final por generalización.</li>
+  <li><strong>F7</strong> · Generar <code>results_dashboard.html</code>, <code>conclusions.json/.md</code>, <code>manifest_index.csv</code>.</li>
+  <li><strong>Cierre</strong> · Reportar al humano: rutas de los 4 artefactos + 3–5 hallazgos clave + fases omitidas y por qué.</li>
+</ul>
+<div class="warn-box"><strong>Gestión de fallos.</strong> Si un replay individual falla (una escena), regístralo y continúa; no abortes el barrido. Si falla una condición entera o el launcher, <span class="badge badge-orange">STOP</span>. Cap de presupuesto: si el total de runs supera lo razonable para el tiempo disponible, baja <code>n_trials</code> y la N de Sobol antes que abandonar fases enteras, y dilo en las conclusiones.</div>
+
+<!-- ============================ NAMING ============================ -->
+<h2 id="naming">Convenciones de nombres y carpetas</h2>
+<ul>
+  <li><strong>Manifests:</strong> <code>manifests/{DATE}_replay_{condition}_{label}.yaml</code>. <code>label</code> con guiones, <strong>sin underscores</strong>.</li>
+  <li><strong>Experiment id</strong> (lo pone el runner): <code>{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{label}_{UID}</code>.</li>
+  <li><strong>Salidas del runner:</strong> <code>data/output/Replica/&lt;experiment_id&gt;/&lt;scene&gt;/</code> (incluye <code>statistics.txt</code>, <code>instance_ap*.txt</code>, <code>logger/*.log</code>, <code>fusion_decisions.csv</code>).</li>
+  <li><strong>Artefactos del estudio</strong> (todo bajo <code>study/</code>): <code>launcher.py · runs_master.parquet/.csv · ranges.json · morris.json · sobol.json · optuna_*.db · results_dashboard.html · conclusions.json · conclusions.md · manifest_index.csv · figs/</code>.</li>
+  <li><strong>Nunca</strong> tocar <code>manifests/experiments_manifest.yaml</code> ni <code>ovo.yaml</code> (el runner usa temp configs por experimento; los replays concurrentes no colisionan).</li>
+</ul>
+
+<!-- ============================ APPENDIX ============================ -->
+<h2 id="appendix">Apéndice · rangos de partida y glosario</h2>
+<p>Rangos iniciales sugeridos (Fase 1 los refina con datos). Físicamente acotados:</p>
+<table>
+  <tr><th>Parámetro</th><th>Default</th><th>Rango sugerido</th><th>Tipo</th></tr>
+  <tr><td><code>th_centroid</code></td><td>1.5</td><td>[0.3, 3.0] m</td><td>float</td></tr>
+  <tr><td><code>th_aabb</code></td><td>0.3</td><td>[0.05, 1.5] m</td><td>float</td></tr>
+  <tr><td><code>th_cossim</code></td><td>0.81</td><td>[0.5, 0.97]</td><td>float</td></tr>
+  <tr><td><code>th_points</code></td><td>0.1</td><td>[0.02, 0.3] m</td><td>float</td></tr>
+  <tr><td><code>th_overlap_ratio</code></td><td>0.5</td><td>[0.2, 0.8]</td><td>float</td></tr>
+  <tr><td><code>th_overlap_cos</code></td><td>0.9</td><td>[0.75, 0.98]</td><td>float</td></tr>
+  <tr><td><code>th_overlap_ratio_low</code></td><td>0.2</td><td>[0.05, 0.5]</td><td>float</td></tr>
+  <tr><td><code>cooccurrence_veto_threshold</code></td><td>5</td><td>[2, 15]</td><td>int</td></tr>
+</table>
+<p class="muted"><strong>Glosario.</strong> OFAT = one-factor-at-a-time. μ* / σ = efectos elementales de Morris (importancia / interacción). S1 / ST = índices de Sobol de primer y total orden; ST−S1 = peso de la interacción. Knee point = punto del frente de Pareto con mejor compromiso. LOSO = leave-one-scene-out. AP-agnostic = average precision de instancia sin tener en cuenta la clase (mide pureza de segmentación).</p>
+
+<div class="footer">
+  OVO · Playbook del estudio de fusión · Generado para una sesión de Claude Code autónoma ·
+  Fusion_method CLIP · GTJump determinista · Replica 8 escenas · Objetivo multi-objetivo [mIoU, AP-agnostic].
+</div>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // Scrollspy: highlight TOC link of section in view
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var map = {};
+  links.forEach(function(a){ var id=a.getAttribute('href').slice(1); var el=document.getElementById(id); if(el) map[id]=a; });
+  var ids = Object.keys(map);
+  function onScroll(){
+    var pos = window.scrollY + 120, cur = null;
+    ids.forEach(function(id){ var el=document.getElementById(id); if(el && el.offsetTop<=pos) cur=id; });
+    links.forEach(function(a){ a.classList.remove('active'); });
+    if(cur && map[cur]) map[cur].classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+  // Copy buttons on code blocks
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copybtn'; b.textContent='copiar';
+    b.addEventListener('click', function(){
+      var t=pre.cloneNode(true); var btn=t.querySelector('.copybtn'); if(btn) btn.remove();
+      navigator.clipboard.writeText(t.innerText).then(function(){ b.textContent='copiado'; setTimeout(function(){b.textContent='copiar';},1200); });
+    });
+    pre.appendChild(b);
+  });
+})();
+</script>
+</body>
+</html>
