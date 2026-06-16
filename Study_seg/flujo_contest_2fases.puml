@@ -1,0 +1,50 @@
+@startuml flujo_contest_2fases
+title Contest - orquestacion en 2 fases (root real + reevaluacion frontera)
+caption Capa de batch que envuelve el flujo per-perdedor (ver flujo_decision_contest.puml). Resuelve el caso 95: 3 IDs (78/33/81) = 1 objeto.
+
+skinparam defaultFontName Helvetica
+skinparam ActivityDiamondBackgroundColor #FFF8E1
+skinparam ActivityBackgroundColor #ECEFF1
+skinparam partitionBorderColor #607D8B
+
+start
+
+partition "FASE 1 - decidir batch (orden actual)" {
+  :Para cada perdedor A:\nclassify() + _resolve_pairs()\n(flujo per-perdedor existente);
+  note right
+    root() = identidad todavia.
+    La rama strong que da
+    ">=2 raices" NO termina:
+    se RETIENE (no es stop).
+  end note
+
+  if (Veredicto del par) then (MERGE_CONTAINMENT)
+    #66BB6A:Aplicar MERGE\n+ unir en union-find\n(33->78, 81->78, ...);
+  elseif (SPLIT / dominancia) then
+    #64B5F6:Aplicar SPLIT;
+  elseif (strong & >=2 raices) then
+    #FFCC80:RETENER en cola "pendiente"\n(no stop);
+  else (borde / ruido / frontera baja)
+    #BDBDBD:NO_ACTION final;
+  endif
+}
+
+:Construir root() = find del union-find\nconstruido en Fase 1;
+note right
+  Ahora root(33)=78, root(81)=78.
+  Los IDs que se fusionaron
+  colapsan a una sola raiz.
+end note
+
+partition "FASE 2 - reevaluar SOLO los pendientes" {
+  :Para cada perdedor retenido:\nrecalcular roots = { root(w) : w in strong };
+  if (len(roots) == 1?\n(todos los ganadores = 1 objeto)) then (si, 1 raiz)
+    #66BB6A:MERGE_CONTAINMENT\n"frontera resuelta tras merges"\n(caso 95 entra);
+    stop
+  else (no, >=2 raices reales)
+    #BDBDBD:NO_ACTION final\n"frontera real verdadera"\n(objetos genuinamente distintos);
+    stop
+  endif
+}
+
+@enduml

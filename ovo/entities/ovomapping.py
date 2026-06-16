@@ -402,6 +402,7 @@ class OVOSemMap():
         kfs = self.slam_backbone.get_kfs()
         point_obs = self.slam_backbone.get_point_observations()
         point_normals = self.slam_backbone.get_point_normals()
+        point_colors = torch.as_tensor(self.slam_backbone.get_pcd_colors())
 
         # Send "before fusion" snapshot to stream visualizer
         self._send_stream_frame(frame_id, mpqueue)
@@ -410,7 +411,7 @@ class OVOSemMap():
         if noise_cfg.get("jump_drift_enabled", False) and noise_cfg.get("save_pre_fusion_checkpoint", False):
             self._save_pre_fusion_checkpoint(frame_id)
 
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)
@@ -539,7 +540,8 @@ class OVOSemMap():
         print(f"Running fusion from checkpoint (frame_id={frame_id})...")
         point_obs = self.slam_backbone.get_point_observations()
         point_normals = self.slam_backbone.get_point_normals()
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals)
+        point_colors = torch.as_tensor(self.slam_backbone.get_pcd_colors())
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)

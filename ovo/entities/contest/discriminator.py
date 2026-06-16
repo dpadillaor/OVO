@@ -23,7 +23,7 @@ class ContestDiscriminator:
         high: float = 0.7,                    # contención alta -> fragmento
         low: float = 0.5,                     # por debajo -> borde
         min_mass: int = 50,                   # por debajo -> ruido
-        min_split_cont: float = 0.05,         # contención mínima para SPLIT por focus
+        min_split_cont: float = 0.0,          # contención mínima para SPLIT por focus (0 = sin corte; sesga contra losers grandes, filtra focus/mass/persist/normal)
         max_rev_split: float = 0.5,           # rev por encima -> bidireccional, NO split parcial
         min_persist_split: float = 0.1,       # persistencia por debajo -> parpadeo, NO split parcial (solo partial)
         sim_merge: float = 0.81,              # cos-sim descriptor por encima -> mismo objeto -> MERGE (franja parcial)
@@ -46,6 +46,7 @@ class ContestDiscriminator:
         pairs: List[PairFeatures],
         sim: Callable[[InsId, InsId], float | None] | None = None,
         seam: Callable[[InsId, InsId, tuple], float | None] | None = None,
+        color: Callable[[InsId, InsId, tuple], tuple] | None = None,
     ) -> Verdict:
         pairs = [p for p in pairs if p.mass >= self.min_mass]
         if not pairs:
@@ -137,11 +138,24 @@ class ContestDiscriminator:
                     Decision.NO_ACTION, loser, winner=best.winner,
                     reason=f"dominancia: objeto en contacto (giro normal={ang:.1f}°{sim_txt}) -> no split",
                 )
+            # guarda de color de DOS sentidos: el chunk debe fundirse (color) mejor con
+            # W que con el resto de L. Si se parece más a L, es de L -> no transferir.
+            # Caza el caso que el normal no ve: superficies coplanares de distinto color
+            # (póster en pared, trozo oscuro propio pegado a objeto grande oscuro).
+            de_w = de_l = None
+            if color is not None:
+                de_w, de_l = color(loser, best.winner, best.split_points)
+            if de_w is not None and de_l is not None and de_w > de_l:
+                return Verdict(
+                    Decision.NO_ACTION, loser, winner=best.winner,
+                    reason=f"dominancia: color de L (ΔE_W={de_w:.1f} > ΔE_L={de_l:.1f}{sim_txt}) -> no split",
+                )
             ang_txt = f", normal={ang:.1f}°" if ang is not None else ""
+            col_txt = f", ΔE_W={de_w:.1f}/L={de_l:.1f}" if de_w is not None and de_l is not None else ""
             return Verdict(
                 Decision.SPLIT, loser, winner=best.winner,
                 subset=list(best.split_points) if best.split_points else None,
-                reason=f"dominancia (focus={best.focus:.2f}, cont={best.containment:.3f}{sim_txt}{ang_txt}) -> split",
+                reason=f"dominancia (focus={best.focus:.2f}, cont={best.containment:.3f}{sim_txt}{ang_txt}{col_txt}) -> split",
             )
 
         return Verdict(Decision.NO_ACTION, loser, reason="borde (contención baja)")

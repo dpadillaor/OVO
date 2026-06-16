@@ -271,6 +271,71 @@ ovo_config:
 When `enabled: false` (or block omitted), the original brute-force pair loop
 runs unchanged.
 
+### Contest mechanism (merge/split discriminator)
+
+The contest mechanism is an alternative fusion path. It watches which points one
+instance's mask steals from another, then a discriminator emits per-pair verdicts
+(MERGE_CONTAINMENT / SPLIT / NO_ACTION) using containment + geometry guards
+(seam-normal turn, persistence) instead of the classic criterion chain.
+
+Two top-level `semantic:` keys control whether it acts:
+
+| Key | Default | Values | Meaning |
+|---|---|---|---|
+| `contest_fusion` | `observe` | `observe` / `only` / `both` | `observe` = classic fusion runs, contest only logs verdicts. `only` = contest drives merges/splits, classic fusion skipped. `both` = contest merges first, classic fusion on the rest. |
+| `contest_split_mode` | `off` | `off` / `partial` / `dominance` / `all` | Which SPLIT verdicts actually get applied. `off` = none (merges only). `partial`/`dominance` = only that band. `all` = both bands. |
+
+Tuning lives in a nested `contest:` block under `semantic:` (overrides `ovo.yaml`):
+
+```yaml
+ovo_config:
+  semantic:
+    contest_fusion: only
+    contest_split_mode: all
+    contest:
+      reeval_frontier: true       # phase-2: re-judge "frontera real" with batch union-find
+      max_seam_angle: 15.0        # dominance: normal-turn threshold (deg) for object-in-contact
+      min_persist_split: 0.1      # dominance/partial: below this persistence -> no split
+```
+
+| `contest:` key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Master switch for the contest store/record path |
+| `high` | `0.7` | Containment ≥ this → strong band (fragment → merge) |
+| `low` | `0.5` | Containment ≥ this and < `high` → partial (ambiguous) band |
+| `min_mass` | `50` | Min Σ-KF mass for a pair to be considered (noise gate) |
+| `min_split_cont` | `0.05` | Min containment for the dominance band |
+| `max_rev_split` | `0.5` | Reverse-containment above this → bidirectional → no split |
+| `min_persist_split` | `0.1` | Persistence below this → no split (flicker / grazing) |
+| `sim_merge` | `0.81` | Descriptor cos-sim ≥ this in partial band → merge |
+| `max_seam_angle` | `15.0` | Dominance: seam normal-turn (deg) above this → object in contact → no split |
+| `reeval_frontier` | `false` | Phase-2 re-evaluation: build a union-find from the batch's merges and re-judge `frontera real (>=2 raíces)` verdicts with the real root; collapses cases where N winner-IDs are actually one object (e.g. 95→78). Logs `reason="frontera resuelta por root real"`. |
+| `min_count` | `1` | Min per-point claim count to aggregate |
+| `prune_every` | `10` | Prune the store every N reports |
+
+Recipes:
+
+```yaml
+# Classic fusion, no contest, cooccurrence veto removed
+semantic:
+  fusion_method: clip
+  fusion_criteria: ["centroid", "cos_sim", "overlap"]
+  # contest_fusion: observe (default), contest_split_mode: off (default)
+
+# Full contest mechanism (merges + all splits + phase-2 reeval)
+semantic:
+  fusion_method: clip
+  contest_fusion: only
+  contest_split_mode: all
+  contest:
+    reeval_frontier: true
+```
+
+Verdicts are written to `<scene>/contest_verdicts.csv` and the raw per-point store
+to `<scene>/contest.json`. Analyze with the `contest-data` skill
+(`Study_seg/contest_csv.py`, `contest_json.py`). Use `label` to encode the contest
+config (e.g. `contest-only-reeval`) — the name token only encodes `fusion_method`.
+
 ### Key semantic parameters (optional overrides)
 
 These live under `ovo_config.semantic:` and override `ovo.yaml > semantic:`.

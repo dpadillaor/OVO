@@ -2,6 +2,9 @@
 
 OVO is a research project for 3D instance-aware semantic mapping. It integrates SLAM backbones with semantic recognition using open-vocabulary models to build 3D maps where objects are recognized as distinct instances. Original work was using CLIP for the semantic part. We'll be testing new things. The current focus is on improving semantic fusion during map optimizations and loop closures.
 
+## Diagrams
+Write diagrams as PlantUML (`.puml`) source. Do NOT render them (no inline SVG/widget) — the user renders `.puml` from VSCode.
+
 ## Project Structure
 ```text
 /

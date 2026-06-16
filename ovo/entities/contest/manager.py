@@ -31,12 +31,16 @@ class ContestManager:
             high=cfg.get("high", 0.7),
             low=cfg.get("low", 0.5),
             min_mass=cfg.get("min_mass", 50),
-            min_split_cont=cfg.get("min_split_cont", 0.05),
+            min_split_cont=cfg.get("min_split_cont", 0.0),
             max_rev_split=cfg.get("max_rev_split", 0.5),
             min_persist_split=cfg.get("min_persist_split", 0.1),
             sim_merge=cfg.get("sim_merge", 0.81),
             max_seam_angle=cfg.get("max_seam_angle", 15.0),
         )
+        # fase 2 opcional: reevaluar "frontera real" con el union-find de los
+        # merges decididos en el MISMO batch (root real, no identidad). Resuelve
+        # el caso 95: varios IDs ganadores que en realidad son un solo objeto.
+        self.reeval_frontier: bool = cfg.get("reeval_frontier", False)
         # podar el store cada N llamadas a report (la poda recorre los vivos)
         self._prune_every: int = cfg.get("prune_every", 10)
         self._reports: int = 0
@@ -67,6 +71,7 @@ class ContestManager:
         point_obs: torch.Tensor | None = None,
         sim=None,
         seam=None,
+        color=None,
     ) -> List[Verdict]:
         if not self.enabled or len(self.store) == 0:
             return []
@@ -84,9 +89,12 @@ class ContestManager:
 
         verdicts: List[Verdict] = []
         for loser, fs in by_loser.items():
-            verdicts.append(self.discriminator.classify(loser, fs, sim=sim, seam=seam))
+            verdicts.append(self.discriminator.classify(loser, fs, sim=sim, seam=seam, color=color))
 
         verdicts = self._resolve_pairs(verdicts, by_loser)
+
+        if self.reeval_frontier:
+            verdicts = self._reeval_frontier(verdicts, by_loser)
 
         for v in verdicts:
             fs = by_loser.get(v.loser, [])
@@ -140,6 +148,51 @@ class ContestManager:
             else:
                 resolved.append(self._join(vab, vba, cont(a, w), cont(w, a), self.discriminator.low))
         return passthrough + resolved
+
+    def _reeval_frontier(self, verdicts: List[Verdict], by_loser: Dict[int, list]) -> List[Verdict]:
+        """FASE 2 (opt-in): revisita las "frontera real" con el root del batch.
+
+        La rama strong marca NO_ACTION "frontera real" cuando un perdedor está muy
+        contenido en >=2 ganadores con IDs distintos. Pero esos IDs pueden ser el
+        MISMO objeto si se fusionan en este mismo batch (caso 95: 78/33/81). Aquí:
+          1. construimos un union-find con los MERGE_CONTAINMENT ya resueltos,
+          2. recomputamos las raíces de los ganadores fuertes con ese find,
+          3. si colapsan a 1 raíz -> el "muro" era ficticio -> MERGE.
+        No re-agrega geometría: solo reordena las decisiones del propio batch.
+        """
+        parent: Dict[int, int] = {}
+
+        def find(x: int) -> int:
+            parent.setdefault(x, x)
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a: int, b: int) -> None:
+            parent[find(a)] = find(b)
+
+        # 1. union-find con los merges decididos en este batch (perdedor -> ganador)
+        for v in verdicts:
+            if v.decision is Decision.MERGE_CONTAINMENT and v.winner is not None:
+                union(v.loser, v.winner)
+
+        high = self.discriminator.high
+        out: List[Verdict] = []
+        for v in verdicts:
+            # solo las frontera-real de la rama strong (no la frontera simétrica)
+            if v.decision is Decision.NO_ACTION and "frontera real" in v.reason:
+                strong = [p for p in by_loser.get(v.loser, []) if p.containment >= high]
+                roots = {find(p.winner) for p in strong}
+                if strong and len(roots) == 1:
+                    best = max(strong, key=lambda p: p.containment)
+                    out.append(Verdict(
+                        Decision.MERGE_CONTAINMENT, v.loser, winner=best.winner,
+                        reason=f"frontera resuelta por root real (cont={best.containment:.2f})",
+                    ))
+                    continue
+            out.append(v)
+        return out
 
     @staticmethod
     def _join(vab: Verdict, vba: Verdict, cab: float, cba: float, low: float) -> Verdict:

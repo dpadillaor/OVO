@@ -138,6 +138,63 @@ def seam_normal_angle(
     return float(np.mean(angles)) if angles else None
 
 
+def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    """sRGB (0-255) -> CIE Lab (D65). Lab acerca la distancia a la percepción;
+    RGB crudo exagera saltos de brillo y aplana los de tono."""
+    c = rgb.astype(np.float64) / 255.0
+    c = np.where(c > 0.04045, ((c + 0.055) / 1.055) ** 2.4, c / 12.92)
+    M = np.array([[0.4124, 0.3576, 0.1805],
+                  [0.2126, 0.7152, 0.0722],
+                  [0.0193, 0.1192, 0.9505]])
+    xyz = (c @ M.T) / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+    return np.stack([116 * f[:, 1] - 16,
+                     500 * (f[:, 0] - f[:, 1]),
+                     200 * (f[:, 1] - f[:, 2])], axis=1)
+
+
+def _seam_color_one_side(chunk_xyz, chunk_lab, tgt_xyz, tgt_rgb, k, dmax):
+    """Mediana del ΔE (Lab) entre cada punto del chunk y la media de color de sus
+    k vecinos en el conjunto objetivo. None si ningún punto tiene vecino en dmax."""
+    if len(tgt_xyz) == 0:
+        return None
+    pc = o3d.geometry.PointCloud()
+    pc.points = o3d.utility.Vector3dVector(tgt_xyz)
+    kd = o3d.geometry.KDTreeFlann(pc)
+    tgt_lab = _rgb_to_lab(tgt_rgb)
+    k = min(k, len(tgt_xyz))
+    des = []
+    for pa, la in zip(chunk_xyz, chunk_lab):
+        _, nn, d2 = kd.search_knn_vector_3d(pa, k)
+        nn = [j for j, dd in zip(nn, d2) if dd <= dmax * dmax]
+        if not nn:
+            continue
+        des.append(np.linalg.norm(la - tgt_lab[nn].mean(0)))
+    return float(np.median(des)) if des else None
+
+
+def seam_color_two_sided(chunk_xyz, chunk_rgb, w_xyz, w_rgb, l_xyz, l_rgb, k: int = 15, dmax: float = 0.05):
+    """Continuidad de color a través de la costura, en DOS sentidos.
+
+    Devuelve (de_w, de_l): mediana del ΔE (Lab) del chunk hacia la superficie del
+    ganador W y hacia la del resto del perdedor L. El chunk debe transferirse a W
+    solo si se funde mejor (ΔE menor) con W que con L. Cualquiera de los dos puede
+    ser None si no hay vecino en dmax.
+
+    El ΔE absoluto NO discrimina (depende de iluminación/tamaño del chunk: un split
+    bueno con chunk grande puede dar ΔE alto). La COMPARACIÓN W-vs-L sí: un trozo
+    siempre se parece más, en color, a su objeto real.
+    """
+    to_np = lambda t: t.detach().cpu().numpy().astype(np.float64)
+    cx = to_np(chunk_xyz)
+    if len(cx) == 0:
+        return None, None
+    clab = _rgb_to_lab(to_np(chunk_rgb))
+    de_w = _seam_color_one_side(cx, clab, to_np(w_xyz), to_np(w_rgb), k, dmax)
+    de_l = _seam_color_one_side(cx, clab, to_np(l_xyz), to_np(l_rgb), k, dmax)
+    return de_w, de_l
+
+
 def same_instance(instance1, instance2, points_centroid1, points_centroid2, th_centroid, th_cossim, th_points):
     """
     Legacy function - kept for backward compatibility during migration.

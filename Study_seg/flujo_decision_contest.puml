@@ -1,6 +1,6 @@
 @startuml flujo_decision_contest
 title Flujo de decision - Contest (merge/split de instancias)
-caption Umbrales: high=0.70  low=0.5  min_mass=50  min_split_cont=0.05  max_rev_split=0.5  min_persist_split=0.1  sim_merge=0.81
+caption Umbrales: high=0.70  low=0.5  min_mass=50  min_split_cont=0.0  max_rev_split=0.5  min_persist_split=0.1  sim_merge=0.81  max_seam_angle=15  (color seam: 2 sentidos, sin umbral)
 
 skinparam defaultFontName Helvetica
 skinparam ActivityDiamondBackgroundColor #FFF8E1
@@ -67,7 +67,17 @@ else (no)
       stop
     else (no, estable)
     endif
-    #64B5F6:SPLIT "dominancia"\n(objeto adyacente -> corta / frontera);
+    if (giro_normal_costura > max_seam_angle=15deg?) then (si, quiebre)
+      #BDBDBD:NO_ACTION\n"objeto en contacto -> no split\n(cojin en sofa, cosa sobre mesa:\nnormales chunk<->W giran, hueco 10<->22deg)";
+      stop
+    else (no, superficie continua ~8deg)
+    endif
+    if (color costura: dE(chunk<->W) > dE(chunk<->resto-L)?) then (si, se funde con L)
+      #BDBDBD:NO_ACTION\n"color de L -> no split\n(chunk se parece mas a L que a W:\ncoplanar de distinto color que el\nnormal no separa; 2 sentidos, no umbral)";
+      stop
+    else (no, se funde con W)
+    endif
+    #64B5F6:SPLIT "dominancia"\n(fragmento real, coplanar Y color de W -> transferir);
   else (no)
     #BDBDBD:NO_ACTION\n"borde, contencion baja";
     stop

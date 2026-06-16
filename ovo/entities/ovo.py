@@ -515,7 +515,7 @@ class OVO:
                 self.cooccurrence.remove(ins_id)
                 self.contest.on_remove(ins_id)
 
-    def update_map(self, map_data, kfs, point_obs=None, point_normals=None):
+    def update_map(self, map_data, kfs, point_obs=None, point_normals=None, point_colors=None):
         # 0. clean the queue
         self.complete_semantic_info()
         points_3d, points_ids_all, points_ins_ids = map_data
@@ -554,7 +554,26 @@ class OVO:
                 points_3d[w_mask], point_normals[w_mask],
             )
 
-        verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam)
+        # señal de color en la costura, de DOS sentidos: ¿el chunk se funde (color)
+        # mejor con W o con el resto de L? Caza coplanares de distinto color que el
+        # normal no separa. Devuelve (ΔE_W, ΔE_L); transferir solo si ΔE_W <= ΔE_L.
+        def _contest_color(loser: int, winner: int, chunk_ids: tuple):
+            if point_colors is None or not chunk_ids:
+                return None, None
+            chunk_t = torch.as_tensor(list(chunk_ids), device=ids_flat.device)
+            chunk_mask = torch.isin(ids_flat, chunk_t)
+            w_mask = points_ins_ids == winner
+            l_mask = (points_ins_ids == loser) & ~chunk_mask
+            if chunk_mask.sum() == 0 or w_mask.sum() == 0 or l_mask.sum() == 0:
+                return None, None
+            pcol = point_colors.to(points_3d.device)
+            return instance_utils.seam_color_two_sided(
+                points_3d[chunk_mask], pcol[chunk_mask],
+                points_3d[w_mask], pcol[w_mask],
+                points_3d[l_mask], pcol[l_mask],
+            )
+
+        verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam, color=_contest_color)
         print("contest:", self.contest.summarize(verdicts))
 
         contest_mode = self.config.get("contest_fusion", "observe")  # observe | only | both
@@ -611,9 +630,19 @@ class OVO:
             if v.decision.name == "MERGE_CONTAINMENT" and v.winner is not None:
                 loser_id = v.loser
                 winner_id = v.winner
-                if loser_id not in self.objects or winner_id not in self.objects:
-                    continue
                 if loser_id in fused_objects:
+                    continue
+                # merge encadenado: si el ganador ya fue absorbido en este batch
+                # (era a su vez perdedor de otro merge), redirige al ganador final.
+                # Sin esto, fuse_instances reasigna los puntos del perdedor a un id
+                # que se va a borrar -> puntos huérfanos (id sin objeto) -> eval peta.
+                seen = set()
+                while winner_id in fused_objects and winner_id not in seen:
+                    seen.add(winner_id)
+                    winner_id = fused_objects[winner_id]
+                if loser_id == winner_id:
+                    continue
+                if loser_id not in self.objects or winner_id not in self.objects:
                     continue
                 winner = self.objects[winner_id]
                 loser = self.objects[loser_id]
