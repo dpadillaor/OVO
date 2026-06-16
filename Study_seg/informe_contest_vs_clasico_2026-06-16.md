@@ -10,13 +10,14 @@
 
 ## 0. Resumen ejecutivo
 
-1. **El contest gana con drift suave, pero pierde con drift fuerte (crossover).**
+1. **El rendimiento del contest depende de la calidad geométrica del SLAM (3 condiciones).**
    - Light (J2-**T0.03**): contest-only AP_agnostic **0.206 vs 0.154** = **+34%**.
-   - Aggressive (J2-**T0.3**, forward-axis): contest-only **0.074 vs 0.095** = **−22%**.
-   - mIoU/mAcc planos en ambos. El cruce sugiere que el contest depende de geometría
-     intacta; con saltos de 30 cm la contención/persistencia se corrompen y su lógica
-     instance-aware se vuelve ruido, mientras la clásica (cos_sim, geometry-light)
-     degrada más suave.
+   - ORB-SLAM2 (**real**): **0.184 vs 0.186** = ~empate (AP50 +0.020, AP25 +0.027).
+   - Aggressive (J2-**T0.3**, forward-axis): **0.074 vs 0.095** = **−22%**.
+   - mIoU/mAcc planos en las 3. El contest brilla con geometría buena, es competitivo
+     con drift real, y solo se vuelve contraproducente bajo drift sintético extremo
+     (30 cm): la contención/persistencia se corrompen y su lógica instance-aware se
+     vuelve ruido, mientras la clásica (cos_sim, geometry-light) degrada más suave.
 2. **Combinar mecanismo + clásica (`both`) hace daño.** En office3 limpio, `both` con
    `[aabb, cos_sim, overlap]` cae a 0.184 vs 0.222 de contest-only (−0.038). La pasada
    clásica re-fusiona adyacencias que el contest mantuvo separadas + crea hubs.
@@ -158,6 +159,71 @@ aggressive:
 Es decir, el drift fuerte rompe el instance-matching del contest (AP cae) pero la
 calidad **semántica por-punto aguanta igual** que la clásica (empate, con wins claros
 en room0). No es pérdida total — es pérdida localizada en AP.
+
+---
+
+## 1c. Contest-only vs clásico con ORB-SLAM2 real (8 escenas)
+
+Tercera condición: SLAM real en vez de GT+jump sintético. Backend `orbslam2` con
+`close_loops: true`. Runs:
+`20260616_orbslam2_CLIP_contest-only-orb-pia_36bf7` vs
+`20260614_orbslam2_CLIP_orb-A-baseline_a4c1c` (clásica `[centroid, cos_sim, overlap]`).
+
+### Instance AP_agnostic (agregado)
+
+| métrica | contest | clásico | Δ |
+|---|---|---|---|
+| AP      | 0.184 | 0.186 | −0.002 (empate) |
+| AP_50   | 0.362 | 0.342 | **+0.020** |
+| AP_25   | 0.548 | 0.521 | **+0.027** |
+
+Empate en AP estricto, contest **mejor en AP50/AP25** (umbrales laxos).
+
+### AP_agnostic por escena
+
+| escena | contest | clásico | Δ |
+|---|---|---|---|
+| office0 | 0.054 | 0.072 | −0.018 |
+| office1 | 0.218 | 0.220 | −0.002 |
+| office2 | 0.171 | 0.162 | +0.009 |
+| office3 | 0.185 | 0.183 | +0.002 |
+| office4 | 0.171 | 0.155 | +0.016 |
+| room0   | 0.272 | 0.260 | +0.012 |
+| room1   | 0.215 | 0.246 | −0.031 |
+| room2   | 0.153 | 0.168 | −0.015 |
+
+### Semántica mIoU / mAcc (media por escena)
+
+| escena | cont mIoU | cls mIoU | ΔIoU | cont mAcc | cls mAcc | ΔAcc |
+|---|---|---|---|---|---|---|
+| office0 | 0.226 | 0.246 | −0.020 | 0.309 | 0.334 | −0.025 |
+| office1 | 0.183 | 0.181 | +0.003 | 0.337 | 0.336 | +0.001 |
+| office2 | 0.272 | 0.244 | +0.028 | 0.344 | 0.322 | +0.022 |
+| office3 | 0.239 | 0.240 | −0.000 | 0.307 | 0.307 | +0.000 |
+| office4 | 0.437 | 0.477 | −0.040 | 0.543 | 0.586 | −0.043 |
+| room0   | 0.335 | 0.332 | +0.002 | 0.401 | 0.399 | +0.002 |
+| room1   | 0.290 | 0.368 | −0.078 | 0.399 | 0.524 | −0.125 |
+| room2   | 0.266 | 0.268 | −0.002 | 0.368 | 0.353 | +0.015 |
+| **media** | **0.281** | **0.294** | **−0.013** | **0.376** | **0.395** | **−0.019** |
+
+(El outlier room1 arrastra la media semántica; sin él, empate. mIoU/mAcc ~plano.)
+
+**Lectura:** bajo SLAM real el contest **empata** en AP estricto y **gana** en AP50/AP25;
+semántica plana (con un outlier en room1). El drift real cae entre el light y el
+aggressive sintéticos: la geometría se degrada de forma moderada, no catastrófica, así
+que el contest no se hunde como en el aggressive ni dispara como en el light.
+
+### Cuadro resumen de las 3 condiciones
+
+| condición | tipo de drift | contest AP_ag | clásico AP_ag | Δ |
+|---|---|---|---|---|
+| Light jump (T0.03)      | sintético leve  | 0.206 | 0.154 | **+34%** |
+| ORB-SLAM2 (real)        | real, moderado  | 0.184 | 0.186 | ~empate (AP50/25 +) |
+| Aggressive jump (T0.3)  | sintético fuerte| 0.074 | 0.095 | **−22%** |
+
+El contest brilla cuando la geometría es buena (light), empata/gana ligero con drift
+real, y solo se vuelve contraproducente bajo drift sintético extremo (30 cm). En el
+régimen realista (ORB) es competitivo. mIoU/mAcc planos en las 3.
 
 ---
 
