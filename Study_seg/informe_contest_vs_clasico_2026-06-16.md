@@ -10,8 +10,13 @@
 
 ## 0. Resumen ejecutivo
 
-1. **Contest-only gana fuerte bajo deriva SLAM.** Con jump-drift J2-T0.03 (8 escenas),
-   AP_agnostic agregado **0.206 vs 0.154** clásico = **+34%**. mIoU/mAcc planos.
+1. **El contest gana con drift suave, pero pierde con drift fuerte (crossover).**
+   - Light (J2-**T0.03**): contest-only AP_agnostic **0.206 vs 0.154** = **+34%**.
+   - Aggressive (J2-**T0.3**, forward-axis): contest-only **0.074 vs 0.095** = **−22%**.
+   - mIoU/mAcc planos en ambos. El cruce sugiere que el contest depende de geometría
+     intacta; con saltos de 30 cm la contención/persistencia se corrompen y su lógica
+     instance-aware se vuelve ruido, mientras la clásica (cos_sim, geometry-light)
+     degrada más suave.
 2. **Combinar mecanismo + clásica (`both`) hace daño.** En office3 limpio, `both` con
    `[aabb, cos_sim, overlap]` cae a 0.184 vs 0.222 de contest-only (−0.038). La pasada
    clásica re-fusiona adyacencias que el contest mantuvo separadas + crea hubs.
@@ -25,7 +30,7 @@
 
 ---
 
-## 1. Contest-only vs clásico bajo jump-drift (8 escenas)
+## 1. Contest-only vs clásico bajo jump-drift LIGHT (T0.03, 8 escenas)
 
 Config idéntica salvo fusión. Jump-drift `J2-T0p03-R0p0` (2 saltos, kf 50 y 100, 3 cm).
 - contest: `contest_fusion: only`, `contest_split_mode: all`, `reeval_frontier: true`.
@@ -80,6 +85,67 @@ clase por-punto (mIoU ~plano). Bajo drift la clásica empeora porque overlap/cen
 fusionan instancias desplazadas por el salto; el contest (contención + persistencia +
 disputa por punto) resiste el desalineo. Consistente con hallazgos previos
 (mecanismo/cooc sube AP_agnostic, mIoU plano).
+
+---
+
+## 1b. Contest-only vs clásico bajo jump-drift AGGRESSIVE (T0.3, 8 escenas)
+
+Misma comparación, drift 10× más fuerte: `J2-T0p3-R0p0`, saltos de 30 cm sobre el eje
+forward (`on_forward_axis: true`). Runs:
+`20260616_GTJump-J2-T0p3-R0p0_CLIP_contest-only-aggressive-pia_aecde` vs
+`20260613_GTJump-J2-T0p3-R0p0_CLIP_agressive-baseline_5f2f1` (eval_instances a posteriori).
+
+### Instance AP_agnostic (agregado)
+
+| métrica | contest | clásico | Δ |
+|---|---|---|---|
+| AP      | 0.074 | 0.095 | **−0.021 (−22%)** |
+| AP_50   | 0.172 | 0.213 | −0.041 |
+| AP_25   | 0.409 | 0.435 | −0.026 |
+
+### AP_agnostic por escena
+
+| escena | contest | clásico | Δ |
+|---|---|---|---|
+| office0 | 0.019 | 0.021 | −0.002 |
+| office1 | 0.049 | 0.081 | −0.032 |
+| office2 | 0.118 | 0.084 | +0.034 |
+| office3 | 0.087 | 0.124 | −0.037 |
+| office4 | 0.122 | 0.163 | −0.041 |
+| room0   | 0.074 | 0.101 | −0.027 |
+| room1   | 0.079 | 0.113 | −0.034 |
+| room2   | 0.037 | 0.056 | −0.019 |
+
+Contest peor en 6/8 escenas (solo office2 sube, office0 plano).
+
+### Semántica mIoU / mAcc (media por escena)
+
+| escena | cont mIoU | cls mIoU | ΔIoU | cont mAcc | cls mAcc | ΔAcc |
+|---|---|---|---|---|---|---|
+| office0 | 0.176 | 0.195 | −0.019 | 0.254 | 0.284 | −0.030 |
+| office1 | 0.181 | 0.182 | −0.001 | 0.315 | 0.334 | −0.019 |
+| office2 | 0.193 | 0.260 | −0.067 | 0.260 | 0.325 | −0.065 |
+| office3 | 0.247 | 0.239 | +0.007 | 0.316 | 0.311 | +0.006 |
+| office4 | 0.430 | 0.420 | +0.010 | 0.551 | 0.557 | −0.005 |
+| room0   | 0.302 | 0.230 | +0.072 | 0.372 | 0.293 | +0.079 |
+| room1   | 0.341 | 0.313 | +0.028 | 0.467 | 0.449 | +0.017 |
+| room2   | 0.233 | 0.270 | −0.036 | 0.312 | 0.335 | −0.023 |
+| **media** | **0.263** | **0.264** | **−0.001** | **0.356** | **0.361** | **−0.005** |
+
+### Crossover light↔aggressive
+
+| drift | contest AP_ag | clásico AP_ag | Δ |
+|---|---|---|---|
+| Light (T0.03)      | 0.206 | 0.154 | **+34%** |
+| Aggressive (T0.3)  | 0.074 | 0.095 | **−22%** |
+
+**Lectura:** el contest se apoya en geometría por-punto (contención, persistencia,
+disputa). Con drift suave la geometría sigue mayormente intacta → su lógica
+instance-aware separa/fusiona bien y gana. Con drift fuerte (30 cm) los puntos caen
+lejos de su posición real → contención/persistencia se vuelven ruido → el contest
+decide mal. La clásica, más apoyada en el descriptor (cos_sim, poco dependiente de
+geometría fina), degrada más suave y acaba por encima. El AP absoluto cae para ambos
+(0.206→0.074 contest, 0.154→0.095 clásico): el drift fuerte rompe el mapa en general.
 
 ---
 
