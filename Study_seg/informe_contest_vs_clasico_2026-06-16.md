@@ -147,6 +147,18 @@ decide mal. La clásica, más apoyada en el descriptor (cos_sim, poco dependient
 geometría fina), degrada más suave y acaba por encima. El AP absoluto cae para ambos
 (0.206→0.074 contest, 0.154→0.095 clásico): el drift fuerte rompe el mapa en general.
 
+**Matiz: la pérdida es solo en AP, no en todo.** Desglose contest vs clásico bajo
+aggressive:
+- **AP_agnostic**: pierde neto (−22%), pero gana en office2 (+0.034) y empata office0.
+  1/8 arriba → el daño está en las **fronteras de instancia**.
+- **mIoU**: media plana (−0.001), reparto mixto. Gana 4/8: office3, office4, room0
+  (+0.072), room1.
+- **mAcc**: media plana (−0.005). Gana 3/8: room0 (+0.079), room1, office3.
+
+Es decir, el drift fuerte rompe el instance-matching del contest (AP cae) pero la
+calidad **semántica por-punto aguanta igual** que la clásica (empate, con wins claros
+en room0). No es pérdida total — es pérdida localizada en AP.
+
 ---
 
 ## 2. `contest_fusion: both` hace daño (office3 limpio)
