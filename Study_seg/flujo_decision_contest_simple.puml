@@ -1,0 +1,72 @@
+@startuml flujo_decision_contest_simple
+title El "contest" en 1 vistazo - decidir si dos detecciones son el MISMO objeto
+
+caption Version divulgativa (sin umbrales). Detalle tecnico en flujo_decision_contest.puml
+
+skinparam defaultFontName Helvetica
+skinparam ActivityDiamondBackgroundColor #FFF8E1
+skinparam ActivityBackgroundColor #ECEFF1
+
+legend top
+  La idea: al construir el mapa 3D, el sistema marca objetos. A veces dos
+  marcas son el MISMO objeto; a veces una "roba" un trozo del vecino.
+  El contest es un arbitro que mira los puntos en disputa y decide:
+  ====
+  <back:#66BB6A>   </back> UNIR = mismo objeto, fundirlos
+  <back:#64B5F6>   </back> SEPARAR = distintos, cortar el trozo robado
+  <back:#BDBDBD>   </back> DEJAR IGUAL = no esta claro, no tocar
+endlegend
+
+start
+:Dos detecciones (A y B)
+comparten puntos en el espacio;
+
+if (Comparten muy pocos puntos?) then (si, casi nada)
+  #BDBDBD:DEJAR IGUAL
+  "se rozan de refilon, ruido";
+  stop
+else (no, comparten bastante)
+endif
+
+if (Una esta casi DENTRO de la otra?) then (si, muy metida)
+  #66BB6A:UNIR
+  "una es claramente parte de la otra";
+  stop
+else (no, solo solapan en parte)
+endif
+
+if (Se PARECEN en aspecto/textura?) then (si)
+  #66BB6A:UNIR
+  "mismo objeto partido en dos";
+  stop
+else (no, distintas)
+endif
+
+if (El solape es ESTABLE en el tiempo?) then (no, parpadea)
+  #BDBDBD:DEJAR IGUAL
+  "contacto inestable, no fiable";
+  stop
+else (si, estable)
+endif
+
+if (La superficie es CONTINUA entre ambas?) then (no, hay un quiebre)
+  #BDBDBD:DEJAR IGUAL
+  "objetos pegados pero distintos
+  (p.ej. un cojin sobre el sofa)";
+  stop
+else (si, superficie lisa)
+endif
+
+if (Tienen el MISMO color en la frontera?) then (no, colores distintos)
+  #BDBDBD:DEJAR IGUAL
+  "se tocan pero son cosas diferentes";
+  stop
+else (si, mismo color)
+endif
+
+#64B5F6:SEPARAR
+"era un trozo robado del vecino
+-> devolverselo (cortar)";
+stop
+
+@enduml

@@ -1,0 +1,67 @@
+@startuml class_agnostic_ap
+title AP class-agnostic — ins_eval_utils.evaluate(class_agnostic=True)
+
+skinparam defaultFontName monospaced
+skinparam ArrowColor #333
+skinparam shadowing false
+
+|#E6F4EA|eval_instance_ap()|
+start
+
+:predictions = load_instance_preds(scene)
+-> pred_masks / pred_classes / pred_scores;
+
+|#FCE4EC|evaluate(class_agnostic=True)|
+:<b>colapsar a 1 clase</b>
+ins_class_labels = "generic"
+todas pred_classes = 1
+id_to_label -> "generic";
+note right
+  agnostic: clase NO importa
+  solo casa la instancia
+  geometricamente
+end note
+
+:params eval
+overlaps = 0.5..0.9 step .05  + 0.25
+min_region_size = 100 verts;
+
+repeat :por cada escena;
+  :leer GT  {scene}.txt
+  gt_ids -> binary_masks
+  (clase = id // 1000, ignorada);
+  :make_pred_info()
+  empaqueta uuid / conf / mask;
+  :assign_instances_for_scan()
+  interseccion pred<->gt (todas "generic")
+  -> gt2pred / pred2gt;
+repeat while (mas escenas?) is (si)
+->no;
+
+|#E8EAF6|evaluate_matches()|
+repeat :por cada overlap_th;
+  :IoU = inter / (gt + pred - inter);
+  if (IoU > overlap_th) then (si)
+    :match greedy por confianza
+    doble match a 1 gt -> menor score = FP;
+  else (no)
+    :pred sin gt = FP
+    gt sin match = hard FN;
+  endif
+  :curva precision-recall
+  AP = integral (dot product);
+repeat while (mas overlaps?) is (si)
+->no;
+
+|#FCE4EC|evaluate()|
+:compute_averages()
+all_ap   = mean(overlaps salvo 0.25)
+all_ap_50%, all_ap_25%;
+
+:metrics agnostic
+<b>AP_agnostic</b> / AP_agnostic_50 / AP_agnostic_25;
+
+:escribe en instance_ap.txt;
+stop
+
+@enduml

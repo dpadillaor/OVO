@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OVO — Estudio de Fusión · Presentación</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3350;
+    --accent:#5c7cfa; --accent2:#74c0fc; --green:#51cf66; --yellow:#ffd43b;
+    --red:#ff6b6b; --orange:#fd7e14; --purple:#b197fc; --text:#cdd9ff; --muted:#7885b0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{
+    position:absolute;inset:0;display:none;flex-direction:column;
+    padding:3.2vh 5vw 7vh;overflow-y:auto;
+  }
+  .slide.active{display:flex;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  h1{font-size:2.6rem;color:#fff;line-height:1.15;margin-bottom:.6rem}
+  h2{font-size:1.7rem;color:var(--accent2);margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+  h3{font-size:1.1rem;color:var(--accent);margin:1rem 0 .4rem}
+  p{line-height:1.6;margin-bottom:.7rem;font-size:1.02rem}
+  .lede{font-size:1.15rem;color:#dfe6ff}
+  ul,ol{padding-left:1.4rem;margin-bottom:.8rem}
+  li{margin-bottom:.45rem;line-height:1.55}
+  strong{color:#eef2ff}
+  code{font-family:'JetBrains Mono',monospace;background:#141824;padding:.12em .45em;border-radius:4px;font-size:.86em;color:#c3e88d}
+  .muted{color:var(--muted);font-size:.9rem}
+  .kicker{color:var(--accent);font-size:.85rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:.5rem}
+  table{width:100%;border-collapse:collapse;margin:.6rem 0 1rem;font-size:.92rem}
+  th{background:var(--surface2);color:var(--accent2);text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border)}
+  td{padding:.45rem .8rem;border-bottom:1px solid var(--border)}
+  tr:hover td{background:var(--surface2)}
+  .good{color:var(--green);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
+  .flat{color:var(--yellow)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.4rem;margin:.7rem 0}
+  .card.hi{border-color:var(--accent)}
+  .card.warn{border-color:var(--orange);background:#2a1a00}
+  .card.win{border-color:var(--green);background:#0d2417}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.2rem;text-align:center}
+  .metric .v{font-size:2rem;font-weight:700;color:#fff;font-family:'JetBrains Mono',monospace}
+  .metric .l{color:var(--muted);font-size:.82rem;margin-top:.2rem}
+  .metric .d{font-size:.95rem;margin-top:.3rem}
+  img{max-width:100%;max-height:58vh;border:1px solid var(--border);border-radius:8px;display:block;margin:.4rem auto}
+  .badge{display:inline-block;padding:.15em .55em;border-radius:5px;font-size:.72rem;font-weight:700;margin-right:.3rem}
+  .b-blue{background:#1a2a4a;color:var(--accent2)} .b-green{background:#1a3a20;color:var(--green)}
+  .b-red{background:#3a1a1a;color:var(--red)} .b-orange{background:#3a2000;color:var(--orange)}
+  .b-purple{background:#281a3a;color:var(--purple)} .b-yellow{background:#3a2a00;color:var(--yellow)}
+  .center{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;height:100%}
+  .center.mid{align-items:center;text-align:center}
+  .pre{font-family:'JetBrains Mono',monospace;background:#141824;border:1px solid var(--border);border-radius:8px;padding:.9rem 1.1rem;font-size:.82rem;line-height:1.55;color:#c9d4ff;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+  .takeaway{border-left:3px solid var(--accent);background:#14122a;padding:.7rem 1.1rem;border-radius:0 8px 8px 0;margin-top:.6rem;font-size:1.05rem}
+  .takeaway::before{content:"★ IDEA CLAVE";display:block;font-size:.68rem;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:.25rem}
+  /* nav */
+  .nav{position:fixed;bottom:1.2rem;right:1.5rem;display:flex;gap:.5rem;align-items:center;z-index:10}
+  .nav button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:1rem;padding:.3rem .7rem;cursor:pointer;font-family:inherit}
+  .nav button:hover{border-color:var(--accent);color:var(--accent2)}
+  .counter{position:fixed;bottom:1.4rem;left:1.5rem;color:var(--muted);font-size:.85rem;font-family:'JetBrains Mono',monospace;z-index:10}
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);transition:width .25s;z-index:20}
+  .foot{position:fixed;bottom:1.4rem;left:50%;transform:translateX(-50%);color:var(--muted);font-size:.72rem;z-index:5}
+</style>
+</head>
+<body>
+<div class="progress" id="prog"></div>
+<div class="deck" id="deck">
+
+<!-- 1 — TÍTULO -->
+<section class="slide active">
+  <div class="center">
+    <div class="kicker">TFM · Open-Vocabulary Online Mapping</div>
+    <h1>Estudio de la fusión<br>de instancias en OVO</h1>
+    <p class="lede">¿Qué configuración del algoritmo de fusión produce el mejor mapa
+    semántico bajo <em>drift</em>, y por qué?</p>
+    <p class="muted">Dataset Replica (8 escenas) · <code>fusion_method = clip</code> ·
+    backend SimulatedSLAM/GTJump determinista · validación en ORB-SLAM real ·
+    commit <code>5fb61fe</code> · 2026-06-14</p>
+    <p class="muted" style="margin-top:1.5rem">← → para navegar · barra espaciadora avanza</p>
+  </div>
+</section>
+
+<!-- 2 — PLANTEAMIENTO -->
+<section class="slide">
+  <h2>Qué se estudió y cómo</h2>
+  <div class="grid2">
+    <div>
+      <h3>El problema</h3>
+      <p>Con <em>drift</em> (saltos de trayectoria), un mismo objeto se duplica en
+      el mapa. La <strong>fusión</strong> debe reunir esos duplicados sin mezclar objetos
+      distintos. Ocurre <strong>una sola vez</strong>, al final, comparando O(N²) pares por una
+      cadena de criterios con <em>early-exit</em>:</p>
+      <p style="text-align:center"><code>cooccurrence → centroid/aabb → cos_sim → overlap</code></p>
+      <p class="muted">Solo <code>overlap</code> puede FUSIONAR; el resto solo descarta o pasa.
+      Los criterios comparten contexto → <strong>están acoplados</strong> (por eso θ se optimiza
+      como vector, no parámetro a parámetro).</p>
+    </div>
+    <div>
+      <h3>Por qué es barato (clave del método)</h3>
+      <p>Cada experimento es un <strong>replay desde checkpoint</strong>: restaura el mapa
+      ya corregido y re-ejecuta <em>solo</em> la fusión. Salta SLAM y SAM2.
+      Determinista (seed fijo) → mismo θ da siempre el mismo resultado.</p>
+      <p><span class="badge b-green">consecuencia</span> Sin repeticiones ni seeds.
+      La <strong>unidad estadística es la escena</strong> (n=8). Se comparan configuraciones con
+      <strong>Wilcoxon pareado por escena</strong>, no con "subió 0.3".</p>
+      <h3>Dos condiciones de perturbación</h3>
+      <ul>
+        <li><span class="badge b-green">light</span> salto 0.03 m → solape alto, fusión fácil</li>
+        <li><span class="badge b-red">aggressive</span> salto 0.30 m → solape bajo, caso duro</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3 — CÓMO LEER LAS MÉTRICAS -->
+<section class="slide">
+  <h2>Cómo leer las métricas</h2>
+  <div class="grid3">
+    <div class="metric"><div class="v" style="color:var(--accent2)">mIoU</div>
+      <div class="l">calidad semántica</div>
+      <div class="d muted">¿clasifico bien la clase de cada punto?</div></div>
+    <div class="metric"><div class="v" style="color:var(--green)">AP<sub>agn</sub></div>
+      <div class="l">pureza de instancia · <b>ignora la clase</b></div>
+      <div class="d muted">¿cada objeto = 1 instancia limpia?</div></div>
+    <div class="metric"><div class="v" style="color:var(--yellow)">N<sub>inst</sub></div>
+      <div class="l">nº de instancias</div>
+      <div class="d muted">control de over / under-merge</div></div>
+  </div>
+  <div class="card hi">
+    <p style="margin:0"><strong>AP_agnostic es el termómetro honesto de la fusión.</strong>
+    mIoU mide otra cosa (clasificar) y puede quedarse plano aunque la fusión mejore.
+    Por eso el objetivo es <strong>multi-objetivo (frente de Pareto)</strong>: maximizar mIoU y AP_agnostic a la vez,
+    vigilando N<sub>inst</sub> (caída brusca + AP↓ = <span class="bad">over-merge</span>;
+    inflado = <span class="flat">under-merge</span>, fantasmas sin fusionar).</p>
+  </div>
+  <div class="takeaway">Spoiler del estudio: <strong>mIoU se mantiene casi plano en todo</strong>.
+  Toda la acción está en <strong>AP_agnostic</strong> (pureza de instancia).</div>
+</section>
+
+<!-- 4 — BASELINES -->
+<section class="slide">
+  <h2>Punto de partida · baselines</h2>
+  <p>Cadena por defecto <code>[centroid, cos_sim, overlap]</code> con umbrales default. Es lo que hay que batir.</p>
+  <table>
+    <tr><th>Condición</th><th>mIoU</th><th>AP<sub>agnostic</sub></th><th>mAcc</th><th>N<sub>inst</sub></th></tr>
+    <tr><td><span class="badge b-green">light</span></td><td>0.2663</td><td>0.1540</td><td>0.3997</td><td>68</td></tr>
+    <tr><td><span class="badge b-red">aggressive</span></td><td>0.2280</td><td>0.0950</td><td>0.3429</td><td>83</td></tr>
+  </table>
+  <div class="card">
+    <p style="margin:0">Lo esperado: <strong>aggressive es peor</strong> en todo (salto mayor → menos solape →
+    duplicados sin fusionar → más instancias, 83 vs 68, y AP_agnostic casi la mitad).
+    Confirma que el banco de pruebas discrimina dificultad.</p>
+  </div>
+</section>
+
+<!-- 5 — FASE 2 ABLACIÓN -->
+<section class="slide">
+  <h2>RQ1 · ¿Qué mecanismo mejora la fusión?</h2>
+  <p>Factorial de cadenas con umbrales en default. Comparación honesta: solo cambia la <em>estructura</em>.</p>
+  <div class="grid2">
+    <div>
+      <h3><span class="badge b-green">light</span> baseline → +cooccurrence</h3>
+      <table>
+        <tr><th>cadena</th><th>mIoU</th><th>AP<sub>agn</sub></th><th>N</th></tr>
+        <tr><td>baseline (sin cooc)</td><td>0.2663</td><td>0.1540</td><td>68</td></tr>
+        <tr><td><code>+cooccurrence</code></td><td class="flat">0.2685</td><td class="good">0.2130</td><td>74</td></tr>
+      </table>
+      <p class="muted">AP_agnostic <span class="good">+38%</span> · mIoU plano · Wilcoxon p=0.945 (no signif.)</p>
+    </div>
+    <div>
+      <h3><span class="badge b-red">aggressive</span> baseline → +cooccurrence</h3>
+      <table>
+        <tr><th>cadena</th><th>mIoU</th><th>AP<sub>agn</sub></th><th>N</th></tr>
+        <tr><td>baseline (sin cooc)</td><td>0.2280</td><td>0.0950</td><td>83</td></tr>
+        <tr><td><code>+cooccurrence</code></td><td class="flat">0.2350</td><td class="good">0.1040</td><td>90</td></tr>
+      </table>
+      <p class="muted">AP_agnostic <span class="good">+9.5%</span> · mIoU plano</p>
+    </div>
+  </div>
+  <div class="card win">
+    <p style="margin:0"><strong>Resultado contraintuitivo.</strong> El playbook predecía que activar
+    <code>cooccurrence</code> en jump-drift <em>dañaría</em> (protegería duplicados de fusionarse).
+    No fue así: <strong>subió la pureza de instancia</strong> sin tocar mIoU.
+    Los rediseños <code>overlap nuevo</code> vs <code>overlap_old</code> y <code>aabb</code> vs <code>centroid</code>
+    resultaron <span class="flat">neutros</span> (Δ ≈ 0).</p>
+  </div>
+</section>
+
+<!-- 5b — heatmap -->
+<section class="slide">
+  <h2>RQ1 · Δ mIoU por cadena y escena</h2>
+  <img src="figs/phase2_delta_heatmap.png" alt="delta heatmap fase 2">
+  <p class="muted">Cada cadena vs baseline, por escena. Verde = mejora, rojo = empeora. La señal en mIoU
+  es <strong>muy pequeña y mixta</strong> → ninguna cadena gana claramente en mIoU. La diferencia real
+  está en AP_agnostic (cooccurrence), no aquí.</p>
+</section>
+
+<!-- 6a — RQ3 MÉTODO -->
+<section class="slide">
+  <h2>RQ3 · Método — cribado de sensibilidad (Morris)</h2>
+  <p class="lede">Pregunta: de las ~8 perillas del vector θ (<code>th_cossim</code>, <code>th_points</code>…),
+  <strong>¿cuáles mueven la métrica y cuáles son peso muerto?</strong></p>
+  <div class="grid2">
+    <div>
+      <h3>El problema</h3>
+      <p>Probar todas las combinaciones de 8 umbrales = explosión. Y moverlos <em>uno a uno</em> (OFAT)
+      <strong>miente</strong>, porque la cadena los acopla: cambiar <code>th_cossim</code> cambia qué pares
+      llegan vivos a <code>overlap</code>.</p>
+      <h3>La idea (Morris)</h3>
+      <p>Muchos <strong>paseos cortos aleatorios</strong> por el espacio. En cada uno, desde un punto
+      al azar, mueve <strong>una perilla un paso</strong> y mide cuánto salta mIoU = "efecto elemental".
+      Repite desde muchos puntos.</p>
+    </div>
+    <div>
+      <h3>Saca 2 números por perilla</h3>
+      <table>
+        <tr><th>Indicador</th><th>Mide</th><th>Si es alto…</th></tr>
+        <tr><td><b>μ*</b></td><td>tamaño medio del salto = <b>IMPORTANCIA</b></td><td>la perilla mueve la métrica</td></tr>
+        <tr><td><b>σ</b></td><td>variación del salto = <b>INTERACCIÓN</b></td><td>su efecto depende de las otras</td></tr>
+      </table>
+      <h3>Cómo se ejecutó</h3>
+      <p class="muted">SALib · ~10 trayectorias · cada evaluación = un replay sobre las 8 escenas ·
+      por condición y por objetivo.</p>
+      <h3>Para qué</h3>
+      <p class="muted">Fijar a default las perillas muertas → reducir θ <strong>antes</strong> de gastar
+      presupuesto de optimización (RQ2).</p>
+    </div>
+  </div>
+  <div class="takeaway">Barato y previo. Separa <strong>importancia</strong> (μ*) de <strong>interacción</strong> (σ):
+  σ alto demuestra que hay que optimizar los umbrales <strong>juntos</strong>, no eje a eje.</div>
+</section>
+
+<!-- 6 — FASE 1 / 3 sensibilidad -->
+<section class="slide">
+  <h2>RQ3 · Resultado — qué umbrales importan</h2>
+  <div class="grid2">
+    <div>
+      <img src="figs/phase3_morris.png" alt="morris mu sigma">
+    </div>
+    <div>
+      <h3>Importancia normalizada (μ*)</h3>
+      <table>
+        <tr><th>parámetro</th><th>μ* (norm.)</th></tr>
+        <tr><td><code>th_cossim</code></td><td class="good">1.00</td></tr>
+        <tr><td><code>th_points</code></td><td class="good">1.00</td></tr>
+        <tr><td><code>th_overlap_ratio_low</code></td><td class="good">1.00</td></tr>
+        <tr><td><code>cooccurrence_veto</code></td><td>0.60</td></tr>
+        <tr><td><code>th_overlap_cos</code></td><td>0.52</td></tr>
+        <tr><td><code>th_overlap_ratio</code></td><td>0.30</td></tr>
+        <tr><td><code>th_aabb</code></td><td class="bad">0.02</td></tr>
+      </table>
+      <p class="muted"><code>th_aabb</code> es <strong>irrelevante</strong> → la geometría no es el cuello de botella.
+      Lo que decide es la <strong>puerta semántica (cos_sim)</strong> y el <strong>solape (points / ratio_low)</strong>.</p>
+    </div>
+  </div>
+  <div class="takeaway">σ alto en Morris confirma <strong>interacción entre umbrales</strong>: justifica optimizar θ como vector (Optuna), no eje a eje.</div>
+</section>
+
+<!-- 7a — RQ2 MÉTODO -->
+<section class="slide">
+  <h2>RQ2 · Método — optimización bayesiana multi-objetivo</h2>
+  <p class="lede">Pregunta: a las ~6 perillas que importan (de RQ3),
+  <strong>¿qué valores maximizan mIoU y AP_agnostic a la vez?</strong></p>
+  <div class="grid2">
+    <div>
+      <h3>La idea (Optuna)</h3>
+      <p>Fuerza bruta imposible (valores continuos, 6 dimensiones). Optuna hace
+      <strong>optimización bayesiana</strong>: prueba una combo → ve el resultado →
+      <strong>se modela la superficie</strong> → elige la siguiente combo donde <em>espera</em> mejora,
+      no al azar. 150 intentos por condición.</p>
+      <h3>El giro: dos objetivos que se pelean</h3>
+      <p>Subir AP_agnostic a veces baja mIoU. No hay un único ganador → hay un
+      <strong>conjunto de mejores compromisos = frente de Pareto</strong>. Un punto está en el frente
+      si no puedes mejorar un objetivo sin empeorar el otro.</p>
+      <h3>Cómo se ejecutó</h3>
+      <p class="muted">Optuna · muestreador NSGA-II · guardado en SQLite (reanudable) ·
+      2 estudios independientes (light, aggressive) · cada trial = un replay sobre 8 escenas.</p>
+    </div>
+    <div>
+      <h3>Frente de Pareto y knee</h3>
+      <div class="pre">AP_agn ↑
+  │   •            ← frente de Pareto
+  │     •  •         (mejores compromisos)
+  │        ◉       ← KNEE = el más equilibrado
+  │          • •
+  │     ·  ·    ·  ← dominados (peores, dentro)
+  └───────────────→ mIoU</div>
+      <p><strong>El knee</strong> = punto del frente más cercano a la esquina ideal (mIoU y AP máximos a la vez).
+      Ese es el θ* elegido como config de la condición.</p>
+      <p class="muted">No se colapsan los 2 objetivos en una nota con peso λ arbitrario:
+      sería indefendible. Se reporta el frente entero y se justifica el knee.</p>
+    </div>
+  </div>
+  <div class="takeaway">RQ3 dijo <strong>qué perillas</strong>; RQ2 dice <strong>qué valores</strong>.
+  Resultado = un θ* (knee) por condición.</div>
+</section>
+
+<!-- 7 — FASE 4 PARETO -->
+<section class="slide">
+  <h2>RQ2 · Resultado — frente de Pareto y knee</h2>
+  <div class="grid2">
+    <div><img src="figs/phase4_pareto_light.png" alt="pareto light"><p class="muted" style="text-align:center">light</p></div>
+    <div><img src="figs/phase4_pareto_aggressive.png" alt="pareto aggressive"><p class="muted" style="text-align:center">aggressive</p></div>
+  </div>
+  <table>
+    <tr><th>θ* (knee)</th><th>mIoU</th><th>AP<sub>agn</sub></th><th>vs baseline AP</th></tr>
+    <tr><td><span class="badge b-green">light</span></td><td>0.2745</td><td class="good">0.2230</td><td class="good">+45%</td></tr>
+    <tr><td><span class="badge b-red">aggressive</span></td><td>0.2353</td><td class="good">0.1120</td><td class="good">+18%</td></tr>
+  </table>
+  <p class="muted">Dos optimizaciones independientes (NSGA-II, 150 trials c/u). Knee = punto del Pareto más cercano
+  a la esquina ideal. El salto de AP_agnostic viene de cooccurrence + bajar <code>th_cossim</code> (0.81→0.70) y <code>th_points</code> (0.1→0.027).</p>
+</section>
+
+<!-- 8 — FASE 6 ROBUSTEZ -->
+<section class="slide">
+  <h2>RQ4 · Robustez (cruce de condiciones + escenas)</h2>
+  <div class="grid2">
+    <div>
+      <h3>θ* de una condición evaluado en la otra</h3>
+      <table>
+        <tr><th>θ* ↓ \ eval →</th><th>en light</th><th>en aggressive</th></tr>
+        <tr><td>knee <b>light</b></td><td>0.2745</td><td class="bad">0.2311</td></tr>
+        <tr><td>knee <b>aggressive</b></td><td class="good">0.2751</td><td>0.2353</td></tr>
+      </table>
+      <p class="muted">mIoU al cruzar. El <strong>knee de aggressive iguala al de light en light</strong>
+      (0.2751 ≈ 0.2745) y cae menos → <strong>generaliza mejor</strong>.</p>
+    </div>
+    <div>
+      <img src="figs/phase6_scene_consistency.png" alt="consistencia por escena">
+    </div>
+  </div>
+  <div class="card">
+    <p style="margin:0">Consistente entre condiciones ✔ · dispersión entre escenas baja
+    (std mIoU ≈ 0.08) · LOSO estable (std ≈ 0.012). <strong>El óptimo no es un pico de una escena.</strong></p>
+  </div>
+</section>
+
+<!-- 9 — VALIDACIÓN EXTERNA (EL GIRO) -->
+<section class="slide">
+  <h2><span class="badge b-orange">VALIDACIÓN EXTERNA</span> ¿Transfiere a SLAM real?</h2>
+  <p>Todo lo anterior es sim determinista. La prueba de fuego: repetir en <strong>ORB-SLAM real</strong> (drift real, 8 escenas).</p>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>config (real)</th><th>mIoU</th><th>AP<sub>agn</sub></th><th>N</th></tr>
+        <tr><td>A · baseline</td><td class="good">0.2577</td><td class="good">0.186</td><td>71</td></tr>
+        <tr><td>B · +mecanismo</td><td>0.2412</td><td class="bad">0.158</td><td>76</td></tr>
+        <tr><td>C · tuned</td><td>0.2476</td><td class="bad">0.162</td><td>71</td></tr>
+        <tr><td>D · sin cooc</td><td>0.2586</td><td>0.175</td><td>66</td></tr>
+      </table>
+      <p class="muted">El <strong>baseline (A) gana</strong>. Activar cooccurrence (B vs A):
+      AP_agnostic <span class="bad">−15.6%</span>, mIoU −1.6% (Wilcoxon p=0.102, n=8).</p>
+    </div>
+    <div><img src="figs/orbslam_compare.png" alt="comparativa orbslam"></div>
+  </div>
+  <div class="card warn">
+    <p style="margin:0"><strong>El hallazgo NO transfiere.</strong> El mecanismo que <em>subía</em> AP_agnostic
+    en sim lo <em>degrada</em> en SLAM real. El beneficio era un artefacto del modelo de perturbación.</p>
+  </div>
+</section>
+
+<!-- 10 — POR QUÉ NO TRANSFIERE -->
+<section class="slide">
+  <h2>Por qué no transfiere (el mecanismo)</h2>
+  <p><code>cooccurrence</code> veta fusionar dos instancias vistas juntas en &gt;N keyframes
+  (co-visibles = objetos distintos).</p>
+  <div class="grid2">
+    <div class="card win">
+      <h3 style="color:var(--green);margin-top:0">Sim · jump drift (salto discreto)</h3>
+      <p style="margin:0">Los duplicados son el mismo objeto separado <strong>en el tiempo</strong> por el salto
+      → <strong>NO co-visibles</strong> → cooccurrence no los veta (bien), y de paso protege objetos
+      genuinamente distintos. → <span class="good">sube pureza</span>.</p>
+    </div>
+    <div class="card warn">
+      <h3 style="color:var(--orange);margin-top:0">Real · drift continuo</h3>
+      <p style="margin:0">El drift se acumula gradualmente mientras el objeto sigue en vista
+      → los duplicados <strong>SÍ aparecen co-visibles</strong> → cooccurrence los veta <strong>mal</strong>
+      → under-merge. → <span class="bad">baja pureza</span>.</p>
+    </div>
+  </div>
+  <div class="takeaway">Misma regla, efecto opuesto, porque <strong>jump-drift ≠ drift real</strong>.
+  Lección metodológica: una mejora de fusión validada solo en perturbación sintética puede ser un espejismo.</div>
+</section>
+
+<!-- 11 — CONCLUSIONES -->
+<section class="slide">
+  <h2>Conclusiones</h2>
+  <ul>
+    <li><span class="badge b-blue">RQ1</span> En sim, <strong>cooccurrence</strong> sube AP_agnostic (+31.8% / +9.5% on-vs-off);
+    <code>overlap nuevo</code> y <code>aabb</code> son neutros. <strong>mIoU plano</strong> en todo el estudio.</li>
+    <li><span class="badge b-blue">RQ2</span> El tuning (Optuna) eleva AP_agnostic hasta <strong>+45%</strong> sobre baseline en sim.</li>
+    <li><span class="badge b-blue">RQ3</span> Mandan <code>th_cossim</code>, <code>th_points</code>, <code>th_overlap_ratio_low</code>;
+    la geometría (<code>aabb</code>) es irrelevante. Hay <strong>interacción</strong> entre umbrales.</li>
+    <li><span class="badge b-blue">RQ4</span> El óptimo es <strong>robusto dentro de sim</strong> (cruce de condiciones, escenas, LOSO).</li>
+    <li><span class="badge b-orange">EXTERNA</span> <strong>NO transfiere a ORB-SLAM real</strong>: cooccurrence degrada AP_agnostic ~−15%; el baseline gana.</li>
+  </ul>
+  <div class="card hi">
+    <p style="margin:0"><strong>Mensaje central.</strong> La contribución no es "encontré la mejor fusión",
+    sino <strong>un protocolo riguroso (replay determinista, Pareto, cribado, validación externa)
+    que detecta que una mejora prometedora en sim es un artefacto</strong>. Resultado negativo, pero honesto y útil.</p>
+  </div>
+</section>
+
+<!-- 12 — LIMITACIONES + CONFIG -->
+<section class="slide">
+  <h2>Limitaciones y entregable</h2>
+  <div class="grid2">
+    <div>
+      <h3>Limitaciones (a declarar)</h3>
+      <ul>
+        <li><strong>n = 8 escenas</strong> → Wilcoxon débil. El −15% en real tiene <strong>p=0.102</strong> (no signif. a 0.05): <em>tendencia</em>, no prueba.</li>
+        <li>Solo <code>fusion_method = clip</code>.</li>
+        <li>Óptimo condicionado a <code>jump_seed = 42</code>.</li>
+        <li>Covisibilidad no implementada en el código.</li>
+        <li>Sobol (fase 5) omitida por coste; interacción vía Morris σ.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Config recomendada (sim)</h3>
+      <div class="pre">{
+  "fusion_criteria":
+    ["cooccurrence","aabb","cos_sim","overlap"],
+  "cooccurrence_veto_threshold": 3,
+  "th_cossim": 0.580,
+  "th_points": 0.038,
+  "th_overlap_ratio": 0.684,
+  "th_overlap_cos": 0.928,
+  "th_overlap_ratio_low": 0.139
+}</div>
+      <p class="muted">Knee de <em>aggressive</em> (mejor generalización).
+      <strong>Pero para SLAM real, el baseline sigue siendo la opción segura.</strong></p>
+    </div>
+  </div>
+  <div class="takeaway">Trazabilidad total: <code>runs_master.parquet</code> (todos los runs + θ + commit),
+  <code>optuna_*.db</code>, <code>conclusions.json</code>, <code>manifest_index.csv</code>.</div>
+</section>
+
+</div>
+
+<div class="progress" id="prog"></div>
+<div class="counter" id="counter">1 / 14</div>
+<div class="nav">
+  <button id="prev">←</button>
+  <button id="next">→</button>
+</div>
+
+<script>
+(function(){
+  var slides=Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i=0;
+  var counter=document.getElementById('counter');
+  var prog=document.getElementById('prog');
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach(function(s,k){s.classList.toggle('active',k===i);});
+    counter.textContent=(i+1)+' / '+slides.length;
+    prog.style.width=((i)/(slides.length-1)*100)+'%';
+    slides[i].scrollTop=0;
+  }
+  document.getElementById('next').onclick=function(){show(i+1);};
+  document.getElementById('prev').onclick=function(){show(i-1);};
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();show(i+1);}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(i-1);}
+    else if(e.key==='Home'){show(0);}
+    else if(e.key==='End'){show(slides.length-1);}
+  });
+  show(0);
+})();
+</script>
+</body>
+</html>
