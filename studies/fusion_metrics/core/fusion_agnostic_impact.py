@@ -41,6 +41,9 @@ DEFAULT_IOU_THRESHOLDS: tuple[float, ...] = (
 )
 _LENIENT_IOU = 0.25
 
+# Production drops predictions and GT instances below this vertex count (ScanNet).
+PRODUCTION_MIN_REGION_SIZE = 100
+
 
 @dataclass
 class ThresholdResult:
@@ -126,33 +129,60 @@ class InstanceStat:
 
 
 def _gt_instance_masks(
-    gt_ids: np.ndarray, valid_classes: set[int] | None = None
+    gt_ids: np.ndarray,
+    valid_classes: set[int] | None = None,
+    min_region_size: int = 0,
 ) -> np.ndarray:
     """Boolean (V, G), one column per GT instance; void ids (<=0) dropped.
 
-    ``valid_classes`` (class = id // 1000): when given, background-class
-    instances are excluded from the GT targets (production's get_instances).
+    ``valid_classes`` (class = id // 1000): drop background-class instances.
+    ``min_region_size``: drop GT instances below this vertex count (production).
     """
-    ids = np.unique(gt_ids[gt_ids > 0])
+    ids, counts = np.unique(gt_ids[gt_ids > 0], return_counts=True)
     if valid_classes is not None:
-        ids = ids[np.isin(ids // 1000, list(valid_classes))]
+        keep = np.isin(ids // 1000, list(valid_classes))
+        ids, counts = ids[keep], counts[keep]
+    if min_region_size > 0:
+        ids = ids[counts >= min_region_size]
     return ids[None, :] == gt_ids[:, None]
 
 
-def _void_fraction(
-    pred_masks: np.ndarray, gt_ids: np.ndarray, valid_classes: set[int] | None
-) -> np.ndarray:
-    """(M,) fraction of each prediction's points on background (class not valid).
+def _ignore_region(
+    gt_ids: np.ndarray, valid_classes: set[int] | None, min_region_size: int = 0
+) -> np.ndarray | None:
+    """(V,) vertices whose FP overlap is forgiven: background class or sub-min GT.
 
-    Zeros when ``valid_classes`` is None (no void => nothing forgiven).
+    None when ``valid_classes`` is None (production handling off, nothing forgiven).
+    """
+    if valid_classes is None:
+        return None
+    ignore = ~np.isin(gt_ids // 1000, list(valid_classes))  # background incl. id 0
+    if min_region_size > 0:
+        ids, counts = np.unique(gt_ids, return_counts=True)
+        ignore |= np.isin(gt_ids, ids[counts < min_region_size])
+    return ignore
+
+
+def _ignore_fraction(
+    pred_masks: np.ndarray, ignore_mask: np.ndarray | None
+) -> np.ndarray:
+    """(M,) fraction of each prediction's points on the ignore region.
+
+    Zeros when ``ignore_mask`` is None (nothing forgiven).
     """
     n = pred_masks.shape[1]
-    if valid_classes is None or n == 0:
+    if ignore_mask is None or n == 0:
         return np.zeros(n)
-    void = ~np.isin(gt_ids // 1000, list(valid_classes))  # background incl. id 0
     sizes = pred_masks.sum(0).astype(np.float64)
-    overlap = (pred_masks & void[:, None]).sum(0).astype(np.float64)
+    overlap = (pred_masks & ignore_mask[:, None]).sum(0).astype(np.float64)
     return np.where(sizes > 0, overlap / np.maximum(sizes, 1), 0.0)
+
+
+def _eligible_preds(pred_masks: np.ndarray, min_region_size: int) -> np.ndarray:
+    """(M,) predictions large enough to count (production's min_region_size)."""
+    if min_region_size <= 0:
+        return np.ones(pred_masks.shape[1], dtype=bool)
+    return pred_masks.sum(0) >= min_region_size
 
 
 def _intersection(pred_masks: np.ndarray, gt_masks: np.ndarray) -> np.ndarray:
@@ -168,13 +198,13 @@ def _iou_matrix(pred_masks: np.ndarray, gt_masks: np.ndarray) -> np.ndarray:
 
 
 def _match_at(
-    iou: np.ndarray, threshold: float, void_frac: np.ndarray | None = None
+    iou: np.ndarray, threshold: float, ignore_frac: np.ndarray | None = None
 ) -> tuple[np.ndarray, int, int, int]:
     """Greedy 1:1 match by descending IoU above ``threshold`` (uniform confidence).
 
-    IoU is raw (predictions kept whole). With ``void_frac``, an unmatched
-    prediction that is mostly background (void_frac > threshold) is forgiven --
-    dropped from the FP count (production's void_intersection rule).
+    IoU is raw (predictions kept whole). With ``ignore_frac``, an unmatched
+    prediction mostly on the ignore region (ignore_frac > threshold) is forgiven --
+    dropped from the FP count (production's num_ignore rule).
 
     Returns (y_true over counted predictions, matched, spurious, missed).
     """
@@ -193,12 +223,12 @@ def _match_at(
             used_gt.add(g)
             y_true[p] = 1
     matched = int(y_true.sum())
-    if void_frac is not None:
+    if ignore_frac is not None:
         keep = np.array(
-            [p in used_pred or void_frac[p] <= threshold for p in range(n_pred)],
+            [p in used_pred or ignore_frac[p] <= threshold for p in range(n_pred)],
             dtype=bool,
         )
-        y_true = y_true[keep]  # forgive unmatched mostly-void predictions
+        y_true = y_true[keep]  # forgive unmatched mostly-ignored predictions
     return y_true, matched, int(len(y_true) - matched), n_gt - matched
 
 
@@ -271,18 +301,24 @@ def compute_agnostic_ap(
     gt_ids: np.ndarray,
     thresholds: tuple[float, ...] = DEFAULT_IOU_THRESHOLDS,
     valid_classes: set[int] | None = None,
+    min_region_size: int = 0,
 ) -> AgnosticAP:
     """Class-agnostic AP of ``pred_masks`` (V, M) against per-vertex ``gt_ids`` (V,).
 
     ``valid_classes`` switches on production's background handling: GT background
-    instances are not targets, and mostly-background predictions are forgiven.
+    instances are not targets, and mostly-ignored predictions are forgiven.
+    ``min_region_size`` drops sub-min predictions and GT; sub-min GT also joins
+    the forgiven (ignore) region (production's min_region_size).
     """
-    gt_masks = _gt_instance_masks(gt_ids, valid_classes)
+    gt_masks = _gt_instance_masks(gt_ids, valid_classes, min_region_size)
+    pred_masks = pred_masks[:, _eligible_preds(pred_masks, min_region_size)]
     iou = _iou_matrix(pred_masks, gt_masks)
-    void_frac = _void_fraction(pred_masks, gt_ids, valid_classes)
+    ignore_frac = _ignore_fraction(
+        pred_masks, _ignore_region(gt_ids, valid_classes, min_region_size)
+    )
     results = []
     for t in thresholds:
-        y_true, matched, spurious, missed = _match_at(iou, t, void_frac)
+        y_true, matched, spurious, missed = _match_at(iou, t, ignore_frac)
         ap = _average_precision(y_true, missed)
         results.append(ThresholdResult(
             iou=round(t, 2), ap=round(ap, 4),
@@ -399,14 +435,16 @@ def fusion_impact(
     gt_ids: np.ndarray,
     thresholds: tuple[float, ...] = DEFAULT_IOU_THRESHOLDS,
     valid_classes: set[int] | None = None,
+    min_region_size: int = 0,
 ) -> dict:
     """Agnostic-AP block for the summary JSON: pre, post and their deltas.
 
-    ``valid_classes`` toggles production's background handling (see compute_agnostic_ap).
+    ``valid_classes`` / ``min_region_size`` toggle production's handling
+    (see compute_agnostic_ap).
     """
-    pre = compute_agnostic_ap(masks_pre, gt_ids, thresholds, valid_classes)
+    pre = compute_agnostic_ap(masks_pre, gt_ids, thresholds, valid_classes, min_region_size)
     masks_post = build_post_masks(masks_pre, col_obj_ids, merged_groups(decisions))
-    post = compute_agnostic_ap(masks_post, gt_ids, thresholds, valid_classes)
+    post = compute_agnostic_ap(masks_post, gt_ids, thresholds, valid_classes, min_region_size)
     pre50, post50 = pre.at(0.5), post.at(0.5)
     return {
         "delta_ap_mean": round(post.ap_mean - pre.ap_mean, 4),

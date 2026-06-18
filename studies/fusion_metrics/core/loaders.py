@@ -84,6 +84,25 @@ def load_ovo_map(exp_path: str | pathlib.Path, scene: str) -> MapData:
     return MapData(xyz=xyz, rgb=rgb, obj_ids=obj_ids)
 
 
+def reproject_ids_to_gt(
+    obj_ids: np.ndarray, ovo_xyz: np.ndarray, gt_xyz: np.ndarray
+) -> set[int]:
+    """Project per-OVO-point ``obj_ids`` onto the GT mesh; return ids winning >=1 vertex.
+
+    Same KDTree majority vote production uses to evaluate (match_labels_to_vtx):
+    an instance whose points reach no GT vertex is absent from the result.
+    """
+    from ovo.utils import eval_utils  # local import: pulls torch/sklearn
+
+    _, _, matched = eval_utils.match_labels_to_vtx(
+        torch.as_tensor(obj_ids.reshape(-1)),
+        torch.as_tensor(np.asarray(ovo_xyz, dtype=np.float64)),
+        torch.as_tensor(np.asarray(gt_xyz, dtype=np.float64)),
+    )
+    ids = np.unique(matched.numpy())
+    return {int(i) for i in ids if i >= 0}
+
+
 def load_scene_mesh(
     mesh_root: str | pathlib.Path, scene: str
 ) -> tuple[np.ndarray, np.ndarray | None]:

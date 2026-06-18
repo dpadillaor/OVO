@@ -11,11 +11,11 @@ allowed-tools:
 # fusion-eval — Interpret & cross-reference fusion-evaluation artifacts
 
 The module `studies/fusion_metrics/` grades a run's **real** fusion merge/split
-decisions against GT. Run it with the `ovo` env:
+decisions against GT. Run it with the `ovo2` env:
 
 ```bash
 cd studies/fusion_metrics
-/home/padidavid/anaconda3/envs/ovo/bin/python -m scripts.eval_fusion_decisions \
+/home/padidavid/anaconda3/envs/ovo2/bin/python -m scripts.eval_fusion_decisions \
   --exp_path data/output/Replica/<EXP_ID> --scene office0     # writes 3 files next to the CSV
 ```
 Needs a `pre_fusion.ckpt` (saved only when `jump_drift_enabled AND
@@ -43,13 +43,13 @@ Original `fusion_decisions.csv` rows + `same_object` + `verdict`. Columns:
 
 ### fusion_eval_summary.json
 Four blocks (two universes: the real run vs the GT-projected pairs we could score):
-- `run` = the real fusion: `instances_pre`, `instances_post` (from `ovo_map.ckpt`), `merges_applied` (= pre - post).
+- `run` = the real fusion: `instances_pre`, `instances_post` (raw unique obj_ids from `ovo_map.ckpt` points, no projection), `merges_applied` (= pre - post). Plus the projection cross-check: `instances_post_reprojected` = post instances that win ≥1 GT vertex (reproject `match_labels_to_vtx`, same count production's `instance_pred/<scene>.txt` writes), and `post_unmatched_gt` = obj_ids present in the raw post map but absent from the GT projection (have points, reach no vertex). `instances_post - instances_post_reprojected = len(post_unmatched_gt)`; non-empty means our raw count and production's evaluated count diverge — names exactly which.
 - `evaluation` = what we could score: `pairs_total`/`pairs_scored`/`pairs_skipped`, `merges_scored`/`merges_skipped`, and `skipped_objects` = per dropped object `{obj_id, pairs, merges}` (how many decisions it was in, how many were real ACCEPTED merges). An obj is skipped when it doesn't project to GT (drift noise, NOT fusion signal).
   - Reconciliation: `run.merges_applied = merges_scored + merges_skipped`; `pairs_total = pairs_scored + pairs_skipped`. A `skipped_objects[i].merges > 0` is exactly why `merges_applied` exceeds `merges_scored`.
 - `verdicts` (scored pairs only): `counts` {TP,FP,FN,TN}, `rates` {precision,recall,f1}, `by_group` (verdicts split by ACCEPTED vs REJECTED/<reason> — where FN/FP come from).
 - `agnostic_impact` = class-agnostic instance AP **pre vs post** fusion, computed **two ways**:
   - `all` = every GT instance counts (background included). The raw view.
-  - `objects` = production's background handling (`ins_eval_utils.evaluate` / `valid_ins_class_ids`): background-class GT instances are not targets, and unmatched predictions that are **mostly background** (void fraction > IoU threshold) are forgiven (not FP). IoU stays raw — predictions are kept whole, NOT carved (carving would inflate IoU and reward sloppy object+background blobs). This is the mode to compare against production / paper numbers; `all` runs higher spurious because background blobs count.
+  - `objects` = production's full handling (`ins_eval_utils.evaluate` / `valid_ins_class_ids` + `min_region_size=100`): background-class GT instances are not targets; sub-100-vertex predictions **and** GT are dropped; the forgiven *ignore region* = background **plus** sub-min GT, and an unmatched prediction mostly on it (ignore fraction > IoU threshold) is not counted FP. IoU stays raw — predictions are kept whole, NOT carved (carving would inflate IoU and reward sloppy object+background blobs). This is the mode to compare against production / paper numbers (validated to match `instance_ap_<scene>.txt` `AP_agnostic*` within ~0.006, the residual being project-then-merge vs production's merge-then-project order); `all` runs higher spurious because background blobs count.
   - Each mode has `delta_ap50` etc. (net effect on segmentation quality; ~0 or negative = fusion didn't help / hurt), `delta_spurious50` (negative = consolidated over-split — good), `delta_matched50` (negative = lost a matched object via over-merge), `delta_missed50`, plus full `pre`/`post` per-threshold.
 
 ### fusion_instance_stats.csv  (one row per GT instance)

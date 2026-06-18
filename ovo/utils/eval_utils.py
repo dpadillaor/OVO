@@ -245,6 +245,15 @@ def eval_semantics(output_path: str, gt_path: str, scenes: List[str], dataset_in
     return np.mean(iou_values[iou_valid_mask]), confusion
      
 
+def _uniform_scores(predictions: Dict[str, Any]) -> Dict[str, Any]:
+    """Copy of predictions with pred_scores set to 1: class-agnostic AP ranks by
+    geometry only, not by CLIP semantic confidence."""
+    return {
+        scene: {**pred, "pred_scores": np.ones_like(pred["pred_scores"])}
+        for scene, pred in predictions.items()
+    }
+
+
 def eval_instance_ap(experiment_path: str, scenes: List[str], dataset_name: str, gt_path: str, output_path: str = None, verbose: bool = True) -> Dict[str, Any]:
     if dataset_name.lower() == "replica":
         from ovo.utils import replica_ins as dataset_module
@@ -260,7 +269,7 @@ def eval_instance_ap(experiment_path: str, scenes: List[str], dataset_name: str,
         predictions[scene] = io_utils.load_instance_preds(experiment_path, scene)
 
     metrics_aware = ins_eval_utils.evaluate(predictions, dataset_module, gt_path=gt_path, class_agnostic=False)
-    metrics_agnostic = ins_eval_utils.evaluate(predictions, dataset_module, gt_path=gt_path, class_agnostic=True)
+    metrics_agnostic = ins_eval_utils.evaluate(_uniform_scores(predictions), dataset_module, gt_path=gt_path, class_agnostic=True)
 
     metrics = {
         "AP": round(metrics_aware.get("AP", float("nan")), 3),
@@ -286,7 +295,7 @@ def eval_instance_ap(experiment_path: str, scenes: List[str], dataset_name: str,
         for scene in scenes:
             scene_pred = {scene: predictions[scene]}
             s_aware = ins_eval_utils.evaluate(scene_pred, dataset_module, gt_path=gt_path, class_agnostic=False)
-            s_agnostic = ins_eval_utils.evaluate(scene_pred, dataset_module, gt_path=gt_path, class_agnostic=True)
+            s_agnostic = ins_eval_utils.evaluate(_uniform_scores(scene_pred), dataset_module, gt_path=gt_path, class_agnostic=True)
             scene_metrics = {
                 "AP": round(s_aware.get("AP", float("nan")), 3),
                 "AP_50": round(s_aware.get("AP_50", float("nan")), 3),

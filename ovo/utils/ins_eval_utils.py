@@ -223,7 +223,14 @@ def evaluate_matches(matches, class_labels, id_to_label, opt):
                     for (gti, gt) in enumerate(gt_instances):
                         gt_category_names[m].add(id_to_label[gt['label_id']])
                         found_match = False
-                        for pred in gt['matched_pred']:
+                        # contested GT: the highest-IoU prediction claims it as TP
+                        # (the rest become FP), not whichever is first in load order.
+                        for pred in sorted(
+                                gt['matched_pred'],
+                                key=lambda p: float(p['intersection']) / (
+                                    gt['vert_count'] + p['vert_count'] -
+                                    p['intersection']),
+                                reverse=True):
                             # greedy assignments
                             if pred_visited[pred['uuid']]:
                                 continue

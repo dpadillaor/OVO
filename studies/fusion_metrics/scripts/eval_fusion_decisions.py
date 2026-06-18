@@ -32,9 +32,14 @@ from core.loaders import (
     parse_fusion_decision,
     load_pre_fusion_scene,
     load_ovo_map,
+    reproject_ids_to_gt,
 )
 from core.merge_decision_eval import evaluate_decision, summarize
-from core.fusion_agnostic_impact import fusion_impact, per_instance_stats
+from core.fusion_agnostic_impact import (
+    fusion_impact,
+    per_instance_stats,
+    PRODUCTION_MIN_REGION_SIZE,
+)
 from core.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
 
 DEFAULT_MESH_ROOT = REPO_ROOT / "data" / "input" / "Datasets" / "Replica"
@@ -91,8 +96,18 @@ def main(argv: list[str] | None = None) -> int:
           f"({scene_data.n_pred_instances} projected onto the GT mesh).")
 
     # True post-fusion instance count from the final OVO map (not derived).
-    n_post = len(load_ovo_map(exp_path, args.scene).instance_ids)
+    post_map = load_ovo_map(exp_path, args.scene)
+    n_post = len(post_map.instance_ids)
     print(f"{n_post} post-fusion instances (final OVO map).")
+
+    # Production reprojects the post-fusion map onto the GT mesh to evaluate; an
+    # instance whose points reach no GT vertex is dropped there but present here.
+    # Track the gap so our raw count and production's evaluated count reconcile.
+    post_on_mesh = reproject_ids_to_gt(post_map.obj_ids, post_map.xyz, scene_data.xyz)
+    post_unmatched = sorted(set(post_map.instance_ids.tolist()) - post_on_mesh)
+    if post_unmatched:
+        print(f"{len(post_unmatched)} post-fusion instances drop in GT projection: "
+              f"{post_unmatched}")
 
     # Score each decision; drop pairs whose instances did not survive projection
     # to the GT mesh (pruned / unmatched obj_ids), tracking each skipped object.
@@ -127,7 +142,11 @@ def main(argv: list[str] | None = None) -> int:
     ap_args = (scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids)
     agnostic_impact = {
         "all": fusion_impact(*ap_args),
-        "objects": fusion_impact(*ap_args, valid_classes=set(valid_ins_class_ids)),
+        "objects": fusion_impact(
+            *ap_args,
+            valid_classes=set(valid_ins_class_ids),
+            min_region_size=PRODUCTION_MIN_REGION_SIZE,
+        ),
     }
 
     summary = {
@@ -138,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
             "instances_pre": n_pre,
             "instances_post": n_post,
             "merges_applied": n_pre - n_post,
+            "instances_post_reprojected": len(post_on_mesh),
+            "post_unmatched_gt": post_unmatched,
         },
         "evaluation": {
             "pairs_total": len(rows),
