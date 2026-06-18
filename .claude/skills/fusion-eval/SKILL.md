@@ -19,7 +19,11 @@ cd studies/fusion_metrics
   --exp_path data/output/Replica/<EXP_ID> --scene office0     # writes 3 files next to the CSV
 ```
 Needs a `pre_fusion.ckpt` (saved only when `jump_drift_enabled AND
-save_pre_fusion_checkpoint`), mirrored under `data/checkpoints/.../<scene>/`.
+save_pre_fusion_checkpoint`). Resolution when `--ckpt` is omitted: the run's own
+(mirror `data/output` -> `data/checkpoints/.../<scene>/`), else the one its
+`config.yaml` borrowed (`restore_pre_fusion_checkpoint`, `{scene}` placeholder —
+a run launched from another run's shared checkpoint), else error. The post map
+(`ovo_map.ckpt`) is always the run's own.
 
 Interactive debugger (GUI, run yourself): `python -m scripts.debug_merge_decisions
 --exp_path <run> --scene office0 --z_max 1.5`. Commands: `gts` (list GT

@@ -19,6 +19,8 @@ import pathlib
 import argparse
 from collections import defaultdict
 
+import yaml
+
 # Make the package root (studies/fusion_metrics) importable as core.*
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(PACKAGE_ROOT) not in sys.path:
@@ -46,13 +48,49 @@ DEFAULT_MESH_ROOT = REPO_ROOT / "data" / "input" / "Datasets" / "Replica"
 DEFAULT_GT_ROOT = DEFAULT_MESH_ROOT / "instance_gt"
 
 
-def _default_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path:
-    """Mirror data/output -> data/checkpoints to find the pre-fusion checkpoint."""
+def _own_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path:
+    """The run's own checkpoint: mirror data/output -> data/checkpoints."""
     try:
         rel = exp_path.relative_to(REPO_ROOT / "data" / "output")
     except ValueError:
         rel = pathlib.Path(exp_path.name)
     return REPO_ROOT / "data" / "checkpoints" / rel / scene / "pre_fusion.ckpt"
+
+
+def _config_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path | None:
+    """Borrowed checkpoint: the run's config may restore another run's pre_fusion.
+
+    A run launched from a shared checkpoint records it under
+    ``restore_pre_fusion_checkpoint`` (``{scene}`` placeholder, repo-relative).
+    """
+    cfg_path = exp_path / scene / "config.yaml"
+    if not cfg_path.exists():
+        return None
+    with open(cfg_path) as f:
+        ref = (yaml.safe_load(f) or {}).get("restore_pre_fusion_checkpoint")
+    if not ref:
+        return None
+    ref = str(ref).replace("{scene}", scene)
+    p = pathlib.Path(ref)
+    return p if p.is_absolute() else REPO_ROOT / p
+
+
+def _resolve_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path:
+    """Find the pre-fusion checkpoint: the run's own, else the one its config
+    borrowed (shared across runs), else raise listing both tried paths."""
+    own = _own_ckpt(exp_path, scene)
+    if own.exists():
+        return own
+    borrowed = _config_ckpt(exp_path, scene)
+    if borrowed is not None and borrowed.exists():
+        print(f"Using checkpoint from config restore_pre_fusion_checkpoint: {borrowed}")
+        return borrowed
+    tried = f"\n  own:    {own}" + (f"\n  config: {borrowed}" if borrowed else "")
+    raise FileNotFoundError(
+        f"No pre-fusion checkpoint for '{scene}'. Tried:{tried}\n"
+        f"Pass --ckpt explicitly, or check the run saved one "
+        f"(jump_drift_enabled AND save_pre_fusion_checkpoint)."
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -82,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             f"Scene '{args.scene}' not found in experiment: {scene_dir}"
         )
     csv_path = scene_dir / "fusion_decisions.csv"
-    ckpt_path = pathlib.Path(args.ckpt) if args.ckpt else _default_ckpt(exp_path, args.scene)
+    ckpt_path = pathlib.Path(args.ckpt) if args.ckpt else _resolve_ckpt(exp_path, args.scene)
     out_dir = pathlib.Path(args.out_dir) if args.out_dir else scene_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
