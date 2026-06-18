@@ -33,8 +33,8 @@ from core.loaders import (
     load_ovo_map,
 )
 from core.merge_decision_eval import evaluate_decision, summarize
-from core.fusion_agnostic_impact import fusion_impact
-from core.writers import write_pairs_csv, write_summary_json
+from core.fusion_agnostic_impact import fusion_impact, per_instance_stats
+from core.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
 
 DEFAULT_MESH_ROOT = REPO_ROOT / "data" / "input" / "Datasets" / "Replica"
 DEFAULT_GT_ROOT = DEFAULT_MESH_ROOT / "instance_gt"
@@ -130,13 +130,21 @@ def main(argv: list[str] | None = None) -> int:
         scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids
     )
 
+    # Per-GT-instance breakdown: IoU/acc pre vs post + matched/spurious predictions.
+    from ovo.utils.replica_ins import valid_ins_class_ids, ins_class_names
+    cls_to_name = dict(zip(valid_ins_class_ids, ins_class_names))
+    stats = per_instance_stats(scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids)
+
     out_csv = out_dir / "fusion_decisions_eval.csv"
     out_json = out_dir / "fusion_eval_summary.json"
+    out_stats = out_dir / "fusion_instance_stats.csv"
     write_pairs_csv(eval_rows, pairs, out_csv)
     write_summary_json(summary, out_json)
+    write_instance_stats_csv(stats, out_stats, cls_to_name)
 
     print(f"Wrote {out_csv}")
     print(f"Wrote {out_json}")
+    print(f"Wrote {out_stats}")
     print(json.dumps(summary["counts"], indent=2))
     return 0
 

@@ -40,7 +40,13 @@ from core.loaders import (
     obj_id_to_column,
 )
 from core.merge_decision_eval import classify_merge_decision
-from viz.debug_viz import build_pair_cloud, build_instance_overlay_cloud, LiveViewer
+from core.fusion_agnostic_impact import instances_for_gt
+from viz.debug_viz import (
+    build_pair_cloud,
+    build_instance_overlay_cloud,
+    build_gt_inspection_cloud,
+    LiveViewer,
+)
 
 # Possible confusion-matrix outcome.
 VERDICT_GLOSS = {
@@ -148,6 +154,80 @@ def _show_pair(
     _report(obj_a, obj_b, decision, summary)
 
 
+def _resolve_gt_id(typed: int, present: set[int]) -> int:
+    """Accept a full GT id, or a unique instance suffix (id % 1000)."""
+    if typed in present:
+        return typed
+    matches = sorted(i for i in present if i % 1000 == typed)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(f"suffix {typed} is ambiguous: {matches}; use the full id")
+    raise ValueError(f"GT id {typed} not present.")
+
+
+def _show_gt(
+    tokens: list[str],
+    *,
+    scene: SceneData,
+    matched,
+    viewer: LiveViewer,
+    z_max: float | None,
+) -> None:
+    """Inspect one GT instance: matched prediction (green) + spurious fragments."""
+    try:
+        typed = int(tokens[1])
+    except (IndexError, ValueError):
+        print(f"  usage: gt <gt_id|instance_suffix>")
+        return
+    try:
+        gt_id = _resolve_gt_id(typed, set(scene.gt_ids[scene.gt_ids > 0].tolist()))
+    except ValueError as e:
+        print(f"  {e}")
+        return
+    try:
+        matched_col, spurious_cols = instances_for_gt(scene.pred_masks, scene.gt_ids, gt_id)
+    except ValueError as e:
+        print(f"  {e}")
+        return
+
+    pcd = build_gt_inspection_cloud(scene, gt_id, matched_col, spurious_cols, z_max=z_max)
+    viewer.show(pcd)
+    won = matched[matched_col] if matched_col is not None else None
+    spurious_ids = [int(matched[c]) for c in spurious_cols]
+    print(f"  GT {gt_id}: matched pred obj_id {won}  |  {len(spurious_cols)} spurious "
+          f"fragments obj_ids {spurious_ids}")
+
+
+def _list_gts(scene: SceneData) -> None:
+    """List GT instances one per line: ``<id>  <name>``, object vs background."""
+    from ovo.utils.replica_ins import valid_ins_class_ids, ins_class_names
+
+    cls_to_name = dict(zip(valid_ins_class_ids, ins_class_names))
+    ids = sorted(set(scene.gt_ids[scene.gt_ids > 0].tolist()))
+    objs = [i for i in ids if i // 1000 in cls_to_name]
+    bg = [i for i in ids if i // 1000 not in cls_to_name]
+
+    print(f"  {len(objs)} object instances (type the id):")
+    for i in objs:
+        print(f"    {i:>6}  {cls_to_name[i // 1000]}")
+    print(f"  {len(bg)} background (class not in valid_ins):")
+    for i in bg:
+        print(f"    {i:>6}  class {i // 1000}")
+
+
+def _print_help() -> None:
+    """List every REPL command."""
+    print("\nCommands:")
+    print("  <obj_id_a> <obj_id_b> [merge|separate]   score a pair")
+    print("  show <obj_id>                            overlay its original points on GT")
+    print("  gt <gt_id>                               inspect a GT: matched (green) + spurious")
+    print("  gts                                      list GT instance ids (object vs background)")
+    print("  missing                                  list instances lost in GT projection")
+    print("  help                                     show this list")
+    print("  q                                        quit")
+
+
 def _handle_command(
     line: str,
     *,
@@ -162,8 +242,17 @@ def _handle_command(
     tokens = line.split()
     head = tokens[0].lower()
 
+    if head in ("help", "h", "?"):
+        _print_help()
+        return
     if head == "missing":
         print(f"  {len(missing)} instances lost in GT projection: {missing}")
+        return
+    if head == "gts":
+        _list_gts(scene)
+        return
+    if head == "gt":
+        _show_gt(tokens, scene=scene, matched=matched, viewer=viewer, z_max=z_max)
         return
     if head == "show":
         if len(tokens) < 2:
@@ -211,11 +300,7 @@ def main(argv: list[str] | None = None) -> int:
 
     threading.Thread(target=_reader, daemon=True).start()
 
-    print("\nCommands:")
-    print("  <obj_id_a> <obj_id_b> [merge|separate]   score a pair")
-    print("  show <obj_id>                            overlay its original points on GT")
-    print("  missing                                  list instances lost in GT projection")
-    print("  q                                        quit")
+    _print_help()
     print(PROMPT, end="", flush=True)
 
     running = True

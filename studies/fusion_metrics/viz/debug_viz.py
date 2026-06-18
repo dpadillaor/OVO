@@ -5,6 +5,8 @@ GT, else yellow (GT of A) + orange (GT of B). Paint order context->GT->B->A.
 """
 from __future__ import annotations
 
+import colorsys
+
 import numpy as np
 import open3d as o3d
 
@@ -69,6 +71,49 @@ def build_pair_cloud(
         xyz, colors = xyz[keep], colors[keep]
 
     return _point_cloud(xyz, colors), summary
+
+
+COLOR_GT_FOOTPRINT = (0.85, 0.78, 0.45)  # khaki: the selected GT object
+COLOR_MATCHED = (0.20, 0.80, 0.25)       # green: prediction that won the GT
+
+# Spurious (over-split) fragments share one hue so they read as one category;
+# saturation+value vary per fragment so individual pieces stay distinguishable.
+_SPURIOUS_HUE = 0.0  # red
+
+
+def _spurious_shades(n: int) -> list[tuple[float, float, float]]:
+    """n shades of ``_SPURIOUS_HUE``: uniform family, distinct per fragment."""
+    if n <= 0:
+        return []
+    sats = np.linspace(1.0, 0.45, n)
+    vals = np.linspace(0.65, 1.0, n)
+    return [colorsys.hsv_to_rgb(_SPURIOUS_HUE, s, v) for s, v in zip(sats, vals)]
+
+
+def build_gt_inspection_cloud(
+    scene: SceneData,
+    gt_id: int,
+    matched_col: int | None,
+    spurious_cols: list[int],
+    *,
+    z_max: float | None = None,
+) -> o3d.geometry.PointCloud:
+    """Grey scene with the GT footprint (khaki), its matched prediction (green)
+    and each spurious fragment in a distinct color. Paint order: GT -> spurious -> matched."""
+    colors = np.tile(np.array(COLOR_CONTEXT), (scene.n_points, 1))
+    colors[scene.gt_ids == gt_id] = COLOR_GT_FOOTPRINT
+
+    shades = _spurious_shades(len(spurious_cols))
+    for col, shade in zip(spurious_cols, shades):
+        colors[scene.pred_masks[:, col]] = shade
+    if matched_col is not None:
+        colors[scene.pred_masks[:, matched_col]] = COLOR_MATCHED
+
+    xyz = scene.xyz
+    if z_max is not None:
+        keep = scene.xyz[:, 2] <= z_max
+        xyz, colors = xyz[keep], colors[keep]
+    return _point_cloud(xyz, colors)
 
 
 def build_instance_overlay_cloud(
