@@ -125,10 +125,34 @@ class InstanceStat:
         return "unchanged"
 
 
-def _gt_instance_masks(gt_ids: np.ndarray) -> np.ndarray:
-    """Boolean (V, G) one column per ground-truth instance; void ids (<=0) dropped."""
+def _gt_instance_masks(
+    gt_ids: np.ndarray, valid_classes: set[int] | None = None
+) -> np.ndarray:
+    """Boolean (V, G), one column per GT instance; void ids (<=0) dropped.
+
+    ``valid_classes`` (class = id // 1000): when given, background-class
+    instances are excluded from the GT targets (production's get_instances).
+    """
     ids = np.unique(gt_ids[gt_ids > 0])
+    if valid_classes is not None:
+        ids = ids[np.isin(ids // 1000, list(valid_classes))]
     return ids[None, :] == gt_ids[:, None]
+
+
+def _void_fraction(
+    pred_masks: np.ndarray, gt_ids: np.ndarray, valid_classes: set[int] | None
+) -> np.ndarray:
+    """(M,) fraction of each prediction's points on background (class not valid).
+
+    Zeros when ``valid_classes`` is None (no void => nothing forgiven).
+    """
+    n = pred_masks.shape[1]
+    if valid_classes is None or n == 0:
+        return np.zeros(n)
+    void = ~np.isin(gt_ids // 1000, list(valid_classes))  # background incl. id 0
+    sizes = pred_masks.sum(0).astype(np.float64)
+    overlap = (pred_masks & void[:, None]).sum(0).astype(np.float64)
+    return np.where(sizes > 0, overlap / np.maximum(sizes, 1), 0.0)
 
 
 def _intersection(pred_masks: np.ndarray, gt_masks: np.ndarray) -> np.ndarray:
@@ -143,17 +167,24 @@ def _iou_matrix(pred_masks: np.ndarray, gt_masks: np.ndarray) -> np.ndarray:
     return np.where(union > 0, inter / np.maximum(union, 1), 0.0)
 
 
-def _match_at(iou: np.ndarray, threshold: float) -> tuple[np.ndarray, int, int, int]:
+def _match_at(
+    iou: np.ndarray, threshold: float, void_frac: np.ndarray | None = None
+) -> tuple[np.ndarray, int, int, int]:
     """Greedy 1:1 match by descending IoU above ``threshold`` (uniform confidence).
 
-    Returns (y_true per prediction, matched, spurious, missed).
+    IoU is raw (predictions kept whole). With ``void_frac``, an unmatched
+    prediction that is mostly background (void_frac > threshold) is forgiven --
+    dropped from the FP count (production's void_intersection rule).
+
+    Returns (y_true over counted predictions, matched, spurious, missed).
     """
     n_pred, n_gt = iou.shape
     y_true = np.zeros(n_pred, dtype=np.int64)
+    used_pred: set[int] = set()
     if n_pred and n_gt:
         ps, gs = np.where(iou >= threshold)
         order = np.argsort(iou[ps, gs])[::-1]
-        used_pred, used_gt = set(), set()
+        used_gt: set[int] = set()
         for k in order:
             p, g = int(ps[k]), int(gs[k])
             if p in used_pred or g in used_gt:
@@ -162,7 +193,13 @@ def _match_at(iou: np.ndarray, threshold: float) -> tuple[np.ndarray, int, int, 
             used_gt.add(g)
             y_true[p] = 1
     matched = int(y_true.sum())
-    return y_true, matched, n_pred - matched, n_gt - matched
+    if void_frac is not None:
+        keep = np.array(
+            [p in used_pred or void_frac[p] <= threshold for p in range(n_pred)],
+            dtype=bool,
+        )
+        y_true = y_true[keep]  # forgive unmatched mostly-void predictions
+    return y_true, matched, int(len(y_true) - matched), n_gt - matched
 
 
 def _greedy_gt_to_pred(iou: np.ndarray, threshold: float) -> dict[int, int]:
@@ -233,13 +270,19 @@ def compute_agnostic_ap(
     pred_masks: np.ndarray,
     gt_ids: np.ndarray,
     thresholds: tuple[float, ...] = DEFAULT_IOU_THRESHOLDS,
+    valid_classes: set[int] | None = None,
 ) -> AgnosticAP:
-    """Class-agnostic AP of ``pred_masks`` (V, M) against per-vertex ``gt_ids`` (V,)."""
-    gt_masks = _gt_instance_masks(gt_ids)
+    """Class-agnostic AP of ``pred_masks`` (V, M) against per-vertex ``gt_ids`` (V,).
+
+    ``valid_classes`` switches on production's background handling: GT background
+    instances are not targets, and mostly-background predictions are forgiven.
+    """
+    gt_masks = _gt_instance_masks(gt_ids, valid_classes)
     iou = _iou_matrix(pred_masks, gt_masks)
+    void_frac = _void_fraction(pred_masks, gt_ids, valid_classes)
     results = []
     for t in thresholds:
-        y_true, matched, spurious, missed = _match_at(iou, t)
+        y_true, matched, spurious, missed = _match_at(iou, t, void_frac)
         ap = _average_precision(y_true, missed)
         results.append(ThresholdResult(
             iou=round(t, 2), ap=round(ap, 4),
@@ -355,11 +398,15 @@ def fusion_impact(
     decisions: list[FusionDecision],
     gt_ids: np.ndarray,
     thresholds: tuple[float, ...] = DEFAULT_IOU_THRESHOLDS,
+    valid_classes: set[int] | None = None,
 ) -> dict:
-    """Agnostic-AP block for the summary JSON: pre, post and their deltas."""
-    pre = compute_agnostic_ap(masks_pre, gt_ids, thresholds)
+    """Agnostic-AP block for the summary JSON: pre, post and their deltas.
+
+    ``valid_classes`` toggles production's background handling (see compute_agnostic_ap).
+    """
+    pre = compute_agnostic_ap(masks_pre, gt_ids, thresholds, valid_classes)
     masks_post = build_post_masks(masks_pre, col_obj_ids, merged_groups(decisions))
-    post = compute_agnostic_ap(masks_post, gt_ids, thresholds)
+    post = compute_agnostic_ap(masks_post, gt_ids, thresholds, valid_classes)
     pre50, post50 = pre.at(0.5), post.at(0.5)
     return {
         "delta_ap_mean": round(post.ap_mean - pre.ap_mean, 4),

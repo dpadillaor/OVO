@@ -120,10 +120,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Skipped {pairs_skipped} pairs with obj_ids absent from the GT "
               f"projection: {sorted(skipped_objects)}")
 
-    # Class-agnostic AP before vs after fusion (impact of the recorded merges).
-    agnostic_impact = fusion_impact(
-        scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids
-    )
+    # Class-agnostic AP before vs after fusion (impact of the recorded merges),
+    # both over all GT instances and over objects only (production's void handling).
+    from ovo.utils.replica_ins import valid_ins_class_ids, ins_class_names
+    cls_to_name = dict(zip(valid_ins_class_ids, ins_class_names))
+    ap_args = (scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids)
+    agnostic_impact = {
+        "all": fusion_impact(*ap_args),
+        "objects": fusion_impact(*ap_args, valid_classes=set(valid_ins_class_ids)),
+    }
 
     summary = {
         "experiment": exp_path.name,
@@ -150,8 +155,6 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     # Per-GT-instance breakdown: IoU/acc pre vs post + matched/spurious predictions.
-    from ovo.utils.replica_ins import valid_ins_class_ids, ins_class_names
-    cls_to_name = dict(zip(valid_ins_class_ids, ins_class_names))
     stats = per_instance_stats(scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids)
 
     out_csv = out_dir / "fusion_decisions_eval.csv"

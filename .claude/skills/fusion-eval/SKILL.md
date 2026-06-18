@@ -47,9 +47,10 @@ Four blocks (two universes: the real run vs the GT-projected pairs we could scor
 - `evaluation` = what we could score: `pairs_total`/`pairs_scored`/`pairs_skipped`, `merges_scored`/`merges_skipped`, and `skipped_objects` = per dropped object `{obj_id, pairs, merges}` (how many decisions it was in, how many were real ACCEPTED merges). An obj is skipped when it doesn't project to GT (drift noise, NOT fusion signal).
   - Reconciliation: `run.merges_applied = merges_scored + merges_skipped`; `pairs_total = pairs_scored + pairs_skipped`. A `skipped_objects[i].merges > 0` is exactly why `merges_applied` exceeds `merges_scored`.
 - `verdicts` (scored pairs only): `counts` {TP,FP,FN,TN}, `rates` {precision,recall,f1}, `by_group` (verdicts split by ACCEPTED vs REJECTED/<reason> — where FN/FP come from).
-- `agnostic_impact` = class-agnostic instance AP **pre vs post** fusion:
-  - `delta_ap50` etc.: net effect on segmentation quality. ~0 or negative = fusion didn't help / hurt.
-  - `delta_spurious50` (negative = consolidated over-split fragments — good), `delta_matched50` (negative = lost a matched object — an over-merge), `delta_missed50`.
+- `agnostic_impact` = class-agnostic instance AP **pre vs post** fusion, computed **two ways**:
+  - `all` = every GT instance counts (background included). The raw view.
+  - `objects` = production's background handling (`ins_eval_utils.evaluate` / `valid_ins_class_ids`): background-class GT instances are not targets, and unmatched predictions that are **mostly background** (void fraction > IoU threshold) are forgiven (not FP). IoU stays raw — predictions are kept whole, NOT carved (carving would inflate IoU and reward sloppy object+background blobs). This is the mode to compare against production / paper numbers; `all` runs higher spurious because background blobs count.
+  - Each mode has `delta_ap50` etc. (net effect on segmentation quality; ~0 or negative = fusion didn't help / hurt), `delta_spurious50` (negative = consolidated over-split — good), `delta_matched50` (negative = lost a matched object via over-merge), `delta_missed50`, plus full `pre`/`post` per-threshold.
 
 ### fusion_instance_stats.csv  (one row per GT instance)
 `gt_id,name,iou_pre,iou_post,acc_pre,acc_post,matched_obj_id_pre,n_spurious,spurious_obj_ids,status,match_status`
