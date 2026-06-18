@@ -7,12 +7,32 @@ AP is class-agnostic: only mask geometry matters, scores are uniform.
 """
 from __future__ import annotations
 
+from enum import Enum
 from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
 
 from core.loaders import FusionDecision
+
+
+class MatchStatus(str, Enum):
+    """How a GT instance's AP match (@0.5) changed across fusion: pre x post."""
+
+    KEPT = "KEPT"            # matched before and after
+    LOST = "LOST"            # matched before, missed after (over-merge killed it)
+    GAINED = "GAINED"        # missed before, matched after (recovered)
+    UNMATCHED = "UNMATCHED"  # missed before and after
+
+
+def _match_status(pre: bool, post: bool) -> MatchStatus:
+    if pre and post:
+        return MatchStatus.KEPT
+    if pre:
+        return MatchStatus.LOST
+    if post:
+        return MatchStatus.GAINED
+    return MatchStatus.UNMATCHED
 
 # 9 strict thresholds (ap_mean calculated from this average) + 0.25 threshold reported apart,
 # I've mirrored what ins_eval_utils was doing (all_ap excludes 0.25).
@@ -87,8 +107,9 @@ class InstanceStat:
     iou_post: float
     acc_pre: float
     acc_post: float
-    matched_obj_id: int | None   # pred obj_id matching this GT pre-fusion (IoU >= thr)
-    spurious_obj_ids: list[int]  # over-split fragments dominated by this GT (pre-fusion)
+    matched_obj_id_pre: int | None  # pred obj_id that won this GT pre-fusion (None = unmatched)
+    spurious_obj_ids: list[int]     # over-split fragments dominated by this GT (pre-fusion)
+    match_status: MatchStatus    # AP-match transition across fusion (KEPT/LOST/GAINED/UNMATCHED)
 
     @property
     def n_spurious(self) -> int:
@@ -302,11 +323,12 @@ def per_instance_stats(
     gt_sizes = gt_masks.sum(0).astype(np.float64)
 
     iou_pre, acc_pre, best_pre, inter_pre, iou_pre_mat = _gt_overlap(masks_pre, gt_masks, gt_sizes)
-    iou_post, acc_post, *_ = _gt_overlap(masks_post, gt_masks, gt_sizes)
+    iou_post, acc_post, _, _, iou_post_mat = _gt_overlap(masks_post, gt_masks, gt_sizes)
 
-    # Greedy 1:1 GT->pred match (same as AP). matched_obj_id is who won this GT;
-    # spurious = predictions that won no GT whose dominant GT is this one.
+    # Greedy 1:1 GT->pred match (same as AP), pre and post. matched_obj_id is who
+    # won this GT pre-fusion; match_status tracks the @0.5 transition pre->post.
     won = _greedy_gt_to_pred(iou_pre_mat, iou_threshold)
+    won_post = _greedy_gt_to_pred(iou_post_mat, iou_threshold)
     matched_preds = set(won.values())
     spurious_by_gt: dict[int, list[int]] = defaultdict(list)
     for p in range(masks_pre.shape[1]):
@@ -321,7 +343,8 @@ def per_instance_stats(
             gt_id=int(gid),
             iou_pre=round(float(iou_pre[gi]), 4), iou_post=round(float(iou_post[gi]), 4),
             acc_pre=round(float(acc_pre[gi]), 4), acc_post=round(float(acc_post[gi]), 4),
-            matched_obj_id=matched, spurious_obj_ids=spurious,
+            matched_obj_id_pre=matched, spurious_obj_ids=spurious,
+            match_status=_match_status(gi in won, gi in won_post),
         ))
     return stats
 

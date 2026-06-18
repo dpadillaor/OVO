@@ -51,13 +51,15 @@ Original `fusion_decisions.csv` rows + `same_object` + `verdict`. Columns:
   - `delta_spurious50` (negative = consolidated over-split fragments — good), `delta_matched50` (negative = lost a matched object — an over-merge), `delta_missed50`.
 
 ### fusion_instance_stats.csv  (one row per GT instance)
-`gt_id,name,iou_pre,iou_post,acc_pre,acc_post,matched_obj_id,n_spurious,spurious_obj_ids,status`
+`gt_id,name,iou_pre,iou_post,acc_pre,acc_post,matched_obj_id_pre,n_spurious,spurious_obj_ids,status,match_status`
 - `iou_pre/post` = best IoU of this GT with a prediction, before/after fusion. **IoU is the honest metric** (penalizes over-merge spill).
 - `acc_pre/post` = coverage = intersection/|GT|. High acc + low IoU = prediction covers the object but **spills beyond** (over-merge / object swallowed by a big blob).
-- `matched_obj_id` = prediction the **agnostic AP** credits to this GT (greedy 1:1, IoU≥0.5); `None` if unmatched.
+- `matched_obj_id_pre` = prediction the **agnostic AP** credited to this GT **pre-fusion** (greedy 1:1, IoU≥0.5); `None` if unmatched. This is the join key to `fusion_decisions_eval.csv` — even when the match was later lost, it points at the prediction that got over-merged.
 - `n_spurious`/`spurious_obj_ids` = over-split fragments whose dominant GT is this object.
-- `status` = improved / worsened / unchanged (iou_post vs iou_pre).
+- `status` = improved / worsened / unchanged — **IoU magnitude** direction (continuous).
+- `match_status` = the **AP match transition** @0.5 (discrete): `KEPT` (matched pre & post), `LOST` (matched pre, missed post — over-merge killed it), `GAINED` (missed pre, matched post — recovered), `UNMATCHED` (missed both). Pair it with `status`: e.g. `UNMATCHED`+`improved` = "fusion improved its IoU but not enough to cross 0.5"; `LOST`+`worsened` = over-merge dropped it below the bar; `KEPT`+`worsened` = degraded but still matched.
 - Rows named `classN` (e.g. class0/31/40/93) are **background** (class not in `valid_ins_class_ids`) — not real objects; ignore for object-level analysis.
+- Distribution cross-check: `KEPT+LOST = matched_pre`, `KEPT+GAINED = matched_post` (= summary `agnostic_impact.pre/post.per_threshold[0.5].matched`).
 
 ## Cross-referencing — the causal chain
 

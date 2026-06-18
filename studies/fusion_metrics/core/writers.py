@@ -11,7 +11,7 @@ from core.fusion_agnostic_impact import InstanceStat
 _EXTRA_COLS = ["same_object", "verdict"]
 _STAT_FIELDS = [
     "gt_id", "name", "iou_pre", "iou_post", "acc_pre", "acc_post",
-    "matched_obj_id", "n_spurious", "spurious_obj_ids", "status",
+    "matched_obj_id_pre", "n_spurious", "spurious_obj_ids", "status", "match_status",
 ]
 
 
@@ -70,10 +70,11 @@ def write_instance_stats_csv(
                 "name": cls_to_name.get(s.gt_id // 1000, f"class{s.gt_id // 1000}"),
                 "iou_pre": s.iou_pre, "iou_post": s.iou_post,
                 "acc_pre": s.acc_pre, "acc_post": s.acc_post,
-                "matched_obj_id": "None" if s.matched_obj_id is None else s.matched_obj_id,
+                "matched_obj_id_pre": "None" if s.matched_obj_id_pre is None else s.matched_obj_id_pre,
                 "n_spurious": s.n_spurious,
                 "spurious_obj_ids": s.spurious_obj_ids,
                 "status": s.status,
+                "match_status": s.match_status.value,
             })
 
 
