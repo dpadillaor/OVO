@@ -97,7 +97,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exp_path", type=str, required=True,
                         help="Run dir containing {scene}/fusion_decisions.csv")
-    parser.add_argument("--scene", type=str, default="office0")
+    parser.add_argument("--scene", type=str, default=None,
+                        help="Single scene. Omit to scan & evaluate every scene in the run.")
     parser.add_argument("--ckpt", type=str, default=None,
                         help="pre_fusion.ckpt path (default: mirror under data/checkpoints)")
     parser.add_argument("--mesh_root", type=str, default=str(DEFAULT_MESH_ROOT),
@@ -109,18 +110,43 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    exp_path = pathlib.Path(args.exp_path).resolve()
-    if not exp_path.is_dir():
-        raise FileNotFoundError(f"Experiment dir not found: {exp_path}")
-    scene_dir = exp_path / args.scene
+def _discover_scenes(exp_path: pathlib.Path) -> list[str]:
+    """Scene subdirs = those holding a ``config.yaml`` (utility dirs don't)."""
+    return sorted(
+        d.name for d in exp_path.iterdir()
+        if d.is_dir() and (d / "config.yaml").exists()
+    )
+
+
+def _check_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace) -> str | None:
+    """Return ``None`` if the scene has everything to evaluate, else why not."""
+    scene_dir = exp_path / scene
     if not scene_dir.is_dir():
-        raise FileNotFoundError(
-            f"Scene '{args.scene}' not found in experiment: {scene_dir}"
-        )
+        return "scene dir not found"
+    if not (scene_dir / "fusion_decisions.csv").exists():
+        return "no fusion_decisions.csv"
+    if not (scene_dir / "ovo_map.ckpt").exists():
+        return "no ovo_map.ckpt (post-fusion map)"
+    if args.ckpt:
+        ckpt = pathlib.Path(args.ckpt)
+    else:
+        try:
+            ckpt = _resolve_ckpt(exp_path, scene)
+        except FileNotFoundError:
+            return "no pre_fusion.ckpt (own or config)"
+    if not ckpt.exists():
+        return f"checkpoint missing: {ckpt}"
+    if not (pathlib.Path(args.mesh_root) / f"{scene}_mesh.ply").exists():
+        return f"no GT mesh: {scene}_mesh.ply"
+    if not (pathlib.Path(args.gt_root) / f"{scene}.txt").exists():
+        return f"no GT labels: {scene}.txt"
+    return None
+
+
+def evaluate_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace) -> int:
+    scene_dir = exp_path / scene
     csv_path = scene_dir / "fusion_decisions.csv"
-    ckpt_path = pathlib.Path(args.ckpt) if args.ckpt else _resolve_ckpt(exp_path, args.scene)
+    ckpt_path = pathlib.Path(args.ckpt) if args.ckpt else _resolve_ckpt(exp_path, scene)
     out_dir = pathlib.Path(args.out_dir) if args.out_dir else scene_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,13 +154,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Loaded {len(rows)} fusion decisions (frame {frame_id}).")
 
     scene_data, col_obj_ids, n_pre = load_pre_fusion_scene(
-        ckpt_path, args.scene, mesh_root=args.mesh_root, gt_root=args.gt_root
+        ckpt_path, scene, mesh_root=args.mesh_root, gt_root=args.gt_root
     )
     print(f"{n_pre} pre-fusion instances "
           f"({scene_data.n_pred_instances} projected onto the GT mesh).")
 
     # True post-fusion instance count from the final OVO map (not derived).
-    post_map = load_ovo_map(exp_path, args.scene)
+    post_map = load_ovo_map(exp_path, scene)
     n_post = len(post_map.instance_ids)
     print(f"{n_post} post-fusion instances (final OVO map).")
 
@@ -189,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = {
         "experiment": exp_path.name,
-        "scene": args.scene,
+        "scene": scene,
         "frame_id": frame_id,
         "run": {
             "instances_pre": n_pre,
@@ -228,6 +254,88 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote {out_stats}")
     print(json.dumps(summary["verdicts"]["counts"], indent=2))
     return 0
+
+
+def _write_index(
+    exp_path: pathlib.Path,
+    evaluated: list[str],
+    skipped: dict[str, str],
+    failed: dict[str, str],
+) -> pathlib.Path:
+    """Machine-readable per-scene status, so a batch driver knows what ran.
+
+    Written to ``<exp_path>/fusion_eval_index.json``. ``skipped`` = missing
+    inputs (reason), ``failed`` = raised during evaluation (error).
+    """
+    index_path = exp_path / "fusion_eval_index.json"
+    index = {
+        "experiment": exp_path.name,
+        "counts": {
+            "total": len(evaluated) + len(skipped) + len(failed),
+            "evaluated": len(evaluated),
+            "skipped": len(skipped),
+            "failed": len(failed),
+        },
+        "evaluated": sorted(evaluated),
+        "skipped": dict(sorted(skipped.items())),
+        "failed": dict(sorted(failed.items())),
+    }
+    with open(index_path, "w") as f:
+        json.dump(index, f, indent=2)
+    return index_path
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    exp_path = pathlib.Path(args.exp_path).resolve()
+    if not exp_path.is_dir():
+        raise FileNotFoundError(f"Experiment dir not found: {exp_path}")
+
+    # One explicit scene -> just run it. No --scene -> scan the whole experiment.
+    if args.scene:
+        return evaluate_scene(exp_path, args.scene, args)
+
+    scenes = _discover_scenes(exp_path)
+    if not scenes:
+        print(f"No scenes (dirs with config.yaml) found in {exp_path}")
+        _write_index(exp_path, [], {}, {})
+        return 1
+    print(f"Found {len(scenes)} scene(s): {', '.join(scenes)}")
+
+    ready: list[str] = []
+    skipped: dict[str, str] = {}
+    for s in scenes:
+        reason = _check_scene(exp_path, s, args)
+        if reason is None:
+            ready.append(s)
+            print(f"  [OK]   {s}")
+        else:
+            skipped[s] = reason
+            print(f"  [SKIP] {s}: {reason}")
+
+    evaluated: list[str] = []
+    failed: dict[str, str] = {}
+    if ready:
+        print(f"\nEvaluating {len(ready)} scene(s): {', '.join(ready)}")
+        for i, s in enumerate(ready, 1):
+            print(f"\n=== [{i}/{len(ready)}] {s} ===")
+            try:
+                evaluate_scene(exp_path, s, args)
+                evaluated.append(s)
+            except Exception as e:  # one bad scene must not abort the batch
+                failed[s] = f"{type(e).__name__}: {e}"
+                print(f"  [FAIL] {s}: {failed[s]}", file=sys.stderr)
+
+    index_path = _write_index(exp_path, evaluated, skipped, failed)
+    print(f"\nDone. {len(evaluated)} evaluated, {len(skipped)} skipped, "
+          f"{len(failed)} failed (of {len(scenes)}). Index: {index_path}")
+    if skipped:
+        print(f"  skipped: {', '.join(f'{s} ({r})' for s, r in skipped.items())}")
+    if failed:
+        print(f"  failed:  {', '.join(failed)}")
+    # Non-zero whenever not every discovered scene was evaluated -> a batch driver
+    # (or agent) can branch on it; the index JSON has the per-scene detail.
+    return 0 if len(evaluated) == len(scenes) else 1
 
 
 if __name__ == "__main__":

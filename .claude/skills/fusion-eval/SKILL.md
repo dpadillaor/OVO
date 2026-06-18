@@ -15,9 +15,18 @@ decisions against GT. Run it with the `ovo2` env:
 
 ```bash
 cd studies/fusion_metrics
+# one scene:
 /home/padidavid/anaconda3/envs/ovo2/bin/python -m scripts.eval_fusion_decisions \
   --exp_path data/output/Replica/<EXP_ID> --scene office0     # writes 3 files next to the CSV
+# whole run (omit --scene): discover every scene, report [OK]/[SKIP]+reason, run the ready ones:
+/home/padidavid/anaconda3/envs/ovo2/bin/python -m scripts.eval_fusion_decisions \
+  --exp_path data/output/Replica/<EXP_ID>
 ```
+Omitting `--scene` scans the experiment: scenes = subdirs holding a `config.yaml`;
+each is checked for all inputs (fusion_decisions.csv, resolvable pre_fusion.ckpt,
+ovo_map.ckpt, GT mesh, GT labels) and printed `[OK]` or `[SKIP] <reason>`; only
+the ready ones are evaluated, one at a time with `[i/N] <scene>` progress.
+
 Needs a `pre_fusion.ckpt` (saved only when `jump_drift_enabled AND
 save_pre_fusion_checkpoint`). Resolution when `--ckpt` is omitted: the run's own
 (mirror `data/output` -> `data/checkpoints/.../<scene>/`), else the one its
