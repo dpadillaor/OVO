@@ -42,10 +42,11 @@ Original `fusion_decisions.csv` rows + `same_object` + `verdict`. Columns:
 - `verdict` (positive = MERGE): **TP** correct merge, **FP** over-merge, **FN** over-split, **TN** correct separation.
 
 ### fusion_eval_summary.json
-- `counts` {TP,FP,FN,TN} and `rates` {precision,recall,f1} over **evaluated** pairs.
-- `by_group` = verdicts split by ACCEPTED vs REJECTED/<reason> (see where FN/FP come from).
-- `n_instances_pre/post` = real instance count before/after (post from `ovo_map.ckpt`).
-- `n_skipped`/`skipped_obj_ids` = pairs dropped because an obj_id didn't project to GT (drift noise, NOT fusion signal).
+Four blocks (two universes: the real run vs the GT-projected pairs we could score):
+- `run` = the real fusion: `instances_pre`, `instances_post` (from `ovo_map.ckpt`), `merges_applied` (= pre - post).
+- `evaluation` = what we could score: `pairs_total`/`pairs_scored`/`pairs_skipped`, `merges_scored`/`merges_skipped`, and `skipped_objects` = per dropped object `{obj_id, pairs, merges}` (how many decisions it was in, how many were real ACCEPTED merges). An obj is skipped when it doesn't project to GT (drift noise, NOT fusion signal).
+  - Reconciliation: `run.merges_applied = merges_scored + merges_skipped`; `pairs_total = pairs_scored + pairs_skipped`. A `skipped_objects[i].merges > 0` is exactly why `merges_applied` exceeds `merges_scored`.
+- `verdicts` (scored pairs only): `counts` {TP,FP,FN,TN}, `rates` {precision,recall,f1}, `by_group` (verdicts split by ACCEPTED vs REJECTED/<reason> — where FN/FP come from).
 - `agnostic_impact` = class-agnostic instance AP **pre vs post** fusion:
   - `delta_ap50` etc.: net effect on segmentation quality. ~0 or negative = fusion didn't help / hurt.
   - `delta_spurious50` (negative = consolidated over-split fragments — good), `delta_matched50` (negative = lost a matched object — an over-merge), `delta_missed50`.
@@ -86,11 +87,11 @@ or as its `matched_obj_id` — that tells you which GT object got glued on.
 
 ## Interpreting (what the numbers mean)
 
-- **recall low + huge FN** → fusion is too conservative (over-splits). Under drift, fragments of one object are displaced → `centroid`/`aabb` gates reject correct merges → FN piles up in `by_group.REJECTED/centroid`.
+- **recall low + huge FN** → fusion is too conservative (over-splits). Under drift, fragments of one object are displaced → `centroid`/`aabb` gates reject correct merges → FN piles up in `verdicts.by_group.REJECTED/centroid`.
 - **FP (over-merge)** → typically two **distinct same-class** objects, close (low `centroid_dist`) and semantically similar (high `cos_sim`); one bad merge can worsen **two** instances at once.
 - **agnostic AP flat despite -spurious** → AP is recall-bound; cleaning over-split fragments doesn't raise AP if the matched/missed count doesn't move.
 - **small objects** (camera, wall-plug): acc≈1 but IoU≈0 → swallowed by a much larger prediction.
 
 ## Gotchas
-- Drift breaks the GT projection (`match_labels_to_vtx` assumes shared frame). On jump-drift scenes, `skipped_obj_ids` and some low IoUs are **projection noise**, not fusion error. Use `show <obj_id>` to see the displacement. A clean (no-drift) scene isolates the fusion effect.
-- `n_instances_pre - n_instances_post` (real merges) can differ from summary `n_accepted` (evaluated-only): one universe is the full run, the other is GT-projected pairs.
+- Drift breaks the GT projection (`match_labels_to_vtx` assumes shared frame). On jump-drift scenes, `evaluation.skipped_objects` and some low IoUs are **projection noise**, not fusion error. Use `show <obj_id>` to see the displacement. A clean (no-drift) scene isolates the fusion effect.
+- `run.merges_applied` (real merges) can exceed `evaluation.merges_scored` (GT-projected pairs only): the gap is `merges_skipped`, attributable per object in `skipped_objects` (one universe is the full run, the other is scored pairs).

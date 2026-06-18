@@ -17,6 +17,7 @@ import sys
 import json
 import pathlib
 import argparse
+from collections import defaultdict
 
 # Make the package root (studies/fusion_metrics) importable as core.*
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -94,41 +95,59 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{n_post} post-fusion instances (final OVO map).")
 
     # Score each decision; drop pairs whose instances did not survive projection
-    # to the GT mesh (pruned / unmatched obj_ids).
+    # to the GT mesh (pruned / unmatched obj_ids), tracking each skipped object.
     colset = set(col_obj_ids.tolist())
     eval_rows: list[dict[str, str]] = []
     pairs = []
     decisions = []
-    skipped = 0
-    skipped_ids: set[int] = set()
+    merges_scored = merges_skipped = 0
+    skipped_objects: dict[int, dict[str, int]] = defaultdict(lambda: {"pairs": 0, "merges": 0})
     for row in rows:
         decision = parse_fusion_decision(row)
         decisions.append(decision)
         try:
             pairs.append(evaluate_decision(scene_data, col_obj_ids, decision))
             eval_rows.append(row)
+            merges_scored += decision.merged
         except ValueError:
-            skipped += 1
-            skipped_ids.update(i for i in (decision.i1, decision.i2) if i not in colset)
-    if skipped:
-        print(f"Skipped {skipped} pairs with obj_ids absent from the GT projection: "
-              f"{sorted(skipped_ids)}")
-
-    summary = summarize(
-        pairs,
-        experiment=exp_path.name,
-        scene=args.scene,
-        frame_id=frame_id,
-        n_instances_pre=n_pre,
-        n_instances_post=n_post,
-    )
-    summary["n_skipped"] = skipped
-    summary["skipped_obj_ids"] = sorted(skipped_ids)
+            merges_skipped += decision.merged
+            for i in (decision.i1, decision.i2):
+                if i not in colset:
+                    skipped_objects[i]["pairs"] += 1
+                    skipped_objects[i]["merges"] += decision.merged
+    pairs_skipped = len(rows) - len(pairs)
+    if pairs_skipped:
+        print(f"Skipped {pairs_skipped} pairs with obj_ids absent from the GT "
+              f"projection: {sorted(skipped_objects)}")
 
     # Class-agnostic AP before vs after fusion (impact of the recorded merges).
-    summary["agnostic_impact"] = fusion_impact(
+    agnostic_impact = fusion_impact(
         scene_data.pred_masks, col_obj_ids, decisions, scene_data.gt_ids
     )
+
+    summary = {
+        "experiment": exp_path.name,
+        "scene": args.scene,
+        "frame_id": frame_id,
+        "run": {
+            "instances_pre": n_pre,
+            "instances_post": n_post,
+            "merges_applied": n_pre - n_post,
+        },
+        "evaluation": {
+            "pairs_total": len(rows),
+            "pairs_scored": len(pairs),
+            "pairs_skipped": pairs_skipped,
+            "merges_scored": merges_scored,
+            "merges_skipped": merges_skipped,
+            "skipped_objects": [
+                {"obj_id": int(o), "pairs": d["pairs"], "merges": d["merges"]}
+                for o, d in sorted(skipped_objects.items())
+            ],
+        },
+        "verdicts": summarize(pairs),
+        "agnostic_impact": agnostic_impact,
+    }
 
     # Per-GT-instance breakdown: IoU/acc pre vs post + matched/spurious predictions.
     from ovo.utils.replica_ins import valid_ins_class_ids, ins_class_names
@@ -145,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Wrote {out_csv}")
     print(f"Wrote {out_json}")
     print(f"Wrote {out_stats}")
-    print(json.dumps(summary["counts"], indent=2))
+    print(json.dumps(summary["verdicts"]["counts"], indent=2))
     return 0
 
 

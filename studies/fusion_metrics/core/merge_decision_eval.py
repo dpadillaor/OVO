@@ -110,16 +110,8 @@ def _ratio(num: int, den: int) -> float | None:
     return round(num / den, 4) if den else None
 
 
-def summarize(
-    pairs: list[EvaluatedPair],
-    *,
-    experiment: str,
-    scene: str,
-    frame_id: int,
-    n_instances_pre: int,
-    n_instances_post: int,
-) -> dict:
-    """Aggregate scored pairs into the report dict (counts, rates, by_group)."""
+def summarize(pairs: list[EvaluatedPair]) -> dict:
+    """Verdicts block for scored pairs: counts, rates, by_group."""
     counts = Counter(p.verdict for p in pairs)
     tp, fp, fn, tn = (counts[v] for v in Verdict)
 
@@ -132,14 +124,6 @@ def summarize(
     }
 
     return {
-        "experiment": experiment,
-        "scene": scene,
-        "frame_id": frame_id,
-        "n_instances_pre": n_instances_pre,
-        "n_instances_post": n_instances_post,
-        "n_pairs": len(pairs),
-        "n_accepted": sum(1 for p in pairs if p.decision.merged),
-        "n_rejected": sum(1 for p in pairs if not p.decision.merged),
         "counts": {"TP": tp, "FP": fp, "FN": fn, "TN": tn},
         "rates": {
             "precision": _ratio(tp, tp + fp),
