@@ -16,7 +16,7 @@ import open3d as o3d
 import torch
 
 # Make the repo root importable so we can reuse the production prediction loader.
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -48,7 +48,8 @@ class FusionDecision:
     i1: int
     i2: int
     merged: bool
-    reason: str | None  # Rejection cause; None when merged
+    reason: str | None       # Rejection cause; None when merged
+    accept_mode: str | None  # Accept branch A/B/AB; None when not merged or column absent
 
 
 @dataclass
@@ -222,6 +223,47 @@ def load_pre_fusion_map(ckpt_path: str | pathlib.Path) -> MapData:
     return MapData(xyz=xyz, rgb=rgb, obj_ids=obj_ids)
 
 
+@dataclass
+class DriftInputs:
+    """Raw drift-epoch inputs from ``pre_fusion.ckpt``: creation frame per obj_id + jump frame."""
+
+    created_at_frame: dict[int, int]  # obj_id -> frame id where the instance was created
+    jump_frame: int                   # frame id of the (single) jump drift
+
+
+def load_drift_inputs(ckpt_path: str | pathlib.Path) -> DriftInputs:
+    """Per-instance creation frame and the jump frame from ``pre_fusion.ckpt`` (one torch.load).
+
+    Raises if the checkpoint holds anything other than exactly one jump or if any
+    instance lacks ``created_at_frame``.
+    """
+    ckpt_path = pathlib.Path(ckpt_path)
+    if not ckpt_path.exists():
+        raise FileNotFoundError(f"Pre-fusion checkpoint not found: {ckpt_path}")
+    ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+
+    jumps = ckpt.get("jump_events", [])
+    if len(jumps) != 1:
+        raise ValueError(
+            f"Expected exactly one jump in {ckpt_path.name}, found {len(jumps)}. "
+            f"Drift-epoch classification assumes a single jump."
+        )
+    jump_frame = int(jumps[0]["frame_id"])
+
+    ovo = ckpt["ovo_params"]
+    created_at_frame: dict[int, int] = {}
+    for oid in np.asarray(ovo["ins_3d_ids"]).reshape(-1).tolist():
+        val = ovo.get(f"ins3d_{int(oid)}_created_at_frame")
+        if val is None:
+            raise ValueError(
+                f"Instance {int(oid)} has no created_at_frame in {ckpt_path.name}; "
+                f"cannot assign a drift epoch."
+            )
+        created_at_frame[int(oid)] = int(val)
+
+    return DriftInputs(created_at_frame=created_at_frame, jump_frame=jump_frame)
+
+
 def instance_mask(scene: SceneData, index: int) -> np.ndarray:
     """Return the boolean mask of predicted instance ``index`` (column ``index``)."""
     n = scene.n_pred_instances
@@ -301,6 +343,7 @@ def parse_fusion_decision(row: dict[str, str]) -> FusionDecision:
         i2=int(row["i2"]),
         merged=merged,
         reason=None if merged else (row.get("reason") or None),
+        accept_mode=(row.get("accept_mode") or None) if merged else None,
     )
 
 

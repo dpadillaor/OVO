@@ -8,7 +8,19 @@ import wandb
 import csv
 import time
 
-_FUSION_LOG_FIELDS = ["frame_id", "result", "i1", "i2", "reason", "centroid_dist", "aabb_dist", "cos_sim", "p_dist", "shared_kfs"]
+_FUSION_LOG_FIELDS = ["frame_id", "result", "accept_mode", "i1", "i2", "reason", "centroid_dist", "aabb_dist", "cos_sim", "p_dist", "shared_kfs"]
+
+# Stats produced by the fusion step itself. A restore run regenerates these, so it must
+# NOT inherit them from the source run's logs (see load_stats_from).
+_FUSION_OWNED_STATS = {
+    "t_fusion", "t_loop_closure_refusion", "t_precompute_fusion", "t_descriptor_update",
+    "n_pairs_evaluated", "n_instances_alive",
+}
+
+
+def _is_fusion_owned_stat(key: str) -> bool:
+    """True for stats the fusion step regenerates (per-criterion times/counts + fusion totals)."""
+    return key in _FUSION_OWNED_STATS or key.startswith("t_crit_") or key.startswith("sc_")
 
 class Logger:
     def __init__(self, output_path: str, pid: int | None = None, use_wandb: bool = False) -> None:
@@ -119,7 +131,9 @@ class Logger:
 
         Values are cast to float where possible. Keys not in self.stats are
         added dynamically (same behaviour as log_ovo_stats). Missing files are
-        silently skipped — not every key is written by every run.
+        silently skipped — not every key is written by every run. Fusion-owned
+        stats are skipped: this run regenerates them, so inheriting them would
+        mix the source's criteria with ours.
         """
         log_dir = Path(source_path) / "logger"
         if not log_dir.exists():
@@ -127,6 +141,8 @@ class Logger:
             return
         for log_file in log_dir.glob("*.log"):
             key = log_file.stem
+            if _is_fusion_owned_stat(key):
+                continue
             lines = log_file.read_text().splitlines()
             values = []
             for line in lines:

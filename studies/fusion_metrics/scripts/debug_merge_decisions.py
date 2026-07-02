@@ -32,15 +32,15 @@ if str(PACKAGE_ROOT) not in sys.path:
 # Repo root, used to anchor the default data paths.
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-from core.loaders import (
+from core.agnostic_impact.loaders import (
     SceneData,
     MapData,
     load_pre_fusion_scene,
     load_pre_fusion_map,
     obj_id_to_column,
 )
-from core.merge_decision_eval import classify_merge_decision
-from core.fusion_agnostic_impact import instances_for_gt
+from core.agnostic_impact.merge_decision_eval import classify_merge_decision
+from core.agnostic_impact.fusion_agnostic_impact import instances_for_gt
 from viz.debug_viz import (
     build_pair_cloud,
     build_instance_overlay_cloud,

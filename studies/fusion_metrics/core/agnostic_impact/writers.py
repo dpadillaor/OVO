@@ -5,8 +5,8 @@ import csv
 import json
 import pathlib
 
-from core.merge_decision_eval import EvaluatedPair
-from core.fusion_agnostic_impact import InstanceStat
+from core.agnostic_impact.merge_decision_eval import EvaluatedPair
+from core.agnostic_impact.fusion_agnostic_impact import InstanceStat
 
 _EXTRA_COLS = ["same_object", "verdict"]
 _STAT_FIELDS = [
@@ -38,15 +38,25 @@ def write_pairs_csv(
 
 
 def _pretty_json(obj, level: int = 1, indent: int = 2) -> str:
-    """JSON with nested structure indented but scalar-only dicts/lists inline."""
+    """JSON with nested structure indented but scalar-only dicts/lists inline.
+
+    A mixed dict (scalars + nested values) keeps its scalars together on one line,
+    then expands each nested value below -- so e.g. a by_criterion gate stays
+    compact but its ``accept_modes`` block still gets its own lines.
+    """
     pad, close = " " * (indent * level), " " * (indent * (level - 1))
     nested = (dict, list)
     if isinstance(obj, dict):
         if all(not isinstance(v, nested) for v in obj.values()):
             return json.dumps(obj)  # leaf dict -> one line
-        items = [f"{pad}{json.dumps(k)}: {_pretty_json(v, level + 1, indent)}"
-                 for k, v in obj.items()]
-        return "{\n" + ",\n".join(items) + "\n" + close + "}"
+        scalars = {k: v for k, v in obj.items() if not isinstance(v, nested)}
+        parts = []
+        if scalars:  # all scalar fields share the opening line
+            parts.append(pad + ", ".join(f"{json.dumps(k)}: {json.dumps(v)}"
+                                         for k, v in scalars.items()))
+        parts += [f"{pad}{json.dumps(k)}: {_pretty_json(v, level + 1, indent)}"
+                  for k, v in obj.items() if isinstance(v, nested)]
+        return "{\n" + ",\n".join(parts) + "\n" + close + "}"
     if isinstance(obj, list):
         if all(not isinstance(v, nested) for v in obj):
             return json.dumps(obj)  # scalar list -> one line

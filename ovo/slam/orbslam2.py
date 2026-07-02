@@ -81,6 +81,8 @@ class WrapperORBSLAM2(VanillaMapper):
         new_pcd_ids = []
         new_pcd_obj_ids = []
         new_pcd_colors = []
+        new_pcd_obs = []
+        new_pcd_normals = []
         new_c2w = {}
         n_points = 0
         for updated_kf in updated_kfs: 
@@ -106,10 +108,16 @@ class WrapperORBSLAM2(VanillaMapper):
             old_n_points = n_points
             n_points += len(updated_kf_pcd)
             new_kfs[kf_id] = {"id": kf['id'] , "pcd_idxs":(old_n_points, n_points)}
+            kf_normals = self.pcd_normals[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]]
+            # Normals are directions: rotate only (no translation) by the kf transform.
+            updated_kf_normals = torch.einsum('ij,bj->bi', transform[:3, :3], kf_normals)
+
             new_pcd.append(updated_kf_pcd)
             new_pcd_ids.append(self.pcd_ids[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
             new_pcd_obj_ids.append(self.pcd_obj_ids[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
             new_pcd_colors.append(self.pcd_colors[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
+            new_pcd_obs.append(self.pcd_obs[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
+            new_pcd_normals.append(updated_kf_normals)
             new_c2w[kf["id"]] = updated_kf_c2w
 
         self.estimated_c2ws = new_c2w
@@ -118,6 +126,8 @@ class WrapperORBSLAM2(VanillaMapper):
         self.pcd_ids = torch.cat(new_pcd_ids, dim=0)
         self.pcd_obj_ids = torch.cat(new_pcd_obj_ids, dim=0)
         self.pcd_colors = torch.cat(new_pcd_colors, dim=0)
+        self.pcd_obs = torch.cat(new_pcd_obs, dim=0)
+        self.pcd_normals = torch.cat(new_pcd_normals, dim=0)
         self.map_updated = True
 
     

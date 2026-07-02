@@ -217,9 +217,10 @@ class OVO:
             return None
 
         last_id = self.next_ins_id
-        matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids = self._match_and_track_instances(frame_data[1:], map_data, c2w, seg_maps, binary_maps)
+        matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids, assigned_ins_map = self._match_and_track_instances(frame_id, frame_data[1:], map_data, c2w, seg_maps, binary_maps)
 
         # Keep lightweight visual data aligned with the current segmented frame.
+        # ins_map: top-kf survivors only (what feeds CLIP). assigned_ins_map: all assigned ins (what feeds co-occurrence).
         ins_map = np.full(seg_maps.shape, -1, dtype=np.int32)
         for idx, ins_id in enumerate(matched_ins_ids):
             mask_np = binary_maps[idx].detach().cpu().numpy().astype(bool, copy=False)
@@ -227,8 +228,10 @@ class OVO:
 
         self._last_visual_snapshot = {
             "frame_id": int(frame_id),
+            "kf_id": int(self.kf_id),
             "rgb": np.asarray(image).copy(),
             "ins_map": ins_map,
+            "assigned_ins_map": assigned_ins_map,
             "sam_map": seg_maps.cpu().numpy().astype(np.int16),
         }
             
@@ -270,10 +273,11 @@ class OVO:
         return self.mask_generator.get_masks(image, frame_id)
     
     @profil
-    def _match_and_track_instances(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor) -> Tuple[List[int], torch.Tensor, int]:
+    def _match_and_track_instances(self, frame_id: int, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor) -> Tuple[List[int], torch.Tensor, int]:
         """ For the current frame (1) computes using SAM for each level i \\in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
+            - frame_id (int): current frame id.
             - frame_data (tuple): current frame data.
                 - image (np.ndarray): RGB image with shape (H, W, 3).
                 - depth (np.ndarray): Frame depth with shape (h, w).
@@ -313,8 +317,8 @@ class OVO:
         matched_seg_idxs = seg_map[matches[:,1], matches[:,0]]
 
         frustum_points_ids, frustum_points_ins_ids = points_ids[frustum_mask], points_ins_ids[frustum_mask]
-        frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, seg_map, self.config["track_th"], kf_id)
-        matched_ins_ids, binary_maps = self._fuse_masks_with_same_ins_id(binary_maps, matched_ins_info, kf_id)
+        frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, seg_map, self.config["track_th"], kf_id, frame_id)
+        matched_ins_ids, binary_maps, assigned_ins_map = self._fuse_masks_with_same_ins_id(binary_maps, matched_ins_info, kf_id)
 
         updated_ponts_ins_ids = points_ins_ids.clone()
         updated_ponts_ins_ids[frustum_mask] = frustum_points_ins_ids # Updates points_ins_ids
@@ -326,9 +330,9 @@ class OVO:
                     ins_maps[binary_maps[map_idx]] = ins_id
             self.keyframes["ins_maps"].append(ins_maps.cpu().numpy())
 
-        return matched_ins_ids, binary_maps, len(matched_points_idxs), updated_ponts_ins_ids
+        return matched_ins_ids, binary_maps, len(matched_points_idxs), updated_ponts_ins_ids, assigned_ins_map
             
-    def _track_objects(self, points_ids: torch.Tensor, points_ins_ids: torch.Tensor, matched_points_idxs: torch.Tensor, matched_seg_idxs: torch.Tensor, seg_map: torch.Tensor, track_th: float, kf_id: int) -> tuple[torch.Tensor, Dict[int, List[Tuple[int, int]]]]:
+    def _track_objects(self, points_ids: torch.Tensor, points_ins_ids: torch.Tensor, matched_points_idxs: torch.Tensor, matched_seg_idxs: torch.Tensor, seg_map: torch.Tensor, track_th: float, kf_id: int, frame_id: int) -> tuple[torch.Tensor, Dict[int, List[Tuple[int, int]]]]:
         """  We project 3D points and match with segmentation maps. Then we assign to each segmentation map the id of the 3D instance associated with the majority of points projected into it. If the set points don't have an object assigned, a new object is created and assigned to them. Points without an object assigned get assigned the segmentation map's instance.
         Args:
             - points_ids (torch.Tensor): ids to identify 3D points in case their order changes, or any of them is pruned, between keyframes.
@@ -367,7 +371,7 @@ class OVO:
                     map_ins_id = self.next_ins_id
                     self.next_ins_id +=1
                     #assigned points do not change obj id
-                    self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, points_ids=unassigned_points_ids, mask_area=mask_area)
+                    self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, frame_id=frame_id, points_ids=unassigned_points_ids, mask_area=mask_area)
                     matched_ins_info[map_ins_id]=[(map_idx, mask_area)]
 
                 if map_ins_id > -1:
@@ -376,7 +380,7 @@ class OVO:
         
         return points_ins_ids, matched_ins_info
 
-    def _fuse_masks_with_same_ins_id(self, binary_maps: torch.Tensor, matched_ins_info: Dict[int, List[Tuple[int, int]]], kf_id: int) -> Tuple[List[int], torch.Tensor] :
+    def _fuse_masks_with_same_ins_id(self, binary_maps: torch.Tensor, matched_ins_info: Dict[int, List[Tuple[int, int]]], kf_id: int) -> Tuple[List[int], torch.Tensor, np.ndarray] :
         """ A 3D object can be mapped to more than one 2D mask. We fuse masks that belong to the same ins_id, keeping idx of first occurence. Objects matched to fused masks are updated to the new masks areas.
         Args:
             - binary_maps (torch.Tensor): Tensor of shape (N, H, W) on self.device, where each pixel will have a value of 1 if it belongs to the nth segmentation mask, or 0 otherwise.
@@ -385,6 +389,7 @@ class OVO:
         Return:
             - matched_ins_ids:
             - binary_maps (torch.Tensor): Updated binary maps on self.device with shape (M, H, W).
+            - assigned_ins_map (np.ndarray): (H, W) instance-id map of all assigned ins (pre top-kf filter); -1 is background.
         """
 
         # Capture all detected instances before top-kf filtering for co-occurrence tracking
@@ -393,13 +398,15 @@ class OVO:
         matched_ins_ids = []
         maps_idxs=[]
         to_pop = []
+        first_map_idx = {}  # ins_id -> union mask idx, all assigned ins (pre top-kf filter)
         i = 0
         for ins_id, data_list in matched_ins_info.items():
             map_idx = data_list[0][0]
+            first_map_idx[ins_id] = map_idx
             if len(data_list)>1:
                 for j in range(1,len(data_list)):
                     binary_maps[map_idx] = torch.logical_or(binary_maps[map_idx], binary_maps[data_list[j][0]])
-                    
+
                 mask = binary_maps[map_idx]
                 mask_area = mask.sum().item()
 
@@ -416,6 +423,11 @@ class OVO:
         for ins_id in to_pop:
             matched_ins_info.pop(ins_id)
 
+        # Paint every assigned instance (list A, pre top-kf filter) — what drives co-occurrence.
+        assigned_ins_map = np.full(binary_maps.shape[1:], -1, dtype=np.int32)
+        for ins_id, map_idx in first_map_idx.items():
+            assigned_ins_map[binary_maps[map_idx].detach().cpu().numpy().astype(bool, copy=False)] = ins_id
+
         # Update co-occurrence graph with all detected instances (before top-kf filtering)
         for i_idx, ins_i in enumerate(all_ins_ids):
             for ins_j in all_ins_ids[i_idx + 1:]:
@@ -423,7 +435,7 @@ class OVO:
 
         binary_maps = binary_maps[maps_idxs]
 
-        return matched_ins_ids, binary_maps
+        return matched_ins_ids, binary_maps, assigned_ins_map
 
     def compute_semantic_info(self) -> None:
         if len(self.keyframes_queue)>self.config.get("kf_queue_delay", 0):
@@ -573,10 +585,13 @@ class OVO:
                 points_3d[l_mask], pcol[l_mask],
             )
 
-        verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam, color=_contest_color)
-        print("contest:", self.contest.summarize(verdicts))
+        contest_mode = self.config.get("contest_fusion", "off")  # off | observe | only | both
 
-        contest_mode = self.config.get("contest_fusion", "observe")  # observe | only | both
+        if contest_mode == "off":
+            verdicts = []
+        else:
+            verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam, color=_contest_color)
+            print("contest:", self.contest.summarize(verdicts))
 
         if contest_mode in ("only", "both"):
             points_ins_ids, contest_fused = self._apply_contest_merges(verdicts, objects_list, points_ins_ids, map_data)

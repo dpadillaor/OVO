@@ -49,12 +49,18 @@ experiments:
     #     rotation_noise_std: <float>
     # restore_pre_fusion_checkpoint: data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt
     # When set, the run stage skips SLAM entirely and replays only fusion from the checkpoint.
+    # experiment_uid: <fixed-uid>   # fix the UID suffix instead of a random one; reuse across
+    #                               # entries/runs to write multiple scenes into ONE shared folder.
 ```
 
 ### Experiment name convention
 `{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{LABEL}_{UID}` — use this to name the file before running.
 The 5-char hex UID is appended automatically by the runner. Predict it as `xxxxx` when naming the manifest file.
 Example: `20260407_GT_CLIP_baseline.yaml` (manifest) → `20260407_GT_CLIP_baseline_a3f7c` (actual folder)
+
+Set `experiment_uid: <fixed>` on an entry to override the random suffix — the folder
+becomes `{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{LABEL}_{fixed}`. Reuse the same value
+across entries to share one folder (see Shared output folder below).
 
 SLAM tokens: `GT`, `GTNoise-T{t}-R{r}`, `GTJump-J{n}`, `ORBSLAM3`, `Vanilla`
 Fusion tokens: `CLIP`, `PE-Core`, `PE-Spatial`, `SAM3`, `DINO`
@@ -81,6 +87,34 @@ room0    room1    room2
 ```
 Use `office0` by default for verification — it is the fastest scene.
 Use `scenes_list: scenes.txt` when a full evaluation across all scenes is needed.
+
+### `experiment_uid` — Shared output folder (run scenes separately, same experiment)
+
+By default each manifest entry gets a fresh random 5-char UID, so splitting scenes
+across entries/runs produces **separate folders**. Set the same `experiment_uid` on
+multiple entries to make them resolve to **one** folder; scenes land in their own
+subfolders (`{exp}/{scene}/`) and never clobber each other.
+
+```yaml
+experiments:
+  - label: jump-multi
+    scenes_id: office0
+    experiment_uid: shared01
+    stages: [run, segment, eval]
+    ovo_config: { slam: {slam_module: simulated, close_loops: true}, semantic: {fusion_method: clip} }
+  - label: jump-multi
+    scenes_id: room0
+    experiment_uid: shared01
+    stages: [run, segment, eval]
+    ovo_config: { slam: {slam_module: simulated, close_loops: true}, semantic: {fusion_method: clip} }
+```
+→ `data/output/Replica/{DATE}_GT_CLIP_jump-multi_shared01/{office0,room0}/`
+
+Notes:
+- The folder name is `{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{LABEL}_{experiment_uid}` — keep `label` and tokens identical across the entries you want merged.
+- `experiment_meta.json` is written once (first writer wins); keep the experiment-level params the same across the shared entries.
+- `date_str` is per-day. Same day → shared folder. Across days the same uid yields different names.
+- True parallelism: launch the runner as separate processes, each on a 1-scene manifest with the same `experiment_uid` (entries within one manifest run sequentially).
 
 ### `slam_module` — SLAM backends
 
@@ -130,6 +164,7 @@ slam_config:
 Each jump entry supports either explicit vectors or random magnitudes:
 - `translation: [x, y, z]` — explicit XYZ metres, OR `translation_magnitude: float` — random direction
 - `rotation: [rx, ry, rz]` — explicit euler degrees, OR `rotation_magnitude: float` — random axis
+- `forward: true` — (optional, only with `translation_magnitude`) applies the translation along the camera's forward (-Z) direction at that keyframe instead of a random world-space direction. Useful for jumps "hacia la cámara".
 
 `noise_enabled` must NOT be set (jump drift uses `jump_drift_enabled`, a separate flag).
 

@@ -206,11 +206,11 @@ class TestJumpAppliedAtTriggerKf:
         slam.kfs[0] = {"id": 0, "pcd_idxs": (0, 0), "pose": dummy_c2w}
 
         # The keyframe about to be created has index N = len(kfs) == 1 → jump fires
-        events = slam.jump_controller.maybe_trigger(len(slam.kfs))
+        events = slam.jump_controller.maybe_trigger(len(slam.kfs), frame_id=1)
 
         assert len(events) == 1
         assert torch.allclose(slam.jump_controller.offset[:3, 3], torch.tensor([1.0, 0.0, 0.0]), atol=1e-5)
-        assert 1 in slam.jump_controller._applied_kf_indices
+        assert 1 in slam.jump_controller._applied_triggers
 
 
 # ---------------------------------------------------------------------------
@@ -227,12 +227,12 @@ class TestJumpNotAppliedTwice:
         slam = make_slam(make_minimal_config(noise_cfg))
 
         # Apply the jump once
-        events = slam.jump_controller.maybe_trigger(1)
+        events = slam.jump_controller.maybe_trigger(1, frame_id=1)
         assert len(events) == 1
         first_offset = slam.jump_controller.offset.clone()
 
         # Try to apply again — should be skipped (no event, offset unchanged)
-        events_again = slam.jump_controller.maybe_trigger(1)
+        events_again = slam.jump_controller.maybe_trigger(1, frame_id=1)
         assert events_again == []
         assert torch.allclose(slam.jump_controller.offset, first_offset, atol=1e-6)
 
@@ -254,8 +254,8 @@ class TestMultipleJumpsAccumulate:
         slam = make_slam(make_minimal_config(noise_cfg))
 
         # Trigger both jumps at their respective KF indices
-        slam.jump_controller.maybe_trigger(1)
-        slam.jump_controller.maybe_trigger(2)
+        slam.jump_controller.maybe_trigger(1, frame_id=1)
+        slam.jump_controller.maybe_trigger(2, frame_id=2)
 
         # Both jumps applied; combined translation should be [1, 1, 0]
         # (pure translations compose additively when rotations are identity)

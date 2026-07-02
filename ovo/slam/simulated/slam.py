@@ -9,16 +9,16 @@ from .jump_drift import JumpDriftController
 from .keyframes import KeyframeSelector
 
 
-def load_trajectory(dataset_name: str, scene_name: str) -> List[torch.Tensor]:
-    """Load a ground-truth camera trajectory (4x4 poses) from a Replica-style traj.txt."""
-    traj_file = f"data/input/Datasets/{dataset_name.capitalize()}/{scene_name}/traj.txt"
-    trajectory: List[torch.Tensor] = []
-    with open(traj_file, 'r') as f:
-        for line in f:
-            values = [float(v) for v in line.strip().split()]
-            if len(values) == 16:
-                trajectory.append(torch.tensor(values).reshape(4, 4))
-    return trajectory
+def load_trajectory(dataset) -> List[torch.Tensor]:
+    """Build the GT camera trajectory (4x4 poses) from the dataset's per-frame poses.
+
+    Dataset-agnostic: reuses the same poses vanilla/orbslam consume, so any dataset
+    that populates `dataset.poses` (Replica traj.txt, ScanNet pose/*.txt, ...) works.
+    """
+    if dataset is None or not getattr(dataset, "poses", None):
+        raise ValueError("SimulatedSLAM needs a dataset exposing per-frame `poses`.")
+    return [torch.from_numpy(np.asarray(pose, dtype=np.float32)).reshape(4, 4)
+            for pose in dataset.poses]
 
 
 class SimulatedSLAM(VanillaMapper):
@@ -35,12 +35,11 @@ class SimulatedSLAM(VanillaMapper):
     JumpDriftController (jump state). This class wires them together.
     """
 
-    def __init__(self, config: Dict[str, Any], cam_intrinsics: torch.Tensor) -> None:
+    def __init__(self, config: Dict[str, Any], cam_intrinsics: torch.Tensor, dataset=None) -> None:
         super().__init__(config, cam_intrinsics)
 
-        dataset_name = self.config["dataset_name"]
         scene_name = self.config["data"]["scene_name"]
-        self.trajectory = load_trajectory(dataset_name, scene_name)
+        self.trajectory = load_trajectory(dataset)
         print(f"Initialized SimulatedSLAM with {len(self.trajectory)} poses for scene {scene_name}.")
 
         noise_config = self.config.get("noise", {})
@@ -129,7 +128,8 @@ class SimulatedSLAM(VanillaMapper):
             return c2w
 
         kf_count = len(self.kfs)  # index of the keyframe about to be created
-        events = self.jump_controller.maybe_trigger(kf_count)
+        gt_pose = self.trajectory[frame_id].to(self.device) if frame_id < len(self.trajectory) else c2w
+        events = self.jump_controller.maybe_trigger(kf_count, frame_id, gt_pose=gt_pose)
         if not events:
             return c2w
 
@@ -139,7 +139,6 @@ class SimulatedSLAM(VanillaMapper):
         # as a fresh ghost instead of being absorbed back into the old points.
         self._dedup_min_idx = self.pcd.shape[0]
         # Retroactively reflect the jump on the stored pose for this frame.
-        gt_pose = self.trajectory[frame_id].to(self.device) if frame_id < len(self.trajectory) else c2w
         c2w = self.jump_controller.offset @ gt_pose
         self.estimated_c2ws[frame_id] = c2w
         return c2w

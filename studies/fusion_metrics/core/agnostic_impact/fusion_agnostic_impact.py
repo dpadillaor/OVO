@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from core.loaders import FusionDecision
+from core.agnostic_impact.loaders import FusionDecision
 
 
 class MatchStatus(str, Enum):

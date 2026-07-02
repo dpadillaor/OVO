@@ -116,6 +116,15 @@ class BaseRerunRenderer:
         if self.live_rec is None and self.file_rec is None:
             rr.set_time(timeline, **kwargs)
 
+    def _colorize_id_map(self, id_map):
+        """Map int instance ids to RGB; -1 (background) stays dark gray."""
+        id_map = id_map.astype(np.int32)
+        vis = np.full(id_map.shape + (3,), 40, dtype=np.uint8)
+        valid = id_map >= 0
+        if valid.any():
+            vis[valid] = self.cmap[(id_map[valid] % len(self.cmap)).astype(np.int32)]
+        return vis
+
     def build_blueprint(self):
         raise NotImplementedError
 
@@ -210,7 +219,8 @@ class StreamRenderer(BaseRerunRenderer):
                 rrb.Horizontal(
                     rrb.Spatial2DView(name="RGB", contents="frame/rgb"),
                     rrb.Spatial2DView(name="SAM Masks", contents="frame/sam_map"),
-                    rrb.Spatial2DView(name="Instances2D", contents="frame/ins_map"),
+                    rrb.Spatial2DView(name="Assigned Instances", contents="frame/assigned_map"),
+                    rrb.Spatial2DView(name="Top-KF Instances", contents="frame/ins_map"),
                 ),
             ),
             collapse_panels=False,
@@ -237,12 +247,18 @@ class StreamRenderer(BaseRerunRenderer):
             c2w = data["c2w"]
             rgb = data["rgb"]
             ins_map = data["ins_map"]
+            assigned_ins_map = data.get("assigned_ins_map")
             sam_map = data["sam_map"]
+            kf_id = data.get("kf_id")
             time_step = int(data["frame_id"])
             corrected_trajectory = data.get("corrected_trajectory")
         elif is_stream_message(data):
             points, obj_ids, colors, c2w = data
+            ins_map = None
+            assigned_ins_map = None
             sam_map = None
+            rgb = None
+            kf_id = None
             corrected_trajectory = None
         else:
             return
@@ -381,6 +397,14 @@ class StreamRenderer(BaseRerunRenderer):
                 if valid_sam.any():
                     sam_vis[valid_sam] = self.cmap[(sam_map_i32[valid_sam] % len(self.cmap)).astype(np.int32)]
                 rr.log("frame/sam_map", rr.Image(sam_vis))
+
+        # All assigned instances (pre top-kf filter) — what co-occurrence actually counts.
+        if assigned_ins_map is not None:
+            self._log("frame/assigned_map", rr.Image(self._colorize_id_map(assigned_ins_map)))
+
+        # kf_id of this frame — lets you map co-occurrence kf indices back to rrd steps.
+        if kf_id is not None:
+            self._log("frame/kf_id", rr.TextLog(f"kf_id={kf_id}"))
 
         self.step = max(self.step + 1, time_step + 1)
 

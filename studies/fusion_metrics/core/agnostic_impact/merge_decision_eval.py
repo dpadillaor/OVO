@@ -7,13 +7,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from core.loaders import (
+from core.agnostic_impact.loaders import (
     SceneData,
     FusionDecision,
     instance_mask,
     gt_ids_under_mask,
     obj_id_to_column,
 )
+from core.agnostic_impact.cascade import cascade_by_criterion
 
 class Verdict(str, Enum):
     """Confusion-matrix outcome of a merge/split decision (positive = MERGE)."""
@@ -53,12 +54,32 @@ class EvaluatedPair:
     same_object: bool
     verdict: Verdict
 
-    @property
-    def group(self) -> str:
-        """Bucket for the summary: 'ACCEPTED' or 'REJECTED/<reason>'."""
-        if self.decision.merged:
-            return "ACCEPTED"
-        return f"REJECTED/{self.decision.reason or 'unknown'}"
+
+class Epoch(str, Enum):
+    """Drift epoch of an instance, relative to the single jump's keyframe."""
+
+    PREDRIFT = "predrift"    # created before the jump
+    POSTDRIFT = "postdrift"  # created at/after the jump (ghost)
+
+
+# Pair-class name orders epochs PREDRIFT-first (lexical sort would reverse it).
+_EPOCH_ORDER = (Epoch.PREDRIFT, Epoch.POSTDRIFT)
+
+
+def instance_epoch(created_at_frame: int, jump_frame: int) -> Epoch:
+    """Drift epoch of an instance: born at/after the jump frame is POSTDRIFT (ghost)."""
+    return Epoch.POSTDRIFT if created_at_frame >= jump_frame else Epoch.PREDRIFT
+
+
+def epoch_by_obj_id(created_at_frame: dict[int, int], jump_frame: int) -> dict[int, Epoch]:
+    """obj_id -> Epoch, derived from each instance's creation frame vs the jump frame."""
+    return {oid: instance_epoch(kf, jump_frame) for oid, kf in created_at_frame.items()}
+
+
+def pair_class(a: Epoch, b: Epoch) -> str:
+    """Symmetric drift bucket of a pair: ``{lo}_{hi}`` over the two epochs."""
+    lo, hi = sorted((a, b), key=_EPOCH_ORDER.index)
+    return f"{lo.value}_{hi.value}"
 
 
 def classify_merge_decision(same_object: bool, merged: bool) -> Verdict:
@@ -110,25 +131,47 @@ def _ratio(num: int, den: int) -> float | None:
     return round(num / den, 4) if den else None
 
 
-def summarize(pairs: list[EvaluatedPair]) -> dict:
-    """Verdicts block for scored pairs: counts, rates, by_group."""
+def summarize(pairs: list[EvaluatedPair], chain: list[str] | None = None) -> dict:
+    """Verdicts block for scored pairs: totals, counts, rates, by_criterion.
+
+    ``chain`` (ordered criterion names) adds the ``by_criterion`` cascade: each
+    gate scored as a classifier on its incoming stream (TP/FP it lets pass +
+    TN/FN it rejects + precision/recall/f1). The OR branch of the terminal gate
+    lands in its ``accept_modes``. Omitted when ``chain`` is None.
+    """
     counts = Counter(p.verdict for p in pairs)
     tp, fp, fn, tn = (counts[v] for v in Verdict)
 
-    by_group: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for p in pairs:
-        by_group[p.group][p.verdict] += 1
-    by_group_out = {
-        g: {"total": sum(v.values()), **dict(sorted(v.items()))}
-        for g, v in sorted(by_group.items())
-    }
-
-    return {
+    out = {
+        "totals": {"eval": len(pairs), "accepted": tp + fp, "rejected": fn + tn},
         "counts": {"TP": tp, "FP": fp, "FN": fn, "TN": tn},
         "rates": {
             "precision": _ratio(tp, tp + fp),
             "recall": _ratio(tp, tp + fn),
             "f1": _ratio(2 * tp, 2 * tp + fp + fn),
         },
-        "by_group": by_group_out,
     }
+    if chain is not None:
+        out["by_criterion"] = cascade_by_criterion(pairs, chain)
+    return out
+
+
+def summarize_by_epoch(
+    pairs: list[EvaluatedPair], epochs: dict[int, Epoch], chain: list[str] | None = None
+) -> dict[str, dict]:
+    """Verdicts split by drift pair-class; each bucket summarized like the top block.
+
+    The ``prev_post`` bucket isolates the loop-closure mechanism (original vs ghost).
+    ``chain`` propagates the by_criterion cascade into each epoch bucket.
+    """
+    buckets: dict[str, list[EvaluatedPair]] = defaultdict(list)
+    for p in pairs:
+        try:
+            cls = pair_class(epochs[p.decision.i1], epochs[p.decision.i2])
+        except KeyError as missing:
+            raise ValueError(
+                f"obj_id {missing} in a fusion decision has no drift epoch "
+                f"(absent from the checkpoint's instances)."
+            ) from None
+        buckets[cls].append(p)
+    return {cls: summarize(grp, chain=chain) for cls, grp in sorted(buckets.items())}

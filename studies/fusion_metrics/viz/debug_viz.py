@@ -10,8 +10,8 @@ import colorsys
 import numpy as np
 import open3d as o3d
 
-from core.loaders import SceneData
-from core.merge_decision_eval import analyze_pair
+from core.agnostic_impact.loaders import SceneData
+from core.agnostic_impact.merge_decision_eval import analyze_pair
 
 # RGB triples in [0, 1].
 COLOR_CONTEXT = (0.80, 0.80, 0.80)

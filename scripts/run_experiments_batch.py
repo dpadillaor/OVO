@@ -28,6 +28,7 @@ class OVOConfigOverride:
     slam: Dict[str, Any] = field(default_factory=dict)
     semantic: Dict[str, Any] = field(default_factory=dict)
     vis: Dict[str, Any] = field(default_factory=dict)
+    mapping: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class SLAMConfigOverride:
@@ -43,6 +44,7 @@ class Experiment:
     slam_config: SLAMConfigOverride = field(default_factory=SLAMConfigOverride)
     dataset: Optional[str] = None
     restore_pre_fusion_checkpoint: Optional[str] = None
+    experiment_uid: Optional[str] = None     # fixed UID suffix; reuse across entries to share an output folder
 
 @dataclass # Represents the entire experiments_manifest.yaml file
 class Manifest:
@@ -134,12 +136,14 @@ class ExperimentRunner:
         Format: [DATE]_[SLAM_CONFIG]_[FUSION_CONFIG]_[LABEL]_[UID]
         UID is a 5-char hex suffix that guarantees uniqueness; all experiment
         parameters are stored in the experiment_meta.json sidecar.
+        A fixed `experiment_uid` in the manifest overrides the random suffix so
+        multiple entries can share one output folder (one scene each).
         """
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         slam_token = self._get_slam_token()
         fusion_config_token = self._get_fusion_token()
         tag = self.experiment.label
-        uid = uuid.uuid4().hex[:5]
+        uid = self.experiment.experiment_uid or uuid.uuid4().hex[:5]
 
         return f"{date_str}_{slam_token}_{fusion_config_token}_{tag}_{uid}"
 
@@ -159,6 +163,9 @@ class ExperimentRunner:
 
         if self.experiment.ovo_config.vis:
             _update_recursive(ovo_data, {"vis": self.experiment.ovo_config.vis})
+
+        if self.experiment.ovo_config.mapping:
+            _update_recursive(ovo_data, {"mapping": self.experiment.ovo_config.mapping})
 
         # Noise goes to ovo.yaml root (not to the slam config file).
         # SimulatedSLAM reads noise from config["noise"] which comes from ovo.yaml.
@@ -239,7 +246,12 @@ class ExperimentRunner:
 
         out_dir = Path(f"data/output/{self.dataset}/{self.experiment_name}")
         out_dir.mkdir(parents=True, exist_ok=True)
-        with open(out_dir / "experiment_meta.json", "w") as f:
+        meta_path = out_dir / "experiment_meta.json"
+        # Shared-folder runs (fixed experiment_uid) write one entry per scene into
+        # the same folder; keep the first meta so a later scene doesn't clobber it.
+        if self.experiment.experiment_uid and meta_path.exists():
+            return
+        with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
 
     def setup(self):
@@ -363,6 +375,7 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
             slam=ovo_data.get("slam", {}),
             semantic=ovo_data.get("semantic", {}),
             vis=ovo_data.get("vis", {}),
+            mapping=ovo_data.get("mapping", {}),
         )
         
         slam_data = exp_data.get("slam_config", {})
@@ -379,6 +392,7 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
             slam_config=slam_override,
             dataset=exp_data.get("dataset"),
             restore_pre_fusion_checkpoint=exp_data.get("restore_pre_fusion_checkpoint"),
+            experiment_uid=exp_data.get("experiment_uid"),
         )
         loaded_experiments.append(experiment_obj)
 

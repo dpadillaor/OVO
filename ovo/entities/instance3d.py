@@ -26,7 +26,7 @@ class Instance3D:
     """
     n_top_kf: int = 0
 
-    def __init__(self, id: int, kf_id: int | None = None, points_ids: List[int] = None, mask_area: int = 0):
+    def __init__(self, id: int, kf_id: int | None = None, frame_id: int | None = None, points_ids: List[int] = None, mask_area: int = 0):
         self.id = id
         self.clip_feature = None
         self.clip_feature_kf = None
@@ -37,6 +37,7 @@ class Instance3D:
         self.dino_feature = None
         self.dino_feature_kf = None
         self.kfs_ids = []
+        self.created_at_frame = frame_id
         self.points_ids = []
         self.top_kf = []
         self.to_update = False
@@ -256,6 +257,7 @@ class Instance3D:
             f"ins3d_{self.id}_pe_feature_kf": self.pe_feature_kf,
             f"ins3d_{self.id}_sam3_feature": self.sam3_feature,
             f"ins3d_{self.id}_sam3_feature_kf": self.sam3_feature_kf,
+            f"ins3d_{self.id}_created_at_frame": self.created_at_frame,
         }
 
         if debug_info:
@@ -283,6 +285,7 @@ class Instance3D:
         self.sam3_feature = obj_dict.get(f"ins3d_{self.id}_sam3_feature", None)
         self.sam3_feature_kf = obj_dict.get(f"ins3d_{self.id}_sam3_feature_kf", None)
         self.to_update_sam3 = self.sam3_feature is None
+        self.created_at_frame = obj_dict.get(f"ins3d_{self.id}_created_at_frame", None)
         if debug_info:
             self.kfs_ids = obj_dict[f"ins3d_{self.id}_keyframes_ids"].tolist()
             self.points_ids = obj_dict[f"ins3d_{self.id}_points_ids"].tolist()
@@ -298,6 +301,7 @@ class Instance3D:
         """
         self.clip_feature = torch.tensor(obj_dict[f"default_{self.id}_clip_feature"])
         self.clip_feature_kf = obj_dict.get(f"default_{self.id}_clip_feature_kf", None)
+        self.created_at_frame = obj_dict.get(f"default_{self.id}_created_at_frame", None)
         if debug_info:
             self.kfs_ids = obj_dict[f"default_{self.id}_keyframes_ids"].tolist()
             self.points_ids = obj_dict[f"default_{self.id}_points_ids"].tolist()

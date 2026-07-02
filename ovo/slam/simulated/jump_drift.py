@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import torch
 
 from ...utils import geometry_utils
@@ -16,8 +16,9 @@ class JumpDriftController:
         self.device = device
         self.enabled = noise_config.get("jump_drift_enabled", False)
         self._offset = torch.eye(4, device=device)
-        self._applied_kf_indices: set = set()
+        self._applied_triggers: set = set()
         self.jump_configs: List[Dict[str, Any]] = []
+        self.fired_events: List[Dict[str, Any]] = []
 
         if not self.enabled:
             return
@@ -31,15 +32,22 @@ class JumpDriftController:
 
     def _parse_jump(self, jump_entry: Dict[str, Any]) -> Dict[str, Any]:
         """Resolve a config entry into an explicit translation vector and rotation matrix."""
-        kf_index = int(jump_entry["kf_index"])
+        kf_index = int(jump_entry.get("kf_index", -1))
+        frame_id = jump_entry.get("frame_id", None)
+        forward = jump_entry.get("forward", False)
+        forward_mag = 0.0
 
         if "translation" in jump_entry:
             translation = torch.tensor(jump_entry["translation"], dtype=torch.float32, device=self.device)
         elif "translation_magnitude" in jump_entry:
             mag = float(jump_entry["translation_magnitude"])
-            rand_vec = torch.randn(3, generator=self.generator, device=self.device)
-            rand_vec = rand_vec / torch.norm(rand_vec)
-            translation = rand_vec * mag
+            if forward:
+                translation = torch.zeros(3, device=self.device)
+                forward_mag = mag
+            else:
+                rand_vec = torch.randn(3, generator=self.generator, device=self.device)
+                rand_vec = rand_vec / torch.norm(rand_vec)
+                translation = rand_vec * mag
         else:
             translation = torch.zeros(3, device=self.device)
 
@@ -54,34 +62,67 @@ class JumpDriftController:
         else:
             rotation_matrix = torch.eye(3, device=self.device)
 
-        return {"kf_index": kf_index, "translation": translation, "rotation_matrix": rotation_matrix}
+        result = {
+            "kf_index": kf_index,
+            "translation": translation,
+            "rotation_matrix": rotation_matrix,
+            "forward": forward,
+            "forward_mag": forward_mag,
+        }
+        if frame_id is not None:
+            result["frame_id"] = frame_id
+        return result
 
     @property
     def offset(self) -> torch.Tensor:
         return self._offset
 
-    def maybe_trigger(self, kf_count: int) -> List[Dict[str, Any]]:
-        """Apply any jump configured for keyframe index `kf_count` to the accumulated
-        offset (once). Returns a telemetry event per jump applied (empty if none)."""
+    def maybe_trigger(self, kf_count: int, frame_id: int, gt_pose: Optional[torch.Tensor] = None) -> List[Dict[str, Any]]:
+        """Apply any jump whose trigger condition matches the current frame to the
+        accumulated offset (once). Returns a telemetry event per jump applied (empty if none).
+
+        A jump can be triggered by ``frame_id`` (preferred) or ``kf_index``
+        (backward-compatible fallback). When ``forward: true``, the translation
+        is applied along the camera's forward (-Z) direction at the jump frame
+        instead of a fixed world-space vector; ``gt_pose`` must be provided.
+        """
         events: List[Dict[str, Any]] = []
         if not self.enabled:
             return events
 
         for cfg in self.jump_configs:
-            if cfg["kf_index"] == kf_count and kf_count not in self._applied_kf_indices:
-                T_jump = geometry_utils.create_transformation_matrix(cfg["rotation_matrix"], cfg["translation"])
-                self._offset = T_jump @ self._offset
-                self._applied_kf_indices.add(kf_count)
+            if "frame_id" in cfg:
+                trigger_id = cfg["frame_id"]
+                current_id = frame_id
+                match = current_id >= trigger_id  # first KF at or after the target frame
+            else:
+                trigger_id = cfg["kf_index"]
+                current_id = kf_count
+                match = current_id == trigger_id
 
-                t_mag = torch.norm(cfg["translation"]).item()
+            if match and trigger_id not in self._applied_triggers:
+                translation = cfg["translation"]
+                if cfg.get("forward", False) and gt_pose is not None:
+                    current_pose = self._offset @ gt_pose
+                    forward_dir = current_pose[:3, :3] @ torch.tensor([0, 0, -1.0], device=self.device)
+                    translation = forward_dir * cfg["forward_mag"]
+                T_jump = geometry_utils.create_transformation_matrix(cfg["rotation_matrix"], translation)
+                self._offset = T_jump @ self._offset
+                self._applied_triggers.add(trigger_id)
+
+                t_mag = torch.norm(translation).item()
                 R = cfg["rotation_matrix"]
                 angle_rad = torch.acos(torch.clamp((torch.trace(R) - 1) / 2, -1.0, 1.0))
-                events.append({
+                event = {
                     "kf_index": kf_count,
+                    "frame_id": frame_id,
                     "translation_magnitude": t_mag,
                     "rotation_magnitude": (angle_rad * 180 / torch.pi).item(),
-                })
+                }
+                self.fired_events.append(event)
+                events.append(event)
         return events
 
     def reset(self) -> None:
         self._offset = torch.eye(4, device=self.device)
+        self._applied_triggers.clear()

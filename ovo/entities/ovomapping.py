@@ -48,7 +48,7 @@ def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Ten
         return WrapperORBSLAM2(config, cam_intrinsics, world_ref=torch.from_numpy(dataset[0][3]))
     elif backbone == "simulated":
         from ..slam.simulated import SimulatedSLAM
-        return SimulatedSLAM(config, cam_intrinsics)
+        return SimulatedSLAM(config, cam_intrinsics, dataset=dataset)
     else:
         return VanillaMapper(config, cam_intrinsics)
 
@@ -255,11 +255,15 @@ class OVOSemMap():
 
         rgb = None
         ins_map = None
+        assigned_ins_map = None
         sam_map = None
+        kf_id = None
         if visual_snapshot is not None and visual_snapshot.get("frame_id") == frame_id:
             rgb = visual_snapshot.get("rgb")
             ins_map = visual_snapshot.get("ins_map")
+            assigned_ins_map = visual_snapshot.get("assigned_ins_map")
             sam_map = visual_snapshot.get("sam_map")
+            kf_id = visual_snapshot.get("kf_id")
 
         corrected_trajectory = None
         if (
@@ -284,7 +288,9 @@ class OVOSemMap():
                 "c2w": c2w_np,
                 "rgb": rgb,
                 "ins_map": ins_map,
+                "assigned_ins_map": assigned_ins_map,
                 "sam_map": sam_map,
+                "kf_id": kf_id,
                 "corrected_trajectory": corrected_trajectory,
             },
         )
@@ -487,19 +493,8 @@ class OVOSemMap():
         ckpt_dir = ckpt_root / rel
         ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        jump_events = []
         controller = getattr(self.slam_backbone, "jump_controller", None)
-        if controller is not None:
-            for cfg in controller.jump_configs:
-                t_mag = torch.norm(cfg["translation"]).item()
-                R = cfg["rotation_matrix"]
-                angle_deg = (torch.acos(torch.clamp((torch.trace(R) - 1) / 2, -1.0, 1.0)) * 180 / torch.pi).item()
-                jump_events.append({
-                    "kf_index": cfg["kf_index"],
-                    "translation": cfg["translation"].cpu().tolist(),
-                    "translation_magnitude": t_mag,
-                    "rotation_magnitude_deg": angle_deg,
-                })
+        jump_events = controller.fired_events[:] if controller is not None else []
 
         ckpt = {
             "frame_id": frame_id,

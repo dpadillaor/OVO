@@ -29,20 +29,26 @@ if str(PACKAGE_ROOT) not in sys.path:
 # Repo root, used to anchor the default data paths.
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-from core.loaders import (
+from core.agnostic_impact.loaders import (
     load_fusion_decisions,
     parse_fusion_decision,
     load_pre_fusion_scene,
     load_ovo_map,
     reproject_ids_to_gt,
+    load_drift_inputs,
 )
-from core.merge_decision_eval import evaluate_decision, summarize
-from core.fusion_agnostic_impact import (
+from core.agnostic_impact.merge_decision_eval import (
+    evaluate_decision,
+    summarize,
+    epoch_by_obj_id,
+    summarize_by_epoch,
+)
+from core.agnostic_impact.fusion_agnostic_impact import (
     fusion_impact,
     per_instance_stats,
     PRODUCTION_MIN_REGION_SIZE,
 )
-from core.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
+from core.agnostic_impact.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
 
 DEFAULT_MESH_ROOT = REPO_ROOT / "data" / "input" / "Datasets" / "Replica"
 DEFAULT_GT_ROOT = DEFAULT_MESH_ROOT / "instance_gt"
@@ -73,6 +79,31 @@ def _config_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path | None:
     ref = str(ref).replace("{scene}", scene)
     p = pathlib.Path(ref)
     return p if p.is_absolute() else REPO_ROOT / p
+
+
+# Canonical criterion order (mirror ovo/entities/fusion/factory.py build order).
+# overlap / overlap_old are terminal (mutually exclusive in a real chain).
+_CANONICAL_CRITERIA = ("cooccurrence", "centroid", "aabb", "cos_sim", "overlap", "overlap_old")
+
+
+def _fusion_chain(exp_path: pathlib.Path, scene: str, observed_reasons: set[str]) -> list[str] | None:
+    """Ordered criterion chain for the cascade view.
+
+    Prefers the run's explicit ``fusion_criteria`` (config.yaml). Otherwise infers
+    it from the reject reasons actually present in the CSV, ordered canonically --
+    robust to configs that omit ``fusion_method``/``fusion_criteria`` and to the
+    overlap-vs-overlap_old choice (the reason strings are the source of truth).
+    A criterion that never rejected simply won't appear (its cascade row would be
+    a trivial pass-through). None if nothing to build.
+    """
+    cfg_path = exp_path / scene / "config.yaml"
+    if cfg_path.exists():
+        with open(cfg_path) as f:
+            chain = (yaml.safe_load(f) or {}).get("fusion_criteria")
+        if chain:
+            return list(chain)
+    inferred = [c for c in _CANONICAL_CRITERIA if c in observed_reasons]
+    return inferred or None
 
 
 def _resolve_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path:
@@ -213,6 +244,28 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace)
         ),
     }
 
+    # Drift-epoch split: classify every instance (pre/post the jump) from the
+    # checkpoint, then break the verdicts down by the pair's drift bucket.
+    observed_reasons = {d.reason for d in decisions if not d.merged and d.reason}
+    chain = _fusion_chain(exp_path, scene, observed_reasons)
+    if chain is None:
+        print("Warning: no fusion chain resolvable; by_criterion cascade skipped.")
+    try:
+        drift = load_drift_inputs(ckpt_path)
+        epochs = epoch_by_obj_id(drift.created_at_frame, drift.jump_frame)
+        verdicts = summarize(pairs, chain=chain)
+        verdicts["by_epoch"] = summarize_by_epoch(pairs, epochs, chain=chain)
+    except ValueError:
+        print("Warning: drift-epoch classification unavailable (segment_every != map_every).")
+        verdicts = summarize(pairs, chain=chain)
+        verdicts["by_epoch"] = {}
+
+    # Cascade sanity: gate-0 eval below scored total means chain/reason mismatch.
+    cascade = verdicts.get("by_criterion")
+    if cascade and cascade[0]["eval"] < len(pairs):
+        print(f"Warning: cascade gate-0 eval {cascade[0]['eval']} < {len(pairs)} scored "
+              f"pairs; some reject reasons are absent from the chain {chain}.")
+
     summary = {
         "experiment": exp_path.name,
         "scene": scene,
@@ -235,7 +288,7 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace)
                 for o, d in sorted(skipped_objects.items())
             ],
         },
-        "verdicts": summarize(pairs),
+        "verdicts": verdicts,
         "agnostic_impact": agnostic_impact,
     }
 
