@@ -37,6 +37,7 @@ import argparse
 import csv
 import glob
 import json
+import os
 
 import numpy as np
 import open3d as o3d
@@ -45,6 +46,13 @@ import torch
 
 LABELS = {(89, 103): "BUENO", (18, 26): "MALO", (31, 22): "MALO",
           (131, 103): "MALO", (134, 103): "MALO"}
+
+
+def contest_file(run_dir: str, name: str) -> str:
+    """Locate a contest output. New runs write it under ``{scene}/fusion/``;
+    older runs left it at the scene root — prefer the new spot, fall back to old."""
+    new = f"{run_dir}/fusion/{name}"
+    return new if os.path.exists(new) else f"{run_dir}/{name}"
 
 
 def find_default_dir() -> str:
@@ -73,10 +81,10 @@ def main() -> None:
     nrm = mp["normals"].numpy().astype(np.float64)
     ids = mp["ids"].ravel().numpy()
     obj = mp["obj_ids"].ravel().numpy()
-    store = json.load(open(f"{run_dir}/contest.json"))["store"]
+    store = json.load(open(contest_file(run_dir, "contest.json")))["store"]
     id2row = {int(k): i for i, k in enumerate(ids.tolist())}
 
-    rows = list(csv.DictReader(open(f"{run_dir}/contest_verdicts.csv")))
+    rows = list(csv.DictReader(open(contest_file(run_dir, "contest_verdicts.csv"))))
     dom = [(int(r["loser"]), int(r["winner"])) for r in rows
            if r["decision"] == "SPLIT" and "dominancia" in r["reason"]]
 

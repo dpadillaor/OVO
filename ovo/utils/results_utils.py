@@ -252,6 +252,15 @@ _FUSION_DECISION_ZERO = {
 }
 
 
+def fusion_decisions_path(scene_dir: Path) -> Path:
+    """Locate a scene's fusion_decisions.csv. New runs write it under
+    ``{scene}/fusion/``; older runs left it at the scene root — prefer the new
+    location, fall back to the old (returns the new path if neither exists)."""
+    new = scene_dir / 'fusion' / 'fusion_decisions.csv'
+    old = scene_dir / 'fusion_decisions.csv'
+    return new if new.is_file() or not old.is_file() else old
+
+
 def parse_fusion_decisions(file_path: Path) -> dict:
     """Aggregate stats from a fusion_decisions.csv for one scene.
 
@@ -386,9 +395,9 @@ def load_experiments(
 
             # Aggregate fusion decisions across all scene subdirs.
             scene_fusion_stats = [
-                parse_fusion_decisions(d / 'fusion_decisions.csv')
+                parse_fusion_decisions(fusion_decisions_path(d))
                 for d in sorted(folder.iterdir())
-                if d.is_dir() and (d / 'fusion_decisions.csv').is_file()
+                if d.is_dir() and fusion_decisions_path(d).is_file()
             ]
             fusion_agg = (
                 _aggregate_fusion_stats(scene_fusion_stats)
@@ -669,7 +678,7 @@ def load_scene_results(output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                 ap_scene_file = folder / 'replica' / f'instance_ap_{scene_name}.txt'
                 ap = parse_instance_ap_file(ap_scene_file) if ap_scene_file.is_file() else None
 
-                fusion_csv = folder / scene_name / 'fusion_decisions.csv'
+                fusion_csv = fusion_decisions_path(folder / scene_name)
                 fusion = parse_fusion_decisions(fusion_csv)
 
                 scene_row: dict = {

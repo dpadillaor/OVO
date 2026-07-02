@@ -103,7 +103,7 @@ class OVOSemMap():
 
         # Semantic module and SLAM backend.
         self.ovo = OVO(config["semantic"], self.logger, config["data"]["scene_name"], cam_intrinsics, device=self.device)
-        self.ovo.contest.set_output_dir(self.output_path)
+        self.ovo.contest.set_output_dir(self.output_path / "fusion")
         self.slam_backbone = get_slam_backbone(config, self.dataset, cam_intrinsics)
 
         # Optional preprocessing for SAM masks.
@@ -142,8 +142,8 @@ class OVOSemMap():
         }
         io_utils.save_dict_to_ckpt(
             submap_ckpt, "ovo_map.ckpt", directory=self.output_path)    
-        self.ovo.contest.dump(str(self.output_path / "contest.json"))
-        self.ovo.contest.dump_verdicts(str(self.output_path / "contest_verdicts.csv"))
+        self.ovo.contest.dump(str(self.output_path / "fusion" / "contest.json"))
+        self.ovo.contest.dump_verdicts(str(self.output_path / "fusion" / "contest_verdicts.csv"))
         if self.config["slam"].get("save_estimated_cam", False):
             c2w = self.slam_backbone.get_cam_dict()
             with open(self.output_path / "estimated_c2w.npy", "wb") as f:

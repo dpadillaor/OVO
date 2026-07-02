@@ -366,8 +366,8 @@ semantic:
     reeval_frontier: true
 ```
 
-Verdicts are written to `<scene>/contest_verdicts.csv` and the raw per-point store
-to `<scene>/contest.json`. Analyze with the `contest-data` skill
+Verdicts are written to `<scene>/fusion/contest_verdicts.csv` and the raw per-point store
+to `<scene>/fusion/contest.json`. Analyze with the `contest-data` skill
 (`Study_seg/contest_csv.py`, `contest_json.py`). Use `label` to encode the contest
 config (e.g. `contest-only-reeval`) — the name token only encodes `fusion_method`.
 

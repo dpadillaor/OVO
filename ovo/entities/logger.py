@@ -27,6 +27,7 @@ class Logger:
         self.output_path = Path(output_path)
         (self.output_path / "logger").mkdir(exist_ok=True, parents=True)
         (self.output_path / "logger" / "segment_vis").mkdir(exist_ok=True, parents=True)
+        (self.output_path / "fusion").mkdir(exist_ok=True, parents=True)
         stat_keys = [
             "frame_id", "t_sam", "t_obj", "n_obj", "n_matches", "t_up", "t_seg", "t_clip",
             "avg_fps", "ram", "vram", "spf", "total_time",
@@ -39,7 +40,7 @@ class Logger:
 
     @property
     def _fusion_log_path(self) -> Path:
-        return self.output_path / "fusion_decisions.csv"
+        return self.output_path / "fusion" / "fusion_decisions.csv"
 
     def _init_fusion_log(self) -> None:
         with open(self._fusion_log_path, "w", newline="") as f:

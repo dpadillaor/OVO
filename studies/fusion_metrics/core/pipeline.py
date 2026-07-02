@@ -122,13 +122,20 @@ def discover_scenes(exp_path: pathlib.Path) -> list[str]:
     )
 
 
+def fusion_decisions_csv(scene_dir: pathlib.Path) -> pathlib.Path:
+    """The run's fusion_decisions.csv. New runs write it under ``{scene}/fusion/``;
+    older runs left it at the scene root — prefer the new spot, fall back to the old."""
+    new = scene_dir / "fusion" / "fusion_decisions.csv"
+    return new if new.exists() else scene_dir / "fusion_decisions.csv"
+
+
 def check_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None,
                 mesh_root: str | pathlib.Path, gt_root: str | pathlib.Path) -> str | None:
     """Return ``None`` if the scene has everything to evaluate, else why not."""
     scene_dir = exp_path / scene
     if not scene_dir.is_dir():
         return "scene dir not found"
-    if not (scene_dir / "fusion_decisions.csv").exists():
+    if not fusion_decisions_csv(scene_dir).exists():
         return "no fusion_decisions.csv"
     if not (scene_dir / "ovo_map.ckpt").exists():
         return "no ovo_map.ckpt (post-fusion map)"
@@ -153,7 +160,7 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
                    gt_root: str | pathlib.Path = DEFAULT_GT_ROOT,
                    out_dir: str | pathlib.Path | None = None) -> int:
     scene_dir = exp_path / scene
-    csv_path = scene_dir / "fusion_decisions.csv"
+    csv_path = fusion_decisions_csv(scene_dir)
     ckpt_path = pathlib.Path(ckpt) if ckpt else _resolve_ckpt(exp_path, scene)
     out_dir = pathlib.Path(out_dir) if out_dir else scene_dir / "fusion"
     out_dir.mkdir(parents=True, exist_ok=True)

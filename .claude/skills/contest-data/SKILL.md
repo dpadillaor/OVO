@@ -12,7 +12,8 @@ allowed-tools:
 
 Two stdlib-only tools live in `Study_seg/`. No deps, run with plain `python3`.
 Each contest experiment writes both files per scene under
-`data/output/Replica/<EXP_ID>/<scene>/`:
+`data/output/Replica/<EXP_ID>/<scene>/fusion/` (older runs: the scene root — the
+tools take an explicit path, so point them at wherever the file actually is):
 
 | File | What it is | Tool |
 |---|---|---|
@@ -103,6 +104,6 @@ python Study_seg/seam_normals_viz.py [RUN_OFFICE_DIR] [--kw 15] [--dmax 0.05] [-
 ## Typical workflow
 
 1. Run experiment (skill `run-experiment`), note the new `EXP_ID`.
-2. `contest_csv.py compare <baseline>/contest_verdicts.csv <new>/contest_verdicts.csv` → see what flipped.
-3. For suspicious flips: `contest_csv.py pair <new>/contest_verdicts.csv <ids>` → read features + reason.
-4. To ground a decision in raw data: `contest_json.py point <new>/contest.json <point_id>` or `winner <ins_id>`.
+2. `contest_csv.py compare <baseline>/fusion/contest_verdicts.csv <new>/fusion/contest_verdicts.csv` → see what flipped.
+3. For suspicious flips: `contest_csv.py pair <new>/fusion/contest_verdicts.csv <ids>` → read features + reason.
+4. To ground a decision in raw data: `contest_json.py point <new>/fusion/contest.json <point_id>` or `winner <ins_id>`.
