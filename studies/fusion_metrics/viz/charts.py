@@ -19,6 +19,177 @@ C_WORSENED = "#c0392b"
 C_UNCHANGED = "#95a5a6"
 
 
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+# Sankey semantic palette — a traffic-light ramp matching the top-to-bottom band
+# order TP→FP→FN→TN: green = go (correct merge), red = stop (correct reject), and
+# the two errors sit as amber caution between them. Correct outcomes own the vivid
+# extremes; mistakes are the softer transition at the split seam. Nodes stay neutral.
+Q_TP, Q_FP, Q_FN, Q_TN = "#4caf7d", "#ef8e3b", "#f2c94c", "#d1495b"
+NODE_SLATE = "#3d4b5c"
+REJECT_NODE = "#a8384c"  # deeper garnet of the TN red — ties the sinks to "reject"
+
+
+def gate_sankey(by_criterion: list[dict], garnet_reject_nodes: bool = True) -> go.Figure:
+    """Cascade funnel per gate: geometry = pass (up) vs reject (down), colour = TP/FP/FN/TN correctness.
+
+    garnet_reject_nodes: reject sink nodes in garnet red (True) or neutral slate (False).
+    """
+    if not by_criterion:
+        return go.Figure()
+    reject_node = REJECT_NODE if garnet_reject_nodes else NODE_SLATE
+
+    gates = by_criterion  # already in cascade order (eval[i] == pass[i-1])
+    n = len(gates)
+    eps = 1e-9  # nudge fixed positions off the 0/1 edges (plotly clamps exact edges)
+
+    # Depths 0..n map into [X_MIN, X_MAX] (not full [0,1]) so neither edge column
+    # touches the border: centroid gets breathing room on the left, and the result
+    # column keeps its reject label on the right instead of plotly flipping it.
+    X_MIN, X_MAX = 0.03, 0.82
+
+    def depth_x(d: int) -> float:
+        return X_MIN + d / n * (X_MAX - X_MIN)
+
+    total = gates[0].get("eval", 0) or 1  # full inflow; scales node heights
+    labels, node_colors, node_x, node_y = [], [], [], []
+
+    def add(label: str, color: str, x: float, y: float) -> int:
+        labels.append(label); node_colors.append(color)
+        node_x.append(min(max(x, eps), 1 - eps))
+        node_y.append(min(max(y, eps), 1 - eps))
+        return len(labels) - 1
+
+    # depth d in [0, n]. gate_i sits at depth i; the two outputs of gate_i land at
+    # depth i+1: survivor (next gate / accept) on top, its reject sibling stacked
+    # right below — same column, touching, heights ∝ volume, so the split reads
+    # as one incoming flow cleanly bisected. y is each node's centre (0 = top).
+    def col_y(above: int, height: int) -> float:
+        return (above + height / 2) / total
+
+    # gate/accept nodes stay unlabelled — the column header carries criterion +
+    # eval total; only reject sinks label their leaked count. All reject sinks
+    # hang from one waterline (baseline = first survivor band) instead of hugging
+    # their shrinking survivor, so late gates don't crowd the top.
+    baseline = gates[0].get("pass", 0)
+    # Node labels left empty; reject counts are placed as annotations below so we
+    # control which side they sit on (plotly auto-flips sink labels unpredictably).
+    gate_idx, reject_idx = [], []
+    for i, g in enumerate(gates):
+        gate_idx.append(add("", NODE_SLATE, depth_x(i), col_y(0, g.get("eval", 0))))
+        reject_idx.append(add("", reject_node,
+                              depth_x(i + 1), col_y(baseline, g.get("reject", 0))))
+    accept = add("", NODE_SLATE, depth_x(n), col_y(0, gates[-1].get("pass", 0)))
+
+    # Each flow splits by confusion quadrant. Pass = TP (right merge) + FP (wrong
+    # merge that slipped through); both go to the next gate. Reject = TN (right
+    # reject) + FN (missed merge); both drop to the reject sink. Order good-first
+    # so correct outcomes hug the survivor rail, errors band toward the split seam.
+    src, tgt, val, link_colors, link_kind = [], [], [], [], []
+
+    def link(s: int, t: int, v: int, color: str, kind: str) -> None:
+        src.append(s); tgt.append(t); val.append(v)
+        link_colors.append(color); link_kind.append(kind)
+
+    for i, g in enumerate(gates):
+        pass_tgt = gate_idx[i + 1] if i + 1 < n else accept
+        link(gate_idx[i], pass_tgt, g.get("TP", 0), _hex_to_rgba(Q_TP, 0.65), "TP")
+        link(gate_idx[i], pass_tgt, g.get("FP", 0), _hex_to_rgba(Q_FP, 0.65), "FP")
+        link(gate_idx[i], reject_idx[i], g.get("FN", 0), _hex_to_rgba(Q_FN, 0.7), "FN")
+        link(gate_idx[i], reject_idx[i], g.get("TN", 0), _hex_to_rgba(Q_TN, 0.55), "TN")
+
+    assert len(src) == len(tgt) == len(val), "sankey link arrays must match"
+
+    def pair(la: str, va: int, ca: str, lb: str, vb: int, cb: str) -> str:
+        return (f"<span style='color:{ca}'>{la} {va:,}</span> · "
+                f"<span style='color:{cb}'>{lb} {vb:,}</span>")
+
+    # Headers carry only column identity (name + eval). The confusion counts live
+    # at their terminal node instead: each reject sink is FN + TN, the final merges
+    # are TP + FP — a complete, non-duplicated split with no header clutter.
+    headers = [(depth_x(i), f"<b>{g['criterion']}</b><br>{g.get('eval', 0):,} eval")
+               for i, g in enumerate(gates)]
+    headers.append((depth_x(n), "<b>Result</b><br>&nbsp;"))  # blank eval line to align names
+    annotations = [
+        dict(x=x, y=1.03, xref="paper", yref="paper", text=text, showarrow=False,
+             xanchor="center", yanchor="bottom", align="center",
+             font=dict(size=11, color="#555"))
+        for x, text in headers
+    ]
+
+    # Terminal counts placed by hand right of each node. Sankey node y is 0 = top,
+    # so paper y (0 = bottom) is 1 - node_y; x nudged past the bar. A reject sink is
+    # FN + TN, the accept node is TP + FP — shown as a sub-line under the total.
+    def terminal(idx: int, total_txt: str, color: str, comp: str) -> dict:
+        return dict(
+            x=node_x[idx] + 0.025, y=1 - node_y[idx], xref="paper", yref="paper",
+            text=f"<b>{total_txt}</b><br><span style='font-size:9px'>{comp}</span>",
+            showarrow=False, xanchor="left", yanchor="middle", align="center",
+            font=dict(size=11, color=color), bgcolor="rgba(255,255,255,0.75)",
+            borderpad=1)
+
+    for i, g in enumerate(gates):
+        comp = pair("FN", g.get("FN", 0), Q_FN, "TN", g.get("TN", 0), Q_TN)
+        annotations.append(terminal(reject_idx[i], f"−{g.get('reject', 0):,}", "#333", comp))
+    last = gates[-1]
+    comp = pair("TP", last.get("TP", 0), Q_TP, "FP", last.get("FP", 0), Q_FP)
+    annotations.append(terminal(accept, f"{last.get('pass', 0):,} merges", "#2e8b57", comp))
+
+    # Pass composition (TP + FP) for the intermediate transitions, floated on the
+    # pass band in each gap — the final gate's pass already shows at the accept node.
+    for i in range(n - 1):
+        g = gates[i]
+        y_pass = 1 - g.get("pass", 0) / (2 * total)  # centre of the pass band
+        annotations.append(dict(
+            x=(depth_x(i) + depth_x(i + 1)) / 2, y=y_pass, xref="paper", yref="paper",
+            text=f"<span style='font-size:9px'>"
+                 f"{pair('TP', g.get('TP', 0), Q_TP, 'FP', g.get('FP', 0), Q_FP)}</span>",
+            showarrow=False, xanchor="center", yanchor="middle",
+            bgcolor="rgba(255,255,255,0.75)", borderpad=1))
+
+    fig = go.Figure(go.Sankey(
+        arrangement="fixed",
+        valueformat=",.0f",
+        node=dict(label=labels, color=node_colors, x=node_x, y=node_y,
+                  pad=2, thickness=18, line=dict(color="#888", width=0.5),
+                  hovertemplate="%{label}<extra></extra>"),
+        link=dict(source=src, target=tgt, value=val, color=link_colors,
+                  customdata=link_kind,
+                  hovertemplate="%{source.label} → %{target.label}<br>"
+                                "%{customdata}: %{value}<extra></extra>"),
+    ))
+
+    # Sankey links don't populate a legend, so add dummy no-data scatter traces —
+    # one per quadrant — purely to render a real, native, positionable legend.
+    legend = [(Q_TP, "TP — correct merge"), (Q_FP, "FP — wrong merge"),
+              (Q_FN, "FN — missed merge"), (Q_TN, "TN — correct reject")]
+    for color, name in legend:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="markers", name=name, showlegend=True,
+            marker=dict(size=12, color=color, symbol="square")))
+
+    fig.update_layout(
+        title=dict(text="<b>Fusion gate cascade</b>", x=0.5, xanchor="center",
+                   y=0.975, yanchor="top", font=dict(size=15)),
+        font=dict(family="Helvetica, Arial, sans-serif", size=12, color="#333"),
+        width=820, height=560, margin=dict(t=110, b=50, l=40, r=30),
+        shapes=[dict(type="line", xref="paper", yref="paper", x0=0.02, x1=0.98,
+                     y0=1.18, y1=1.18, line=dict(color="#ccc", width=1))],
+        annotations=annotations,
+        xaxis=dict(visible=False, range=[0, 1]),
+        yaxis=dict(visible=False, range=[0, 1]),
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="white",
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.04, yanchor="top",
+                    font=dict(size=11), bgcolor="rgba(0,0,0,0)", borderwidth=0,
+                    itemsizing="constant"),
+    )
+    return fig
+
+
 def confusion_heatmap(data: SceneFusionData) -> go.Figure:
     c = data.counts
     tp, fp, fn, tn = c.get("TP", 0), c.get("FP", 0), c.get("FN", 0), c.get("TN", 0)

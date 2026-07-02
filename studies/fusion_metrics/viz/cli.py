@@ -14,6 +14,7 @@ import sys
 
 from .loader import OUTPUT_ROOT, load_scene, load_experiment, load_experiments
 from .dashboards import scene_dashboard, experiment_summary, compare_dashboard
+from .charts import gate_sankey
 
 
 def _resolve_exp_path(exp_id: str) -> pathlib.Path:
@@ -44,6 +45,21 @@ def cmd_scene(args: argparse.Namespace) -> None:
     out = args.out or str(exp_path / "_viz" / f"{args.scene}_dashboard.html")
     pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(out)
+    print(f"Saved: {out}")
+
+
+def cmd_sankey(args: argparse.Namespace) -> None:
+    exp_path = _resolve_exp_path(args.exp)
+    data = load_scene(exp_path, args.scene)
+    fig = gate_sankey(data.by_criterion)
+    out = pathlib.Path(
+        args.out or exp_path / args.scene / "fusion" / "figures" / "fusion_gate_cascade.svg"
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if out.suffix == ".html":
+        fig.write_html(out)
+    else:
+        fig.write_image(out)  # SVG/PNG/PDF via kaleido
     print(f"Saved: {out}")
 
 
@@ -80,6 +96,11 @@ def main() -> None:
     p_scene.add_argument("--mode", default="objects", choices=["objects", "all"],
                          help="AP evaluation mode (default: objects)")
 
+    p_sankey = sub.add_parser("sankey", help="Single-scene gate cascade Sankey")
+    p_sankey.add_argument("--exp", required=True, help="Experiment ID or path")
+    p_sankey.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
+    p_sankey.add_argument("--out", help="Output HTML path")
+
     p_exp = sub.add_parser("exp", help="Experiment summary (all scenes)")
     p_exp.add_argument("--exp", required=True, help="Experiment ID or path")
     p_exp.add_argument("--out", help="Output HTML path")
@@ -93,6 +114,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "scene":
         cmd_scene(args)
+    elif args.command == "sankey":
+        cmd_sankey(args)
     elif args.command == "exp":
         cmd_exp(args)
     elif args.command == "compare":

@@ -1,35 +1,23 @@
-"""Batch-evaluate a run's fusion decisions against the GT.
+"""Evaluation pipeline: score a run's real fusion merge/split decisions against GT.
 
-Reads ``{exp_path}/{scene}/fusion_decisions.csv`` (the machine's merge/split
-calls) and the matching pre-fusion checkpoint (the instances as fusion saw
-them), scores every pair as TP/FP/FN/TN, and writes two outputs next to the
-CSV: ``fusion_decisions_eval.csv`` (rows + verdict) and
-``fusion_eval_summary.json`` (counts, rates, by-group breakdown).
+Reads ``{exp_path}/{scene}/fusion_decisions.csv`` (the machine's calls) and the
+matching pre-fusion checkpoint (the instances as fusion saw them), scores every
+pair as TP/FP/FN/TN, and writes three artifacts to ``{exp_path}/{scene}/fusion/``:
+``fusion_decisions_eval.csv`` (rows + verdict), ``fusion_eval_summary.json``
+(counts, rates, by-group breakdown) and ``fusion_instance_stats.csv``.
 
-Example:
-    python -m scripts.eval_fusion_decisions \
-        --exp_path data/output/Replica/20260614_GT_CLIP_opt-aggressive-10_c6050 \
-        --scene office0
+Pure orchestration — no argparse. The CLI (``python -m cli eval``) is the entry.
 """
 from __future__ import annotations
 
 import sys
 import json
 import pathlib
-import argparse
 from collections import defaultdict
 
 import yaml
 
-# Make the package root (studies/fusion_metrics) importable as core.*
-PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[1]
-if str(PACKAGE_ROOT) not in sys.path:
-    sys.path.insert(0, str(PACKAGE_ROOT))
-
-# Repo root, used to anchor the default data paths.
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-
-from core.agnostic_impact.loaders import (
+from .agnostic_impact.loaders import (
     load_fusion_decisions,
     parse_fusion_decision,
     load_pre_fusion_scene,
@@ -37,19 +25,21 @@ from core.agnostic_impact.loaders import (
     reproject_ids_to_gt,
     load_drift_inputs,
 )
-from core.agnostic_impact.merge_decision_eval import (
+from .agnostic_impact.merge_decision_eval import (
     evaluate_decision,
     summarize,
     epoch_by_obj_id,
     summarize_by_epoch,
 )
-from core.agnostic_impact.fusion_agnostic_impact import (
+from .agnostic_impact.fusion_agnostic_impact import (
     fusion_impact,
     per_instance_stats,
     PRODUCTION_MIN_REGION_SIZE,
 )
-from core.agnostic_impact.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
+from .agnostic_impact.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
 
+# Repo root (studies/fusion_metrics/core/pipeline.py -> OVO), anchors default data paths.
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_MESH_ROOT = REPO_ROOT / "data" / "input" / "Datasets" / "Replica"
 DEFAULT_GT_ROOT = DEFAULT_MESH_ROOT / "instance_gt"
 
@@ -119,29 +109,12 @@ def _resolve_ckpt(exp_path: pathlib.Path, scene: str) -> pathlib.Path:
     tried = f"\n  own:    {own}" + (f"\n  config: {borrowed}" if borrowed else "")
     raise FileNotFoundError(
         f"No pre-fusion checkpoint for '{scene}'. Tried:{tried}\n"
-        f"Pass --ckpt explicitly, or check the run saved one "
+        f"Pass ckpt explicitly, or check the run saved one "
         f"(jump_drift_enabled AND save_pre_fusion_checkpoint)."
     )
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--exp_path", type=str, required=True,
-                        help="Run dir containing {scene}/fusion_decisions.csv")
-    parser.add_argument("--scene", type=str, default=None,
-                        help="Single scene. Omit to scan & evaluate every scene in the run.")
-    parser.add_argument("--ckpt", type=str, default=None,
-                        help="pre_fusion.ckpt path (default: mirror under data/checkpoints)")
-    parser.add_argument("--mesh_root", type=str, default=str(DEFAULT_MESH_ROOT),
-                        help="Dir holding {scene}_mesh.ply")
-    parser.add_argument("--gt_root", type=str, default=str(DEFAULT_GT_ROOT),
-                        help="Dir holding instance ground-truth {scene}.txt")
-    parser.add_argument("--out_dir", type=str, default=None,
-                        help="Where to write outputs (default: next to the CSV)")
-    return parser.parse_args(argv)
-
-
-def _discover_scenes(exp_path: pathlib.Path) -> list[str]:
+def discover_scenes(exp_path: pathlib.Path) -> list[str]:
     """Scene subdirs = those holding a ``config.yaml`` (utility dirs don't)."""
     return sorted(
         d.name for d in exp_path.iterdir()
@@ -149,7 +122,8 @@ def _discover_scenes(exp_path: pathlib.Path) -> list[str]:
     )
 
 
-def _check_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace) -> str | None:
+def check_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None,
+                mesh_root: str | pathlib.Path, gt_root: str | pathlib.Path) -> str | None:
     """Return ``None`` if the scene has everything to evaluate, else why not."""
     scene_dir = exp_path / scene
     if not scene_dir.is_dir():
@@ -158,34 +132,37 @@ def _check_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace) -
         return "no fusion_decisions.csv"
     if not (scene_dir / "ovo_map.ckpt").exists():
         return "no ovo_map.ckpt (post-fusion map)"
-    if args.ckpt:
-        ckpt = pathlib.Path(args.ckpt)
+    if ckpt:
+        ckpt_path = pathlib.Path(ckpt)
     else:
         try:
-            ckpt = _resolve_ckpt(exp_path, scene)
+            ckpt_path = _resolve_ckpt(exp_path, scene)
         except FileNotFoundError:
             return "no pre_fusion.ckpt (own or config)"
-    if not ckpt.exists():
-        return f"checkpoint missing: {ckpt}"
-    if not (pathlib.Path(args.mesh_root) / f"{scene}_mesh.ply").exists():
+    if not ckpt_path.exists():
+        return f"checkpoint missing: {ckpt_path}"
+    if not (pathlib.Path(mesh_root) / f"{scene}_mesh.ply").exists():
         return f"no GT mesh: {scene}_mesh.ply"
-    if not (pathlib.Path(args.gt_root) / f"{scene}.txt").exists():
+    if not (pathlib.Path(gt_root) / f"{scene}.txt").exists():
         return f"no GT labels: {scene}.txt"
     return None
 
 
-def evaluate_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace) -> int:
+def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
+                   mesh_root: str | pathlib.Path = DEFAULT_MESH_ROOT,
+                   gt_root: str | pathlib.Path = DEFAULT_GT_ROOT,
+                   out_dir: str | pathlib.Path | None = None) -> int:
     scene_dir = exp_path / scene
     csv_path = scene_dir / "fusion_decisions.csv"
-    ckpt_path = pathlib.Path(args.ckpt) if args.ckpt else _resolve_ckpt(exp_path, scene)
-    out_dir = pathlib.Path(args.out_dir) if args.out_dir else scene_dir
+    ckpt_path = pathlib.Path(ckpt) if ckpt else _resolve_ckpt(exp_path, scene)
+    out_dir = pathlib.Path(out_dir) if out_dir else scene_dir / "fusion"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows, frame_id = load_fusion_decisions(csv_path)
     print(f"Loaded {len(rows)} fusion decisions (frame {frame_id}).")
 
     scene_data, col_obj_ids, n_pre = load_pre_fusion_scene(
-        ckpt_path, scene, mesh_root=args.mesh_root, gt_root=args.gt_root
+        ckpt_path, scene, mesh_root=str(mesh_root), gt_root=str(gt_root)
     )
     print(f"{n_pre} pre-fusion instances "
           f"({scene_data.n_pred_instances} projected onto the GT mesh).")
@@ -338,17 +315,25 @@ def _write_index(
     return index_path
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    exp_path = pathlib.Path(args.exp_path).resolve()
+def evaluate_experiment(exp_path: str | pathlib.Path, scene: str | None = None,
+                        ckpt: str | None = None,
+                        mesh_root: str | pathlib.Path = DEFAULT_MESH_ROOT,
+                        gt_root: str | pathlib.Path = DEFAULT_GT_ROOT,
+                        out_dir: str | pathlib.Path | None = None) -> int:
+    """Evaluate one scene (``scene`` given) or scan & evaluate every ready scene.
+
+    Returns 0 when everything requested was evaluated, 1 otherwise (a batch driver
+    can branch on it; the per-scene detail lives in ``fusion_eval_index.json``).
+    """
+    exp_path = pathlib.Path(exp_path).resolve()
     if not exp_path.is_dir():
         raise FileNotFoundError(f"Experiment dir not found: {exp_path}")
 
-    # One explicit scene -> just run it. No --scene -> scan the whole experiment.
-    if args.scene:
-        return evaluate_scene(exp_path, args.scene, args)
+    # One explicit scene -> just run it. No scene -> scan the whole experiment.
+    if scene:
+        return evaluate_scene(exp_path, scene, ckpt, mesh_root, gt_root, out_dir)
 
-    scenes = _discover_scenes(exp_path)
+    scenes = discover_scenes(exp_path)
     if not scenes:
         print(f"No scenes (dirs with config.yaml) found in {exp_path}")
         _write_index(exp_path, [], {}, {})
@@ -358,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     ready: list[str] = []
     skipped: dict[str, str] = {}
     for s in scenes:
-        reason = _check_scene(exp_path, s, args)
+        reason = check_scene(exp_path, s, ckpt, mesh_root, gt_root)
         if reason is None:
             ready.append(s)
             print(f"  [OK]   {s}")
@@ -373,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
         for i, s in enumerate(ready, 1):
             print(f"\n=== [{i}/{len(ready)}] {s} ===")
             try:
-                evaluate_scene(exp_path, s, args)
+                evaluate_scene(exp_path, s, ckpt, mesh_root, gt_root, out_dir)
                 evaluated.append(s)
             except Exception as e:  # one bad scene must not abort the batch
                 failed[s] = f"{type(e).__name__}: {e}"
@@ -386,14 +371,4 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  skipped: {', '.join(f'{s} ({r})' for s, r in skipped.items())}")
     if failed:
         print(f"  failed:  {', '.join(failed)}")
-    # Non-zero whenever not every discovered scene was evaluated -> a batch driver
-    # (or agent) can branch on it; the index JSON has the per-scene detail.
     return 0 if len(evaluated) == len(scenes) else 1
-
-
-if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)

@@ -68,13 +68,13 @@ def discover_scenes(exp_path: str | pathlib.Path) -> list[str]:
         raise FileNotFoundError(f"Experiment directory not found: {p}")
     scenes = []
     for entry in sorted(p.iterdir()):
-        if entry.is_dir() and (entry / "fusion_eval_summary.json").exists():
+        if entry.is_dir() and (entry / "fusion" / "fusion_eval_summary.json").exists():
             scenes.append(entry.name)
     return scenes
 
 
 def load_scene(exp_path: str | pathlib.Path, scene: str) -> SceneFusionData:
-    base = pathlib.Path(exp_path) / scene
+    base = pathlib.Path(exp_path) / scene / "fusion"
 
     summary_path = base / "fusion_eval_summary.json"
     stats_path = base / "fusion_instance_stats.csv"

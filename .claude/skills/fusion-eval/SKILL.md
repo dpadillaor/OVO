@@ -13,14 +13,20 @@ allowed-tools:
 The module `studies/fusion_metrics/` grades a run's **real** fusion merge/split
 decisions against GT. Run it with the `ovo2` env:
 
+One CLI — `python -m cli {eval,report,timing}` — a thin argparse layer over the
+`core` library (`core/pipeline.py` does the eval orchestration):
+
 ```bash
 cd studies/fusion_metrics
 # one scene:
-/home/padidavid/anaconda3/envs/ovo2/bin/python -m scripts.eval_fusion_decisions \
-  --exp_path data/output/Replica/<EXP_ID> --scene office0     # writes 3 files next to the CSV
+/home/padidavid/anaconda3/envs/ovo2/bin/python -m cli eval \
+  --exp_path data/output/Replica/<EXP_ID> --scene office0     # writes 3 files to {scene}/fusion/
 # whole run (omit --scene): discover every scene, report [OK]/[SKIP]+reason, run the ready ones:
-/home/padidavid/anaconda3/envs/ovo2/bin/python -m scripts.eval_fusion_decisions \
+/home/padidavid/anaconda3/envs/ovo2/bin/python -m cli eval \
   --exp_path data/output/Replica/<EXP_ID>
+# after eval: per-criterion timing + verdicts / timing only:
+/home/padidavid/anaconda3/envs/ovo2/bin/python -m cli report --exp_path <run> --scene office0
+/home/padidavid/anaconda3/envs/ovo2/bin/python -m cli timing --exp_path <run> --scene office0
 ```
 Omitting `--scene` scans the experiment: scenes = subdirs holding a `config.yaml`;
 each is checked for all inputs (fusion_decisions.csv, resolvable pre_fusion.ckpt,
@@ -39,7 +45,7 @@ Interactive debugger (GUI, run yourself): `python -m scripts.debug_merge_decisio
 instances), `gt <id>` (matched green + spurious red shades), `show <obj_id>`
 (raw OVO points on GT — see drift), `missing` (instances lost in projection).
 
-## The 3 artifacts (all under `data/output/Replica/<EXP_ID>/<scene>/`)
+## The 3 artifacts (all under `data/output/Replica/<EXP_ID>/<scene>/fusion/`)
 
 | File | Grain | What it answers |
 |---|---|---|
@@ -93,7 +99,7 @@ Recipe — find the merge(s) that hurt a worsened instance (its `matched_obj_id`
 ```bash
 D=data/output/Replica/<EXP_ID>/<scene>
 # ACCEPTED merges touching obj 7 (the sofa's matched prediction)
-awk -F, 'NR>1 && $2=="ACCEPTED" && ($3==7||$4==7)' $D/fusion_decisions_eval.csv
+awk -F, 'NR>1 && $2=="ACCEPTED" && ($3==7||$4==7)' $D/fusion/fusion_decisions_eval.csv
 # -> if same_object=False / verdict=FP, that merge over-merged a different object onto it
 ```
 The partner obj_id usually appears in **another** instance's `spurious_obj_ids`

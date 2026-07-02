@@ -13,6 +13,7 @@ from .loader import (
 from .charts import (
     confusion_heatmap,
     gate_waterfall,
+    gate_sankey,
     ap_curves,
     instance_composition,
     instance_waterfall,
