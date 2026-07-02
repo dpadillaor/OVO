@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contest — Guía completa: qué es, cómo funciona, tiempos y camino a real-time</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --card2:#1e222b; --ink:#e6e9ef; --mut:#9aa4b2;
+    --line:#2a2f3a; --acc:#5aa9ff; --warn:#ffb454; --bad:#ff6b6b; --good:#5ad19a;
+    --merge:#2f9e6f; --split:#d98a2b; --noact:#5b6472; --defer:#5aa9ff;
+    --bar:#3d7dd8; --bar2:#8a63d2; --bar3:#2f9e6f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15.5px/1.68 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 90px}
+  h1{font-size:29px;margin:0 0 6px;letter-spacing:-.02em;line-height:1.2}
+  h2{font-size:22px;margin:52px 0 16px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;margin:30px 0 10px;color:var(--acc)}
+  h4{font-size:15px;margin:20px 0 6px;color:var(--ink)}
+  p{margin:11px 0}
+  .lead{font-size:16.5px;color:var(--mut)}
+  .sub{color:var(--mut)}
+  .toc{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:22px 0;font-size:14px;column-count:2;column-gap:28px}
+  .toc a{color:var(--acc);text-decoration:none;display:block;padding:3px 0}
+  .toc a:hover{text-decoration:underline}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px}
+  .chip{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12.5px;color:var(--mut)}
+  .chip b{color:var(--ink);font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:16px 0}
+  .callout{border-left:3px solid var(--warn);background:var(--card2);border-radius:8px;padding:14px 18px;margin:18px 0}
+  .callout.good{border-left-color:var(--good)}
+  .callout.bad{border-left-color:var(--bad)}
+  .callout.info{border-left-color:var(--acc)}
+  .callout b{color:var(--ink)}
+  .ex{border:1px dashed var(--line);border-radius:10px;padding:14px 18px;margin:16px 0;background:rgba(90,169,255,.04)}
+  .ex .tag{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);
+           border:1px solid rgba(90,169,255,.35);border-radius:6px;padding:1px 8px;margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  code{background:var(--card2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .bars{margin:14px 0}
+  .row{display:flex;align-items:center;gap:12px;margin:7px 0}
+  .row .lbl{width:180px;flex:none;font-size:13.5px;color:var(--mut)}
+  .row .track{flex:1;background:var(--card2);border-radius:6px;height:22px;overflow:hidden}
+  .row .fill{height:100%;border-radius:6px 0 0 6px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:12px;color:#fff;white-space:nowrap;min-width:2px}
+  .row .val{width:130px;flex:none;text-align:right;font-variant-numeric:tabular-nums;font-size:13.5px}
+  .f1{background:var(--bar)} .f2{background:var(--bar2)} .f3{background:var(--bar3)}
+  .imp-hi{color:var(--good);font-weight:600}.imp-md{color:var(--warn);font-weight:600}.imp-lo{color:var(--mut)}
+  .rk-lo{color:var(--good)}.rk-md{color:var(--warn)}.rk-hi{color:var(--bad)}
+  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line)}
+  .pill.hot{background:rgba(255,107,107,.12);color:var(--bad);border-color:rgba(255,107,107,.3)}
+  .pill.cold{background:rgba(90,209,154,.1);color:var(--good);border-color:rgba(90,209,154,.3)}
+  .pill.warm{background:rgba(255,180,84,.1);color:var(--warn);border-color:rgba(255,180,84,.3)}
+  .foot{color:var(--mut);font-size:13px;margin-top:44px;border-top:1px solid var(--line);padding-top:16px}
+  ul,ol{margin:9px 0;padding-left:24px} li{margin:6px 0}
+  .flow{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+        background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;white-space:pre;color:var(--mut);line-height:1.55}
+  .flow b{color:var(--acc)} .flow .c{color:var(--good)}
+  .figwrap{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:18px 0;overflow-x:auto}
+  .figcap{color:var(--mut);font-size:13px;margin-top:8px;text-align:center}
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:10px;font-size:12.5px;color:var(--mut)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+  kbd{font-family:ui-monospace,monospace;font-size:12px;background:#000;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Contest — Guía completa</h1>
+  <p class="lead">Qué es, qué problema resuelve, cómo funciona por dentro (con ejemplos y diagramas),
+     dónde se va el tiempo, y qué haría falta para ejecutarlo en tiempo real.</p>
+
+  <div class="meta">
+    <span class="chip">Módulo: <b>ovo/entities/contest/</b></span>
+    <span class="chip">Perfilado: <b>office0 · GT · only+split</b></span>
+    <span class="chip">Nube: <b>2.02M pts</b></span>
+    <span class="chip">Fecha: <b>2026-07-02</b></span>
+  </div>
+
+  <div class="toc">
+    <a href="#0">0 · Cómo leer esta guía</a>
+    <a href="#1">1 · Qué es el contest y qué problema resuelve</a>
+    <a href="#2">2 · Conceptos y glosario</a>
+    <a href="#3">3 · Anatomía: las piezas y su flujo</a>
+    <a href="#4">4 · El discriminador (árbol de decisión)</a>
+    <a href="#5">5 · La geometría de costura (seam / color)</a>
+    <a href="#6">6 · Cómo se midió (y el matiz GPU)</a>
+    <a href="#7">7 · Resultados de tiempo</a>
+    <a href="#8">8 · ¿Está bien diseñado?</a>
+    <a href="#9">9 · Rediseño para tiempo real</a>
+    <a href="#10">10 · Catálogo de optimizaciones</a>
+    <a href="#11">11 · Ubicaciones en el código</a>
+    <a href="#12">12 · Conclusión</a>
+  </div>
+
+  <!-- ===================================================== -->
+  <a id="0"></a>
+  <h2>0 · Cómo leer esta guía</h2>
+  <p>Esta es una guía de referencia, pensada para leerse con calma antes de decidir cómo integrar el contest en
+     tiempo real. Estructura en tres bloques:</p>
+  <ul>
+    <li><b>Qué y por qué</b> (§1–§5): qué resuelve el contest y cómo funciona cada pieza, con ejemplos concretos
+        y diagramas. Si nunca miraste el módulo, empieza aquí.</li>
+    <li><b>Cuánto cuesta</b> (§6–§8): cómo se midió el tiempo (con el cuidado que exige la GPU), los resultados,
+        y una evaluación honesta del diseño.</li>
+    <li><b>Hacia dónde</b> (§9–§12): el rediseño para real-time y el catálogo de optimizaciones.</li>
+  </ul>
+  <div class="callout bad">
+    <b>Aviso de muestra.</b> Los números de tiempo salen de <b>un</b> evento de fusión (office0, n=1). Sirven para
+    localizar el cuello y ordenar prioridades, <b>no</b> como media estadística.
+  </div>
+
+  <!-- ===================================================== -->
+  <a id="1"></a>
+  <h2>1 · Qué es el contest y qué problema resuelve</h2>
+
+  <p>OVO construye un mapa 3D donde cada objeto es una <b>instancia</b> con sus puntos. A medida que llegan
+     keyframes, las máscaras 2D se proyectan a 3D y a veces <b>dos instancias se pelean por los mismos puntos</b>:
+     la máscara de la instancia A cubre puntos que "pertenecían" a la instancia B. Ese solapamiento es la señal
+     de que algo pasa entre A y B — pero <b>¿qué</b>, exactamente?</p>
+
+  <div class="figwrap">
+    <svg viewBox="0 0 900 250" role="img" aria-label="Robo de máscara">
+      <!-- caso fragmento -->
+      <text x="150" y="26" text-anchor="middle" fill="#e6e9ef" font-size="14" font-weight="600">Fragmento real → MERGE</text>
+      <ellipse cx="150" cy="130" rx="110" ry="60" fill="rgba(47,158,111,.15)" stroke="#2f9e6f" stroke-width="1.5"/>
+      <text x="150" y="120" text-anchor="middle" fill="#5ad19a" font-size="13">Mesa (inst. 103)</text>
+      <ellipse cx="150" cy="160" rx="42" ry="22" fill="rgba(255,180,84,.25)" stroke="#ffb454" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="150" y="164" text-anchor="middle" fill="#ffb454" font-size="11">trozo (89)</text>
+      <text x="150" y="222" text-anchor="middle" fill="#9aa4b2" font-size="11.5">Un trozo de la MISMA superficie, del mismo objeto.</text>
+      <text x="150" y="238" text-anchor="middle" fill="#9aa4b2" font-size="11.5">Sus puntos caen dentro de la mesa → absorber.</text>
+      <!-- separador -->
+      <line x1="450" y1="45" x2="450" y2="215" stroke="#2a2f3a" stroke-width="1"/>
+      <!-- caso contacto -->
+      <text x="710" y="26" text-anchor="middle" fill="#e6e9ef" font-size="14" font-weight="600">Objeto en contacto → NO tocar</text>
+      <ellipse cx="660" cy="140" rx="70" ry="48" fill="rgba(90,169,255,.13)" stroke="#5aa9ff" stroke-width="1.5"/>
+      <text x="660" y="140" text-anchor="middle" fill="#5aa9ff" font-size="12">silla 102</text>
+      <ellipse cx="770" cy="140" rx="55" ry="42" fill="rgba(138,99,210,.15)" stroke="#8a63d2" stroke-width="1.5"/>
+      <text x="775" y="140" text-anchor="middle" fill="#a78bde" font-size="12">silla 88</text>
+      <line x1="712" y1="105" x2="712" y2="178" stroke="#ff6b6b" stroke-width="2" stroke-dasharray="3 3"/>
+      <text x="710" y="222" text-anchor="middle" fill="#9aa4b2" font-size="11.5">Dos objetos distintos que se rozan.</text>
+      <text x="710" y="238" text-anchor="middle" fill="#9aa4b2" font-size="11.5">CLIP los ve iguales ("silla") → fusionaría mal.</text>
+    </svg>
+    <div class="figcap">El mismo síntoma (puntos disputados) esconde dos causas opuestas. Distinguirlas es el trabajo del contest.</div>
+  </div>
+
+  <p>El descriptor semántico (CLIP) <b>no</b> ayuda a decidir: no distingue <i>instancias</i> de la misma clase
+     (tres sillas pegadas → similitud alta → sobre-fusión). Este es el fallo real que motivó el contest:
+     casos como <span class="mono">office3: la instancia 102 absorbió 88+105</span> porque el descriptor no
+     separa sillas adyacentes.</p>
+
+  <div class="card">
+    <b>El contest, en una frase:</b> observa <b>quién le roba puntos a quién</b> a lo largo de muchos keyframes,
+    y a partir de esa evidencia acumulada emite un veredicto por par de instancias — <span style="color:var(--merge)">MERGE</span>
+    (era un fragmento), <span style="color:var(--split)">SPLIT</span> (transferir los puntos robados a su dueño real),
+    o <span style="color:var(--noact)">NO_ACTION</span> (déjalos en paz) — usando <b>geometría</b> (no el descriptor)
+    para desempatar los casos difíciles.
+  </div>
+
+  <p>Es una <b>alternativa / complemento</b> a la fusión clásica por criterios (centroide, cos-sim, overlap…).
+     Tres modos: <code>observe</code> (solo loguea veredictos, la clásica decide), <code>only</code>
+     (el contest decide, la clásica no corre), <code>both</code> (contest primero, clásica sobre el resto).</p>
+
+  <!-- ===================================================== -->
+  <a id="2"></a>
+  <h2>2 · Conceptos y glosario</h2>
+  <p>Todo el mecanismo gira alrededor de unas pocas magnitudes por par <b>(perdedor L, ganador W)</b>. "Perdedor" =
+     la instancia a la que le roban puntos; "ganador" = la que se los lleva (su máscara los cubrió).</p>
+
+  <table>
+    <tr><th>Magnitud</th><th>Qué es</th><th>Intuición</th></tr>
+    <tr><td class="mono">containment</td><td>fracción de puntos de L que W le disputa (strong_points / tamaño de L)</td><td>“¿qué parte de L está metida dentro de W?” Alto → L parece un trozo de W.</td></tr>
+    <tr><td class="mono">reverse_containment</td><td>lo mismo al revés (parte de W metida en L)</td><td>Si ambos son altos → se contienen mutuamente → frontera simétrica, no un fragmento direccional.</td></tr>
+    <tr><td class="mono">mass</td><td>Σ sobre KFs de los votos del par</td><td>Cuánta evidencia total hay. Baja → ruido, ni mirar.</td></tr>
+    <tr><td class="mono">persistence</td><td>media de (veces visto bajo W / observaciones totales del punto)</td><td>¿el robo es constante o un parpadeo? Bajo → W solo roza los puntos de refilón.</td></tr>
+    <tr><td class="mono">focus</td><td>fracción de los puntos disputados de L que van a ESTE W</td><td>Alto → un solo ganador domina el robo (no repartido entre varios).</td></tr>
+    <tr><td class="mono">strong_points</td><td>nº de puntos de L vistos ≥ <code>min_count</code> KFs bajo W</td><td>El numerador de containment; votos “fuertes”, no anecdóticos.</td></tr>
+    <tr><td class="mono">split_points</td><td>los ids concretos de esos puntos disputados</td><td>Si el veredicto es SPLIT, estos son los puntos que se transfieren.</td></tr>
+  </table>
+
+  <p>Y dos umbrales de banda que parten el eje de containment (config <code>contest:</code>):</p>
+  <ul>
+    <li><b>strong</b> — containment ≥ <code>high</code> (0.70): L está muy metido en W.</li>
+    <li><b>partial</b> — <code>low</code> (0.50) ≤ containment &lt; high: zona ambigua, la geometría no separa sola.</li>
+    <li><b>baja</b> — containment &lt; low: poco metido; solo importa si <code>focus</code> es muy alto (un ganador domina).</li>
+  </ul>
+
+  <!-- ===================================================== -->
+  <a id="3"></a>
+  <h2>3 · Anatomía: las piezas y su flujo</h2>
+  <p>El contest vive en <code>ovo/entities/contest/</code> con responsabilidades separadas y <b>puras</b> (no mutan
+     el mapa). Se engancha a OVO en cuatro puntos, en dos tiempos: un <b>camino caliente</b> que acumula evidencia
+     cada keyframe (barato), y un <b>camino frío</b> que decide y actúa a cadencia de fusión (caro).</p>
+
+  <div class="figwrap">
+    <svg viewBox="0 0 920 340" role="img" aria-label="Arquitectura del contest">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5aa9ff"/></marker>
+      </defs>
+      <!-- hot lane -->
+      <rect x="20" y="30" width="250" height="120" rx="10" fill="rgba(255,107,107,.06)" stroke="rgba(255,107,107,.35)"/>
+      <text x="145" y="52" text-anchor="middle" fill="#ff6b6b" font-size="12" font-weight="600">CAMINO CALIENTE · cada KF</text>
+      <rect x="45" y="66" width="200" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="145" y="86" text-anchor="middle" fill="#5ad19a" font-size="12.5" font-family="monospace">record(puntos, ganador)</text>
+      <rect x="45" y="104" width="200" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="145" y="124" text-anchor="middle" fill="#5ad19a" font-size="12.5" font-family="monospace">on_merge / on_remove</text>
+      <!-- store -->
+      <rect x="330" y="66" width="150" height="68" rx="10" fill="rgba(90,169,255,.1)" stroke="#5aa9ff"/>
+      <text x="405" y="92" text-anchor="middle" fill="#5aa9ff" font-size="13" font-weight="600">STORE</text>
+      <text x="405" y="112" text-anchor="middle" fill="#9aa4b2" font-size="10.5">punto → {ganador: nºKFs}</text>
+      <text x="405" y="126" text-anchor="middle" fill="#9aa4b2" font-size="10.5">solo puntos disputados</text>
+      <line x1="245" y1="81" x2="326" y2="90" stroke="#5aa9ff" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="245" y1="119" x2="326" y2="108" stroke="#5aa9ff" stroke-width="1.5" marker-end="url(#ar)"/>
+      <!-- cold lane -->
+      <rect x="330" y="180" width="560" height="130" rx="10" fill="rgba(90,209,154,.05)" stroke="rgba(90,209,154,.3)"/>
+      <text x="610" y="202" text-anchor="middle" fill="#5ad19a" font-size="12" font-weight="600">CAMINO FRÍO · a cadencia de fusión (report)</text>
+      <g font-family="monospace" font-size="11.5">
+        <rect x="345" y="220" width="92" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="391" y="240" text-anchor="middle" fill="#9aa4b2">prune</text>
+        <rect x="447" y="220" width="104" height="30" rx="6" fill="#1e222b" stroke="#8a63d2"/><text x="499" y="240" text-anchor="middle" fill="#a78bde">aggregate</text>
+        <rect x="561" y="220" width="104" height="30" rx="6" fill="rgba(255,107,107,.12)" stroke="#ff6b6b"/><text x="613" y="240" text-anchor="middle" fill="#ff6b6b">classify ★</text>
+        <rect x="675" y="220" width="92" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="721" y="240" text-anchor="middle" fill="#9aa4b2">resolve</text>
+        <rect x="777" y="220" width="92" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="823" y="240" text-anchor="middle" fill="#9aa4b2">dump</text>
+      </g>
+      <rect x="345" y="266" width="330" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="510" y="286" text-anchor="middle" fill="#e6e9ef" font-size="11.5" font-family="monospace">_apply_contest_merges → ejecuta MERGE / SPLIT en el mapa</text>
+      <line x1="405" y1="134" x2="405" y2="216" stroke="#5aa9ff" stroke-width="1.5" marker-end="url(#ar)"/>
+      <text x="700" y="180" text-anchor="middle" fill="#9aa4b2" font-size="10">★ = el cuello (95% del coste)</text>
+    </svg>
+    <div class="figcap">Cuatro enganches, dos tiempos. La evidencia se acumula gota a gota; la decisión cae de golpe.</div>
+  </div>
+
+  <h3>3.1 · <code>record()</code> + <code>store</code> — acumular evidencia <span class="pill hot">hot</span></h3>
+  <p>Cada keyframe, por cada máscara que roba puntos, se llama <code>record(puntos_disputados, ganador)</code>. El
+     store suma <b>+1</b> al contador (punto, ganador). Diseño clave: la clave es el <b>id permanente</b> del punto
+     (sobrevive a que el SLAM reordene o pode la nube), y el contador <b>es</b> el número de keyframes distintos en
+     que ese punto se vio bajo ese ganador → la <b>persistencia sale gratis</b>, sin estructura extra. Solo se
+     guardan los puntos disputados (una minoría), no toda la nube.</p>
+  <div class="ex">
+    <span class="tag">ejemplo</span>
+    <p style="margin:0">El punto <code>#5012</code> pertenece a la mesa (inst. 103). Durante 8 keyframes, la máscara del
+    trozo (inst. 89) lo cubre. Store: <code>{5012: {89: 8}}</code>. Ese <code>8</code> dice dos cosas: 89 le disputa
+    el punto, y lo hace de forma <b>persistente</b> (8 KFs, no un parpadeo). Cuando llegue el report, este voto
+    contará como “fuerte”.</p>
+  </div>
+
+  <h3>3.2 · <code>on_merge</code> / <code>on_remove</code> / <code>prune_to_live</code> — coherencia <span class="pill cold">cold</span></h3>
+  <p>Espejo del mapa: cuando dos instancias se fusionan, los votos de <code>source</code> pasan a <code>target</code>
+     (gracias al índice inverso <code>_by_winner</code>, barato). Cuando una instancia muere, se borra como ganadora.
+     <code>prune_to_live</code> limpia periódicamente los puntos que el SLAM ya podó. Todo es cirugía de diccionarios.</p>
+
+  <h3>3.3 · <code>aggregator.pairs()</code> — derivar features <span class="pill warm">warm</span></h3>
+  <p>En cada report, recorre el store y calcula, <b>desde cero</b>, las <code>PairFeatures</code> de §2 para cada par
+     (loser, winner): containment, reverse, mass, persistence, focus… Es <b>puro</b>: no toca el mapa. Usa
+     <code>searchsorted</code> sobre ids ordenados para saber el dueño actual de cada punto en O(M·log N) sin construir
+     diccionarios gigantes.</p>
+
+  <h3>3.4 · <code>discriminator.classify()</code> — decidir <span class="pill hot">HOT · el cuello</span></h3>
+  <p>Por cada perdedor, aplica una tabla de casos sobre las features y emite un <code>Verdict</code>. En los casos
+     ambiguos llama a los <b>callbacks geométricos</b> (§5). Aquí se va el 95% del tiempo. Se detalla en §4.</p>
+
+  <h3>3.5 · <code>resolve</code> + actuador — reconciliar y ejecutar <span class="pill cold">cold</span></h3>
+  <p><code>_resolve_pairs</code> junta los dos sentidos de un par (A→B y B→A) en un único veredicto, eliminando
+     contradicciones (MERGE+SPLIT sobre el mismo par). <code>_reeval_frontier</code> (opcional) usa un union-find de
+     los merges del propio batch para colapsar “fronteras” que en realidad son un solo objeto. Finalmente
+     <code>_apply_contest_merges</code> (en <code>ovo.py</code>) ejecuta los veredictos sobre el mapa.</p>
+
+  <!-- ===================================================== -->
+  <a id="4"></a>
+  <h2>4 · El discriminador (árbol de decisión)</h2>
+  <p>Es el corazón lógico. Toma las features de un perdedor y sus ganadores y baja por este árbol. Los umbrales
+     (entre paréntesis, valores por defecto) viven en config y son empíricos.</p>
+
+  <div class="figwrap">
+    <svg viewBox="0 0 960 640" role="img" aria-label="Árbol de decisión del discriminador">
+      <defs>
+        <marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5b6472"/></marker>
+      </defs>
+      <style>
+        .box{fill:#1e222b;stroke:#2a2f3a;stroke-width:1}
+        .q{fill:#e6e9ef;font-size:12.5px}
+        .qn{fill:#9aa4b2;font-size:10.5px;font-family:monospace}
+        .edge{stroke:#5b6472;stroke-width:1.4;fill:none}
+        .el{fill:#9aa4b2;font-size:10.5px}
+        .term{font-size:12px;font-weight:600}
+        .tm{fill:#2f9e6f} .ts{fill:#d98a2b} .tn{fill:#5b6472} .td{fill:#5aa9ff}
+      </style>
+      <!-- root -->
+      <rect class="box" x="380" y="16" width="200" height="40" rx="8"/>
+      <text class="q" x="480" y="34" text-anchor="middle">¿mass ≥ min_mass?</text>
+      <text class="qn" x="480" y="49" text-anchor="middle">min_mass=50</text>
+      <!-- ruido -->
+      <path class="edge" d="M380,36 L250,36 L250,66" marker-end="url(#a2)"/>
+      <text class="el" x="300" y="30" text-anchor="middle">no</text>
+      <text class="term tn" x="250" y="82" text-anchor="middle">NO_ACTION</text>
+      <text class="qn" x="250" y="96" text-anchor="middle">ruido</text>
+      <!-- band gate -->
+      <path class="edge" d="M480,56 L480,86" marker-end="url(#a2)"/>
+      <text class="el" x="495" y="76">sí → ¿banda de containment?</text>
+      <rect class="box" x="380" y="86" width="200" height="30" rx="8"/>
+      <text class="q" x="480" y="106" text-anchor="middle">containment</text>
+      <!-- three branches -->
+      <path class="edge" d="M380,101 L160,101 L160,140" marker-end="url(#a2)"/>
+      <text class="el" x="250" y="95" text-anchor="middle">≥ high (0.70)  ·  STRONG</text>
+      <path class="edge" d="M480,116 L480,140" marker-end="url(#a2)"/>
+      <text class="el" x="590" y="132" text-anchor="middle">0.50–0.70 · PARTIAL</text>
+      <path class="edge" d="M580,101 L800,101 L800,140" marker-end="url(#a2)"/>
+      <text class="el" x="800" y="95" text-anchor="middle">&lt; low · foco alto</text>
+
+      <!-- STRONG column -->
+      <rect class="box" x="60" y="140" width="200" height="40" rx="8"/>
+      <text class="q" x="160" y="158" text-anchor="middle">¿1 ganador y rev ≥ high?</text>
+      <text class="qn" x="160" y="173" text-anchor="middle">simétrico</text>
+      <path class="edge" d="M60,160 L30,160 L30,200" marker-end="url(#a2)"/>
+      <text class="term td" x="60" y="216" text-anchor="middle">DEFER_TO_FUSION</text>
+      <path class="edge" d="M160,180 L160,206" marker-end="url(#a2)"/>
+      <text class="el" x="175" y="197">no → ¿1 raíz?</text>
+      <rect class="box" x="60" y="206" width="200" height="30" rx="8"/>
+      <text class="q" x="160" y="226" text-anchor="middle">¿todos a la misma raíz?</text>
+      <path class="edge" d="M60,221 L30,221 L30,262" marker-end="url(#a2)"/>
+      <text class="term tm" x="70" y="278" text-anchor="middle">MERGE</text>
+      <text class="qn" x="70" y="292" text-anchor="middle">fragmento</text>
+      <path class="edge" d="M160,236 L160,262" marker-end="url(#a2)"/>
+      <text class="term tn" x="180" y="278" text-anchor="middle">NO_ACTION</text>
+      <text class="qn" x="185" y="292" text-anchor="middle">frontera real (≥2 raíces)</text>
+
+      <!-- PARTIAL column -->
+      <rect class="box" x="392" y="140" width="176" height="34" rx="8"/>
+      <text class="q" x="480" y="161" text-anchor="middle">¿sim ≥ 0.81?</text>
+      <path class="edge" d="M392,157 L360,157 L360,196" marker-end="url(#a2)"/>
+      <text class="term tm" x="360" y="212" text-anchor="middle">MERGE</text>
+      <text class="qn" x="360" y="226" text-anchor="middle">desc. igual</text>
+      <path class="edge" d="M480,174 L480,196" marker-end="url(#a2)"/>
+      <rect class="box" x="392" y="196" width="176" height="34" rx="8"/>
+      <text class="q" x="480" y="217" text-anchor="middle">¿rev ≥ 0.5?</text>
+      <path class="edge" d="M568,213 L600,213 L600,250" marker-end="url(#a2)"/>
+      <text class="term tn" x="600" y="266" text-anchor="middle">NO_ACTION</text>
+      <text class="qn" x="600" y="280" text-anchor="middle">bidireccional</text>
+      <path class="edge" d="M480,230 L480,252" marker-end="url(#a2)"/>
+      <rect class="box" x="392" y="252" width="176" height="34" rx="8"/>
+      <text class="q" x="480" y="273" text-anchor="middle">¿persist &lt; 0.1?</text>
+      <path class="edge" d="M568,269 L600,269 L600,306" marker-end="url(#a2)"/>
+      <text class="term tn" x="600" y="322" text-anchor="middle">NO_ACTION</text>
+      <text class="qn" x="600" y="336" text-anchor="middle">inestable</text>
+      <path class="edge" d="M480,286 L480,310" marker-end="url(#a2)"/>
+      <text class="term ts" x="480" y="326" text-anchor="middle">SPLIT</text>
+      <text class="qn" x="480" y="340" text-anchor="middle">parcial</text>
+
+      <!-- FOCUSED column -->
+      <rect class="box" x="712" y="140" width="176" height="34" rx="8"/>
+      <text class="q" x="800" y="161" text-anchor="middle">¿persist &lt; 0.1?</text>
+      <path class="edge" d="M888,157 L916,157 L916,196" marker-end="url(#a2)"/>
+      <text class="term tn" x="900" y="212" text-anchor="middle">NO_ACT.</text>
+      <text class="qn" x="900" y="226" text-anchor="middle">inestable</text>
+      <path class="edge" d="M800,174 L800,196" marker-end="url(#a2)"/>
+      <rect class="box" x="712" y="196" width="176" height="46" rx="8"/>
+      <text class="q" x="800" y="214" text-anchor="middle">¿seam angle &gt; 15°?</text>
+      <text class="qn" x="800" y="230" text-anchor="middle">giro de la normal — GEOMETRÍA</text>
+      <path class="edge" d="M888,219 L916,219 L916,258" marker-end="url(#a2)"/>
+      <text class="term tn" x="900" y="274" text-anchor="middle">NO_ACT.</text>
+      <text class="qn" x="900" y="288" text-anchor="middle">en contacto</text>
+      <path class="edge" d="M800,242 L800,264" marker-end="url(#a2)"/>
+      <rect class="box" x="712" y="264" width="176" height="46" rx="8"/>
+      <text class="q" x="800" y="282" text-anchor="middle">¿ΔE_W &gt; ΔE_L?</text>
+      <text class="qn" x="800" y="298" text-anchor="middle">color 2 lados — GEOMETRÍA</text>
+      <path class="edge" d="M888,287 L916,287 L916,326" marker-end="url(#a2)"/>
+      <text class="term tn" x="900" y="342" text-anchor="middle">NO_ACT.</text>
+      <text class="qn" x="900" y="356" text-anchor="middle">color de L</text>
+      <path class="edge" d="M800,310 L800,332" marker-end="url(#a2)"/>
+      <text class="term ts" x="800" y="348" text-anchor="middle">SPLIT</text>
+      <text class="qn" x="800" y="362" text-anchor="middle">dominancia</text>
+
+      <!-- borde -->
+      <path class="edge" d="M568,101 L680,101 L680,420 L480,420" marker-end="url(#a2)"/>
+      <text class="el" x="690" y="400">containment &lt; low y foco bajo</text>
+      <text class="term tn" x="430" y="424" text-anchor="middle">NO_ACTION · borde</text>
+    </svg>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--merge)"></span>MERGE (absorber)</span>
+      <span><span class="sw" style="background:var(--split)"></span>SPLIT (transferir puntos)</span>
+      <span><span class="sw" style="background:var(--noact)"></span>NO_ACTION</span>
+      <span><span class="sw" style="background:var(--defer)"></span>DEFER (que decida la fusión)</span>
+    </div>
+    <div class="figcap">Solo la columna derecha (dominancia) invoca la geometría cara. Es donde está el coste.</div>
+  </div>
+
+  <h3>Ejemplos recorriendo el árbol</h3>
+  <div class="ex">
+    <span class="tag">MERGE · fragmento</span>
+    <p style="margin:0">Trozo 89 vs mesa 103. containment=0.82 (≥high), un solo ganador, misma raíz →
+    <b style="color:var(--merge)">MERGE</b>. El trozo se absorbe en la mesa. La geometría no se toca.</p>
+  </div>
+  <div class="ex">
+    <span class="tag">NO_ACTION · objeto en contacto</span>
+    <p style="margin:0">Silla 88 vs silla 102. containment bajo pero focus alto (un solo vecino le roba) → rama
+    dominancia. persistencia pasa el filtro, pero <b>seam angle = 24°</b> (&gt;15°): la superficie <b>quiebra</b> en
+    la costura → son dos objetos que se rozan → <b style="color:var(--noact)">NO_ACTION</b>. Sin esta guarda
+    geométrica, CLIP (sim alto, ambas “silla”) las habría fusionado.</p>
+  </div>
+  <div class="ex">
+    <span class="tag">SPLIT · dominancia</span>
+    <p style="margin:0">Un trozo oscuro está mal asignado a L pero cae dentro de W. persistencia ok, seam angle 7°
+    (superficie continua), y el color del chunk se parece más a W que a L (ΔE_W &lt; ΔE_L) →
+    <b style="color:var(--split)">SPLIT</b>: esos puntos se transfieren de L a W.</p>
+  </div>
+
+  <!-- ===================================================== -->
+  <a id="5"></a>
+  <h2>5 · La geometría de costura (seam / color)</h2>
+  <p>Cuando ni la máscara 2D ni el descriptor CLIP pueden separar “fragmento” de “objeto en contacto”, el contest
+     mira la <b>geometría de la costura</b> — la frontera entre el chunk disputado y el ganador. Dos señales, ambas
+     caras porque construyen árboles KD y consultan vecinos:</p>
+
+  <table>
+    <tr><th>Señal</th><th>Qué mide</th><th>Regla</th></tr>
+    <tr><td class="mono">seam_normal_angle</td><td>giro medio de la normal de superficie al cruzar la costura chunk↔W</td><td>~&lt;10° = misma superficie (fragmento). &gt;20° = quiebre/arista (dos objetos).</td></tr>
+    <tr><td class="mono">seam_color_two_sided</td><td>ΔE (color Lab) del chunk hacia W vs hacia el resto de L</td><td>El chunk se transfiere solo si se funde mejor (color) con W que con L (ΔE_W &lt; ΔE_L).</td></tr>
+  </table>
+
+  <div class="callout info">
+    <b>Por qué dos señales.</b> La normal caza el caso 3D obvio (un cojín <i>sobre</i> un sofá quiebra la normal).
+    Pero dos superficies <b>coplanares</b> de distinto color (un póster en una pared) no quiebran la normal — ahí
+    entra el color. Son complementarias.
+  </div>
+
+  <p><b>Cómo se calculan (y por qué cuestan):</b> para cada punto del chunk se buscan sus <i>k</i> vecinos en la
+     nube del ganador (un KDTree de open3d), se promedia la normal/color de ese parche, y se compara. Ese
+     <b>bucle punto-a-punto en Python</b> sobre árboles construidos al vuelo sobre nubes de decenas de miles de
+     puntos es exactamente el cuello de §7.</p>
+
+  <!-- ===================================================== -->
+  <a id="6"></a>
+  <h2>6 · Cómo se midió — y por qué la GPU obliga a cuidarlo</h2>
+  <div class="callout info">
+    <b>CUDA es asíncrono.</b> Una op de torch <i>encola</i> un kernel y devuelve el control al instante. Un
+    <code>time.time()</code> justo después mide solo el <b>encolado</b>, no la ejecución. Para medir GPU de verdad
+    hay que <b>drenar la cola</b> antes de parar el cronómetro: <code>torch.cuda.synchronize()</code> o
+    <code>torch.cuda.Event</code>.
+  </div>
+  <p>Dos niveles de cronometraje se usaron aquí:</p>
+  <ul>
+    <li><b>Buckets <code>t_contest_*</code></b> (permanentes en el código): usan <code>synchronize()</code> explícito
+        en ambos extremos cuando <code>config["log"]=true</code> → <span class="imp-hi">válidos por diseño</span>.</li>
+    <li><b>Sondas finas</b> (temporales, ya retiradas): <code>perf_counter</code> sin sync. Válidas
+        <span class="imp-md">por accidente</span>: el pipeline está lleno de barreras implícitas —
+        <code>.cpu()</code>, <code>.numpy()</code>, <code>.tolist()</code>, <code>.item()</code>,
+        <code>float(t)</code>, <code>if t.sum()==0</code> — que <b>bloquean</b> la CPU hasta que la GPU termina.
+        Cada frontera de fase pasa por una.</li>
+  </ul>
+  <div class="callout">
+    <b>La única medida sesgada.</b> El timer del callback isin paró <b>antes</b> de su barrera → subestima su coste
+    GPU. Pero ese coste se drena aguas abajo, en el <code>.cpu().numpy()</code> de la costura (contado en
+    <code>seam_transfer</code> = 0.013&nbsp;s en 22 llamadas). Así que isin+máscaras+transfer ≤ 0.013&nbsp;s:
+    <b>despreciable igual</b>, ahora con el matiz explícito.
+  </div>
+  <div class="callout bad">
+    <b>Para el futuro.</b> Las optimizaciones que quiten los <code>.cpu()</code> (kNN-GPU, store GPU-resident)
+    eliminan esas barreras. A partir de ahí <code>time.time()</code> <b>mentirá</b> → instrumentar con
+    <code>torch.cuda.Event</code>. Anotarlo antes de tocar esa parte.
+  </div>
+
+  <!-- ===================================================== -->
+  <a id="7"></a>
+  <h2>7 · Resultados de tiempo</h2>
+  <h3>Coste total y dentro de report()</h3>
+  <div class="bars">
+    <div class="row"><div class="lbl">report (decidir)</div><div class="track"><div class="fill f1" style="width:99.3%">1.586 s · 99.3%</div></div><div class="val"></div></div>
+    <div class="row"><div class="lbl">↳ classify</div><div class="track"><div class="fill f1" style="width:94.8%">1.504 s · 94.8%</div></div><div class="val"></div></div>
+    <div class="row"><div class="lbl">↳ aggregate</div><div class="track"><div class="fill f2" style="width:5.1%">5.1%</div></div><div class="val">0.081 s</div></div>
+    <div class="row"><div class="lbl">↳ dump / resolve / prune</div><div class="track"><div class="fill f2" style="width:0.6%">&nbsp;</div></div><div class="val">~0 s</div></div>
+    <div class="row"><div class="lbl">aplicar merges+splits</div><div class="track"><div class="fill f3" style="width:0.7%">&nbsp;</div></div><div class="val">0.010 s</div></div>
+  </div>
+
+  <h3>Dónde de verdad se va el tiempo (corte de classify)</h3>
+  <div class="bars">
+    <div class="row"><div class="lbl">kNN query (bucle Python)</div><div class="track"><div class="fill f1" style="width:68%">1.023 s · 68%</div></div><div class="val"></div></div>
+    <div class="row"><div class="lbl">build KDTree (o3d)</div><div class="track"><div class="fill f2" style="width:25.8%">0.388 s · 26%</div></div><div class="val"></div></div>
+    <div class="row"><div class="lbl">transfer + isin + sim</div><div class="track"><div class="fill f3" style="width:2.7%">&nbsp;</div></div><div class="val">0.041 s · 2.7%</div></div>
+  </div>
+  <div class="callout bad">
+    <b>Contra la intuición:</b> el <code>torch.isin</code> sobre 2.02M puntos (sospechoso #1) es <b>despreciable</b>.
+    El cuello es 100% <b>CPU</b>: open3d + kNN en Python. Ganador medio = 77k pts, KDTree reconstruido en cada
+    una de las 22 llamadas.
+  </div>
+  <table>
+    <tr><th>Función</th><th class="num">calls</th><th class="num">total</th><th class="num">avg</th><th class="num">chunk avg</th><th class="num">target avg</th></tr>
+    <tr><td class="mono">seam_normal_angle</td><td class="num">22</td><td class="num">0.771 s</td><td class="num">35.0 ms</td><td class="num">1 202</td><td class="num">77 046</td></tr>
+    <tr><td class="mono">_seam_color_one_side</td><td class="num">20</td><td class="num">0.653 s</td><td class="num">32.6 ms</td><td class="num">2 427</td><td class="num">34 725</td></tr>
+  </table>
+  <p class="sub">De 107 losers, solo 18 tocan seam y 7 color. <b>11 de las 18 seam terminan en NO_ACTION</b> — geometría cara para no hacer nada.</p>
+
+  <!-- ===================================================== -->
+  <a id="8"></a>
+  <h2>8 · ¿Está bien diseñado?</h2>
+  <div class="callout good">
+    <b>Sí, la arquitectura es sólida.</b> Separación limpia y testeable: store (acumula) · aggregator (deriva, puro) ·
+    discriminator (decide, puro) · manager (fachada) · actuador (aplica). Añadir un patrón = añadir una rama.
+  </div>
+  <h4>Aciertos</h4>
+  <ul>
+    <li><b>Store inteligente:</b> clave = id permanente del punto (sobrevive a poda/reordenado del SLAM); el contador
+        == nº de KFs → persistencia gratis; índice inverso para merge/remove baratos; solo guarda disputados.</li>
+    <li><b>Puro y recomputable:</b> aggregator/discriminator no mutan el mapa → veredicto auditable, y por eso
+        <code>observe</code> funciona sin efectos colaterales.</li>
+    <li><b>Hot path honesto:</b> <code>record()</code> es solo incrementos de dict.</li>
+  </ul>
+  <h4>Debilidades (todas pesan para real-time)</h4>
+  <table>
+    <tr><th>Debilidad</th><th>Por qué duele en real-time</th></tr>
+    <tr><td><b>report() es un monolito batch</b>: aggregate re-deriva TODOS los pares desde cero cada vez.</td><td>La evidencia se acumula continuo pero la decisión es un pico de 1.5&nbsp;s. No cabe en un bucle a X Hz.</td></tr>
+    <tr><td><b>Geometría sin caché</b>: seam/color reconstruyen KDTree y re-transfieren el ganador en cada par.</td><td>Un ganador (una pared) se re-procesa para cada loser y cada report.</td></tr>
+    <tr><td><b>Geometría no-gateada</b>: classify corre seam/color aunque el veredicto no se aplique (observe/split off).</td><td>1.4&nbsp;s/report tirados en barridos de observación.</td></tr>
+    <tr><td><b>record() sincroniza la GPU cada KF</b> (<code>.cpu().tolist()</code>).</td><td>Stall pequeño pero por frame, en el hot path.</td></tr>
+    <tr><td><b>Decisión periódica, no dirigida.</b></td><td>El 90% de los pares no cambió desde el último report; recomputarlos es desperdicio.</td></tr>
+  </table>
+
+  <!-- ===================================================== -->
+  <a id="9"></a>
+  <h2>9 · Rediseño para tiempo real</h2>
+  <p>Hoy: <b>acumular continuo → decidir y actuar todo de golpe</b>. Objetivo: <b>integrar en el bucle</b> con trabajo
+     <b>acotado por frame</b>. Cinco cambios, de menos a más ambicioso:</p>
+  <table>
+    <tr><th>#</th><th>Cambio</th><th>Idea</th><th>Efecto</th></tr>
+    <tr><td><b>R1</b></td><td>Agregación incremental</td><td>Mantener las PairFeatures vivas, actualizadas en <code>record()</code> (o marcar “sucios” los pares tocados). aggregate solo re-deriva lo que cambió.</td><td>O(all) → O(cambiado). Habilita R2.</td></tr>
+    <tr><td><b>R2</b></td><td>Decisión por eventos</td><td>Cola de pares sucios. Un par se re-evalúa solo cuando su containment/mass cruza un umbral (edge-triggered), no re-scan periódico.</td><td>El ruido/borde nunca dispara classify. Se decide poco y a menudo.</td></tr>
+    <tr><td><b>R3</b></td><td>Presupuesto por frame</td><td>Procesar N pares sucios por frame. El pico de 1.5&nbsp;s se amortiza en micro-lotes.</td><td>Latencia por frame acotada. Es la clave del real-time.</td></tr>
+    <tr><td><b>R4</b></td><td>Geometría asíncrona</td><td>seam/color en un hilo/stream de fondo; el bucle encola candidatos y aplica el veredicto unos frames después.</td><td>Saca el cuello del camino crítico. Merges baratos ya; splits geométricos diferidos.</td></tr>
+    <tr><td><b>R5</b></td><td>Store/kNN GPU-resident</td><td>Contadores en GPU (scatter/segment-sum), kNN en GPU sobre ganador cropeado, medición con cuda.Event.</td><td>Quita los sync por-frame y el rebuild CPU. Máximo, mayor reescritura.</td></tr>
+  </table>
+  <div class="callout good">
+    <b>Ruta sugerida:</b> R1+R2+R3 (salto conceptual a real-time; reutiliza todo el store/aggregator/discriminator)
+    → R4 (geometría fuera del camino crítico) → R5 (cuando el cuello ya sea otro). En cuanto entren R4/R5, cambiar
+    el cronometraje a <code>cuda.Event</code> (§6).
+  </div>
+
+  <!-- ===================================================== -->
+  <a id="10"></a>
+  <h2>10 · Catálogo de optimizaciones (mismo algoritmo)</h2>
+  <p>Palancas que aceleran la geometría sin cambiar el diseño. Complementan §9. Impacto sobre el classify de 1.50&nbsp;s.</p>
+  <table>
+    <tr><th>#</th><th>Optimización</th><th>Ataca</th><th class="num">Ahorro est.</th><th>Riesgo</th></tr>
+    <tr><td><b>A</b></td><td><b>Gating por modo</b>: no ejecutar seam/color si split_mode=off o modo observe</td><td>todo classify</td><td class="num imp-hi">~1.42 s</td><td class="rk-lo">bajo</td></tr>
+    <tr><td><b>B</b></td><td><b>kNN vectorizado</b> (<code>scipy.cKDTree.query</code>, una llamada C)</td><td>query (68%)</td><td class="num imp-hi">~0.8–0.9 s</td><td class="rk-md">medio</td></tr>
+    <tr><td><b>C</b></td><td><b>Crop del ganador a la costura</b> (KDTree solo en el AABB del chunk+margen)</td><td>build+query</td><td class="num imp-hi">~0.5–0.8 s</td><td class="rk-md">medio</td></tr>
+    <tr><td><b>D</b></td><td><b>Cache KDTree/arrays por ganador</b> dentro del report</td><td>build (26%)</td><td class="num imp-md">~0.10–0.20 s</td><td class="rk-lo">bajo</td></tr>
+    <tr><td><b>E</b></td><td><b>Submuestreo del chunk</b> (~256 pts; media/mediana)</td><td>query</td><td class="num imp-md">~0.3–0.6 s</td><td class="rk-md">medio</td></tr>
+    <tr><td><b>F</b></td><td><b>kNN en GPU</b> (torch cdist / faiss) sobre ganador cropeado</td><td>build+query+transfer</td><td class="num imp-hi">potencial máx</td><td class="rk-hi">alto</td></tr>
+    <tr><td><b>G</b></td><td><b>Paralelizar losers</b> (ThreadPool; o3d/numpy sueltan el GIL)</td><td>todo classify</td><td class="num imp-md">÷ núcleos</td><td class="rk-md">medio</td></tr>
+    <tr><td><b>H</b></td><td><b>Vectorizar promedio de k-vecinos</b> (bucle interno k=15)</td><td>query</td><td class="num imp-md">~0.1–0.2 s</td><td class="rk-lo">bajo</td></tr>
+    <tr><td><b>I</b></td><td><b>float64 → float32</b> en los utils</td><td>build+query</td><td class="num imp-lo">marginal</td><td class="rk-lo">bajo</td></tr>
+    <tr><td><b>J</b></td><td><b>Hoist de máscaras</b> (una vez por par, reusar seam+color)</td><td>callbacks</td><td class="num imp-lo">&lt;0.015 s</td><td class="rk-lo">bajo</td></tr>
+    <tr><td><b>K</b></td><td><b>Índices por instancia precomputados</b> (máscaras como slices)</td><td>callbacks</td><td class="num imp-lo">&lt;0.03 s</td><td class="rk-lo">bajo</td></tr>
+    <tr><td><b>L</b></td><td><b>Normal/color por instancia cacheados</b> (aprox seam sin KDTree)</td><td>todo seam</td><td class="num imp-hi">alto</td><td class="rk-hi">alto</td></tr>
+  </table>
+  <div class="callout"><b>Combos.</b> Quick win: <b>A</b> (gratis en observe/split-off). Raíz: <b>B+C+D</b> → classify 1.50&nbsp;s → ~0.2–0.3&nbsp;s (~5–7×). En real-time, estas palancas se combinan con R4 (correrlas en el hilo de fondo).</div>
+
+  <!-- ===================================================== -->
+  <a id="11"></a>
+  <h2>11 · Ubicaciones en el código</h2>
+  <table>
+    <tr><th>Qué</th><th>Fichero</th></tr>
+    <tr><td>Hot path — acumular</td><td class="mono">contest/store.py · manager.record()</td></tr>
+    <tr><td>Agregación (features por par)</td><td class="mono">contest/aggregator.py : pairs()</td></tr>
+    <tr><td>Decisión + ramas geométricas</td><td class="mono">contest/discriminator.py : classify()</td></tr>
+    <tr><td>Orquestación report + buckets timing</td><td class="mono">contest/manager.py : report()</td></tr>
+    <tr><td>Callbacks seam/color + _sync_time + aplicar</td><td class="mono">ovo.py : update_map / _apply_contest_merges</td></tr>
+    <tr><td><b>Cuello:</b> geometría de costura</td><td class="mono">utils/instance_utils.py : seam_normal_angle / _seam_color_one_side</td></tr>
+    <tr><td>Cadencia de fusión</td><td class="mono">ovomapping.py : _run_mapping_and_fusion_step (map_every + map_updated)</td></tr>
+    <tr><td>Persistencia timings</td><td class="mono">logger.py : log_contest_timings</td></tr>
+  </table>
+
+  <!-- ===================================================== -->
+  <a id="12"></a>
+  <h2>12 · Conclusión</h2>
+  <ol>
+    <li><b>Coste concentrado en un único punto.</b> 95% en classify, y dentro, 94% en la geometría de costura.
+        Todo lo demás es ruido. Optimizar cualquier otra cosa es perder el tiempo.</li>
+    <li><b>El cuello es CPU, no GPU.</b> open3d KDTree + kNN en bucle Python. La GPU está ociosa → hay margen
+        enorme sin tocarla (kNN vectorizado, crop, cache).</li>
+    <li><b>La cifra es tolerable hoy, letal mañana.</b> ~1.6&nbsp;s por report es imperceptible en offline con
+        1 report. Pero el objetivo real-time convierte ese pico en el problema central. <b>El problema no es el
+        tiempo, es la forma del tiempo</b> (un pico batch).</li>
+    <li><b>La palanca decisiva no es “acelerar”, es “no ejecutar de golpe”.</b> Reducir (B+C+D, ~6×) baja el pico;
+        amortizar/diferir (R1–R4) lo reparte por frame y saca la geometría del camino crítico. Esto último es lo
+        que de verdad habilita real-time.</li>
+    <li><b>Gratis inmediato:</b> en observe/split-off esos 1.4&nbsp;s se tiran enteros (geometría nunca aplicada).
+        Gating (A) = coste cero.</li>
+  </ol>
+  <div class="callout good">
+    <b>En una frase:</b> el contest tiene un cuello único, aislado, CPU-bound y atacable — pero para real-time la
+    prioridad es <b>fragmentar el pico</b> (incremental + async), no solo hacerlo más rápido.
+  </div>
+
+  <p class="foot">
+    Generado 2026-07-02 · office0 / GT / contest only+split · n=1 report · nube 2.02M pts · medición perf_counter con barreras implícitas verificadas.<br>
+    Instrumentación fina retirada tras medir; buckets <code>t_contest_*</code> permanentes. Muestra n=1: para ordenar palancas, no como media.
+  </p>
+
+</div>
+</body>
+</html>
