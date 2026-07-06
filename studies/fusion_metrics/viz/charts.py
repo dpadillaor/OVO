@@ -34,7 +34,8 @@ NODE_SLATE = "#3d4b5c"
 REJECT_NODE = "#a8384c"  # deeper garnet of the TN red — ties the sinks to "reject"
 
 
-def gate_sankey(by_criterion: list[dict], garnet_reject_nodes: bool = True) -> go.Figure:
+def gate_sankey(by_criterion: list[dict], garnet_reject_nodes: bool = True,
+                title: str = "Fusion gate cascade") -> go.Figure:
     """Cascade funnel per gate: geometry = pass (up) vs reject (down), colour = TP/FP/FN/TN correctness.
 
     garnet_reject_nodes: reject sink nodes in garnet red (True) or neutral slate (False).
@@ -173,7 +174,7 @@ def gate_sankey(by_criterion: list[dict], garnet_reject_nodes: bool = True) -> g
             marker=dict(size=12, color=color, symbol="square")))
 
     fig.update_layout(
-        title=dict(text="<b>Fusion gate cascade</b>", x=0.5, xanchor="center",
+        title=dict(text=f"<b>{title}</b>", x=0.5, xanchor="center",
                    y=0.975, yanchor="top", font=dict(size=15)),
         font=dict(family="Helvetica, Arial, sans-serif", size=12, color="#333"),
         width=820, height=560, margin=dict(t=110, b=50, l=40, r=30),
@@ -225,6 +226,84 @@ def confusion_heatmap(data: SceneFusionData) -> go.Figure:
               f"Recall: {r.get('recall', 0):.3f}  |  "
               f"F1: {r.get('f1', 0):.3f}"),
         font={"size": 11, "color": "#555"},
+    )
+    return fig
+
+
+# Confusion quadrants in the Sankey's traffic-light order + labels, reused so the
+# donut reads as the same four colours as the cascade.
+_QUADRANTS = [
+    ("TP", Q_TP, "TP — correct merge"),
+    ("FP", Q_FP, "FP — wrong merge"),
+    ("FN", Q_FN, "FN — missed merge"),
+    ("TN", Q_TN, "TN — correct reject"),
+]
+
+
+def _donut_trace(counts: dict, hole_title: str) -> go.Pie:
+    """A single confusion-split donut (same colours/order as the cascade)."""
+    labels = [lab for _, _, lab in _QUADRANTS]
+    values = [counts.get(k, 0) for k, _, _ in _QUADRANTS]
+    colors = [c for _, c, _ in _QUADRANTS]
+    return go.Pie(
+        labels=labels, values=values, marker=dict(colors=colors, line=dict(color="white", width=1)),
+        hole=0.55, sort=False, direction="clockwise", rotation=0,
+        textinfo="percent", texttemplate="%{percent:.1%}", textposition="outside",
+        title=dict(text=hole_title, font=dict(size=13, color="#333")),
+        hovertemplate="%{label}<br>%{value:,} (%{percent:.1%})<extra></extra>",
+    )
+
+
+def confusion_donut(data: SceneFusionData, title: str = "Confusion split") -> go.Figure:
+    """Donut of the global confusion split (TP/FP/FN/TN), cascade colours + percentages."""
+    total = sum(data.counts.get(k, 0) for k, _, _ in _QUADRANTS)
+    fig = go.Figure(_donut_trace(data.counts, f"{total:,}<br>pairs"))
+    fig.update_layout(
+        title=dict(text=f"<b>{title}</b>", x=0.5, xanchor="center", font=dict(size=15)),
+        width=460, height=440, margin=dict(t=70, b=60, l=20, r=20),
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.08, yanchor="top",
+                    font=dict(size=11)),
+        paper_bgcolor="white",
+    )
+    return fig
+
+
+def confusion_donut_by_epoch(by_epoch: dict[str, dict]) -> go.Figure:
+    """Small-multiples: one confusion donut per drift epoch, shared colours/legend.
+
+    Donuts sit in the lower band (domain y ≤ 0.80) so the outside percent labels of
+    tiny TP/FP slices never reach the epoch header floating above each column.
+    """
+    order = {"predrift_predrift": 0, "predrift_postdrift": 1, "postdrift_postdrift": 2}
+    epochs = sorted(by_epoch.items(), key=lambda kv: order.get(kv[0], 9))
+    if not epochs:
+        return go.Figure()
+
+    n = len(epochs)
+    gap = 0.04
+    fig = go.Figure()
+    annotations = []
+    for i, (ep, d) in enumerate(epochs):
+        counts = d.get("counts", {})
+        total = sum(counts.get(k, 0) for k, _, _ in _QUADRANTS)
+        tr = _donut_trace(counts, f"{total:,}")
+        tr.showlegend = (i == 0)  # one shared legend
+        x0, x1 = i / n + gap, (i + 1) / n - gap
+        tr.domain = dict(x=[x0, x1], y=[0.0, 0.80])  # leave the top strip for the header
+        fig.add_trace(tr)
+        annotations.append(dict(
+            x=(x0 + x1) / 2, y=0.97, xref="paper", yref="paper", showarrow=False,
+            text=f"<b>{ep}</b>", font=dict(size=12, color="#333"),
+            xanchor="center", yanchor="bottom"))
+
+    fig.update_layout(
+        title=dict(text="<b>Confusion split by epoch</b>", x=0.5, xanchor="center",
+                   y=0.98, yanchor="top", font=dict(size=15)),
+        annotations=annotations,
+        width=320 * n, height=470, margin=dict(t=110, b=60, l=20, r=20),
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.06, yanchor="top",
+                    font=dict(size=11)),
+        paper_bgcolor="white",
     )
     return fig
 
@@ -341,6 +420,30 @@ def cascade_bars(data: SceneFusionData) -> go.Figure:
         margin=dict(t=60, b=20, l=100, r=60),
     )
     return fig
+
+
+def _pr_trajectory(by_criterion: list[dict]) -> tuple[list[float], list[float], list[str]]:
+    """Cascade as a path in the P-R plane: (recall_cum, precision, gate_names).
+
+    recall_cum uses a FIXED denominator (all good pairs at entry) so it is monotone
+    decreasing gate-to-gate; precision is the ``precision`` column (live-set precision).
+    Prepends the entry point (recall 1, raw-stream precision). Gates with no ``pass``
+    (undefined precision) are skipped.
+    """
+    if not by_criterion:
+        return [], [], []
+    g0 = by_criterion[0]
+    good_total = g0.get("TP", 0) + g0.get("FN", 0)
+    if good_total == 0 or g0.get("eval", 0) == 0:
+        return [], [], []
+    xs, ys, names = [1.0], [good_total / g0["eval"]], ["eval·in"]
+    for row in by_criterion:
+        if (row.get("TP", 0) + row.get("FP", 0)) == 0:  # nothing passed -> precision undefined
+            continue
+        xs.append(row["TP"] / good_total)
+        ys.append(row["precision"])
+        names.append(row["criterion"])
+    return xs, ys, names
 
 
 def ap_curves(data: SceneFusionData, mode: str = "objects") -> go.Figure:

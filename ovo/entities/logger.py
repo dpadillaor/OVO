@@ -20,7 +20,12 @@ _FUSION_OWNED_STATS = {
 
 def _is_fusion_owned_stat(key: str) -> bool:
     """True for stats the fusion step regenerates (per-criterion times/counts + fusion totals)."""
-    return key in _FUSION_OWNED_STATS or key.startswith("t_crit_") or key.startswith("sc_")
+    return (
+        key in _FUSION_OWNED_STATS
+        or key.startswith("t_crit_")
+        or key.startswith("t_contest_")
+        or key.startswith("sc_")
+    )
 
 class Logger:
     def __init__(self, output_path: str, pid: int | None = None, use_wandb: bool = False) -> None:
@@ -53,6 +58,12 @@ class Logger:
             if stat_key not in self.stats:
                 self.stats[stat_key] = []
             self.stats[stat_key].append(val)
+
+    def log_contest_timings(self, contest_times: dict) -> None:
+        """Log contest-step timings under their own t_contest_* namespace (distinct from fusion criteria)."""
+        for key, val in contest_times.items():
+            stat_key = f"t_contest_{key}"
+            self.stats.setdefault(stat_key, []).append(val)
 
     def log_fusion_decisions(self, frame_id: int, decisions: list) -> None:
         with open(self._fusion_log_path, "a", newline="") as f:

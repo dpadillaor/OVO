@@ -14,7 +14,11 @@ import sys
 
 from .loader import OUTPUT_ROOT, load_scene, load_experiment, load_experiments
 from .dashboards import scene_dashboard, experiment_summary, compare_dashboard
-from .charts import gate_sankey
+from .charts import gate_sankey, confusion_donut, confusion_donut_by_epoch
+from .figures_mpl import (save_pr_trajectory, save_pr_trajectory_by_epoch,
+                          save_pr_trajectory_epochs_separate, save_cost_scatter)
+
+_EPOCH_ORDER = {"predrift_predrift": 0, "predrift_postdrift": 1, "postdrift_postdrift": 2}
 
 
 def _resolve_exp_path(exp_id: str) -> pathlib.Path:
@@ -48,19 +52,83 @@ def cmd_scene(args: argparse.Namespace) -> None:
     print(f"Saved: {out}")
 
 
-def cmd_sankey(args: argparse.Namespace) -> None:
-    exp_path = _resolve_exp_path(args.exp)
-    data = load_scene(exp_path, args.scene)
-    fig = gate_sankey(data.by_criterion)
-    out = pathlib.Path(
-        args.out or exp_path / args.scene / "fusion" / "figures" / "fusion_gate_cascade.svg"
-    )
+def _write_fig(fig, out: pathlib.Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     if out.suffix == ".html":
         fig.write_html(out)
     else:
         fig.write_image(out)  # SVG/PNG/PDF via kaleido
     print(f"Saved: {out}")
+
+
+def cmd_sankey(args: argparse.Namespace) -> None:
+    exp_path = _resolve_exp_path(args.exp)
+    data = load_scene(exp_path, args.scene)
+    figures = exp_path / args.scene / "fusion" / "figures"
+
+    if args.by_epoch:
+        epochs = sorted(data.by_epoch.items(), key=lambda kv: _EPOCH_ORDER.get(kv[0], 9))
+        if not epochs:
+            print(f"No by_epoch data for {args.exp}/{args.scene}", file=sys.stderr)
+            return
+        ext = pathlib.Path(args.out).suffix if args.out else ".svg"
+        for ep, d in epochs:
+            fig = gate_sankey(d.get("by_criterion", []), title=f"Fusion gate cascade · {ep}")
+            _write_fig(fig, figures / f"fusion_gate_cascade_{ep}{ext}")
+        return
+
+    fig = gate_sankey(data.by_criterion)
+    _write_fig(fig, pathlib.Path(args.out or figures / "fusion_gate_cascade.svg"))
+
+
+def cmd_confusion(args: argparse.Namespace) -> None:
+    exp_path = _resolve_exp_path(args.exp)
+    data = load_scene(exp_path, args.scene)
+    figures = exp_path / args.scene / "fusion" / "figures"
+    if args.by_epoch:
+        fig = confusion_donut_by_epoch(data.by_epoch)
+        out = pathlib.Path(args.out or figures / "fusion_confusion_donut_by_epoch.svg")
+    else:
+        fig = confusion_donut(data)
+        out = pathlib.Path(args.out or figures / "fusion_confusion_donut.svg")
+    _write_fig(fig, out)
+
+
+def cmd_cost(args: argparse.Namespace) -> None:
+    exp_path = _resolve_exp_path(args.exp)
+    data = load_scene(exp_path, args.scene)
+    default_name = {"decomp": "gate_cost_scatter", "unit-total": "gate_cost_unit_total",
+                    "attribution": "gate_cost_attribution",
+                    "total-pairs": "gate_cost_total_pairs"}[args.view]
+    out = args.out or str(exp_path / args.scene / "fusion" / "figures" / f"{default_name}.svg")
+    if args.scale == "auto":
+        log = args.view != "total-pairs"  # total-pairs reads better linear; rest log
+    else:
+        log = args.scale == "log"
+    saved = save_cost_scatter(data, exp_path, out, view=args.view, log=log)
+    print(f"Saved: {saved}")
+
+
+def cmd_trajectory(args: argparse.Namespace) -> None:
+    exp_path = _resolve_exp_path(args.exp)
+    if args.by_epoch:
+        if not args.scene:
+            print("--by-epoch requires --scene", file=sys.stderr)
+            sys.exit(1)
+        data = load_scene(exp_path, args.scene)
+        figures = exp_path / args.scene / "fusion" / "figures"
+        ext = pathlib.Path(args.out).suffix if args.out else ".svg"
+        # combined (all epochs, one plane) + one separate figure per epoch
+        combined = save_pr_trajectory_by_epoch(data, args.out or figures / f"pr_trajectory_by_epoch{ext}")
+        separates = save_pr_trajectory_epochs_separate(data, figures, ext=ext)
+        for p in (combined, *separates):
+            print(f"Saved: {p}")
+        return
+    else:
+        scenes = load_experiment(exp_path)
+        out = args.out or str(exp_path / "_viz" / "pr_trajectory.svg")
+        saved = save_pr_trajectory(scenes, out)
+    print(f"Saved: {saved}")
 
 
 def cmd_exp(args: argparse.Namespace) -> None:
@@ -99,7 +167,34 @@ def main() -> None:
     p_sankey = sub.add_parser("sankey", help="Single-scene gate cascade Sankey")
     p_sankey.add_argument("--exp", required=True, help="Experiment ID or path")
     p_sankey.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
-    p_sankey.add_argument("--out", help="Output HTML path")
+    p_sankey.add_argument("--out", help="Output path (.svg/.pdf/.png/.html)")
+    p_sankey.add_argument("--by-epoch", action="store_true",
+                          help="One Sankey per drift epoch (separate files)")
+
+    p_cost = sub.add_parser("cost", help="Gate cost decomposition (volume × unit time)")
+    p_cost.add_argument("--exp", required=True, help="Experiment ID or path")
+    p_cost.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
+    p_cost.add_argument("--out", help="Output path (.svg/.pdf/.png)")
+    p_cost.add_argument("--view", default="decomp",
+                        choices=["decomp", "unit-total", "attribution", "total-pairs"],
+                        help="decomp = pairs×unit (bubble=total); unit-total = ms/pair vs total s; "
+                             "attribution = total-time bars per gate")
+    p_cost.add_argument("--scale", default="auto", choices=["auto", "log", "linear"],
+                        help="axis scale for scatter views (auto: total-pairs linear, rest log)")
+
+    p_conf = sub.add_parser("confusion", help="Confusion-split donut (TP/FP/FN/TN)")
+    p_conf.add_argument("--exp", required=True, help="Experiment ID or path")
+    p_conf.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
+    p_conf.add_argument("--out", help="Output path (.svg/.pdf/.png/.html)")
+    p_conf.add_argument("--by-epoch", action="store_true",
+                        help="Small-multiples: one donut per drift epoch")
+
+    p_traj = sub.add_parser("trajectory", help="P-R trajectory, one polyline per scene")
+    p_traj.add_argument("--exp", required=True, help="Experiment ID or path")
+    p_traj.add_argument("--scene", help="Scene name (required with --by-epoch)")
+    p_traj.add_argument("--out", help="Output path (.svg/.pdf/.png, matplotlib)")
+    p_traj.add_argument("--by-epoch", action="store_true",
+                        help="One polyline per drift epoch for a single scene")
 
     p_exp = sub.add_parser("exp", help="Experiment summary (all scenes)")
     p_exp.add_argument("--exp", required=True, help="Experiment ID or path")
@@ -116,6 +211,12 @@ def main() -> None:
         cmd_scene(args)
     elif args.command == "sankey":
         cmd_sankey(args)
+    elif args.command == "cost":
+        cmd_cost(args)
+    elif args.command == "confusion":
+        cmd_confusion(args)
+    elif args.command == "trajectory":
+        cmd_trajectory(args)
     elif args.command == "exp":
         cmd_exp(args)
     elif args.command == "compare":

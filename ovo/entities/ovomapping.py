@@ -417,7 +417,7 @@ class OVOSemMap():
         if noise_cfg.get("jump_drift_enabled", False) and noise_cfg.get("save_pre_fusion_checkpoint", False):
             self._save_pre_fusion_checkpoint(frame_id)
 
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)
@@ -427,6 +427,8 @@ class OVOSemMap():
         self.logger.log_fusion_timings(t_fusion, crit_only)
         if extra_stats:
             self.logger.log_ovo_stats(extra_stats)
+        if contest_times:
+            self.logger.log_contest_timings(contest_times)
 
         if updated_points_ins_ids is not None:
             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
@@ -536,7 +538,7 @@ class OVOSemMap():
         point_obs = self.slam_backbone.get_point_observations()
         point_normals = self.slam_backbone.get_point_normals()
         point_colors = torch.as_tensor(self.slam_backbone.get_pcd_colors())
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)
@@ -550,6 +552,8 @@ class OVOSemMap():
         self.logger.log_fusion_timings(t_fusion, crit_only)
         if extra_stats:
             self.logger.log_ovo_stats(extra_stats)
+        if contest_times:
+            self.logger.log_contest_timings(contest_times)
         self.logger.log_ovo_stats({"t_loop_closure_refusion": round(t_fusion, 3)})
 
         self.logger.write_stats()

@@ -586,15 +586,20 @@ class OVO:
             )
 
         contest_mode = self.config.get("contest_fusion", "off")  # off | observe | only | both
+        contest_times = {}
 
         if contest_mode == "off":
             verdicts = []
         else:
+            t0 = self._sync_time()
             verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam, color=_contest_color)
+            contest_times["report"] = round(self._sync_time() - t0, 4)
+            contest_times.update(self.contest.last_timings)  # aggregate/classify/resolve/dump/prune
             print("contest:", self.contest.summarize(verdicts))
 
         if contest_mode in ("only", "both"):
-            points_ins_ids, contest_fused = self._apply_contest_merges(verdicts, objects_list, points_ins_ids, map_data)
+            points_ins_ids, contest_fused, apply_times = self._apply_contest_merges(verdicts, objects_list, points_ins_ids, map_data)
+            contest_times.update(apply_times)
         else:
             contest_fused = {}
 
@@ -632,15 +637,22 @@ class OVO:
         if self.pe_generator is not None and self.fusion_encoder is None:
             self.update_objects_pe()
 
-        return points_ins_ids, fusion_decisions, t_fusion, criterion_times
+        return points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times
+
+    def _sync_time(self) -> float:
+        """Wall-clock stamp; syncs CUDA first when profiling (config['log']) so GPU work isn't mis-timed."""
+        if self.config.get("log", False):
+            torch.cuda.synchronize()
+        return time.time()
 
     def _apply_contest_merges(self, verdicts, objects_list, points_ins_ids, map_data):
         """
         Ejecuta los veredictos MERGE_CONTAINMENT y SPLIT del contest.
-        Retorna (points_ins_ids, fused_objects).
+        Retorna (points_ins_ids, fused_objects, apply_times) con tiempos de merges/split.
         """
         _, points_ids, _ = map_data
         fused_objects = {}
+        t0 = self._sync_time()
         for v in verdicts:
             if v.decision.name == "MERGE_CONTAINMENT" and v.winner is not None:
                 loser_id = v.loser
@@ -667,6 +679,9 @@ class OVO:
                 fused_objects[loser_id] = winner_id
                 self.objects[winner_id] = winner
 
+        apply_times = {"merges": round(self._sync_time() - t0, 4)}
+
+        t0 = self._sync_time()
         split_mode = self.config.get("contest_split_mode", "off")
         split_count = 0
         if split_mode != "off":
@@ -699,8 +714,9 @@ class OVO:
                     split_count += 1
         if split_count:
             print(f"  contest splits ({split_mode}): {split_count}")
+        apply_times["split"] = round(self._sync_time() - t0, 4)
 
-        return points_ins_ids, fused_objects
+        return points_ins_ids, fused_objects, apply_times
 
     def _fuse_overlapping_instances(
         self,

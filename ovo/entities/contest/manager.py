@@ -11,6 +11,7 @@ enchufa en la siguiente fase, detrás de su propio flag.
 """
 import csv
 import json
+import time
 from typing import Dict, List, Optional, Set
 
 import torch
@@ -46,6 +47,9 @@ class ContestManager:
         self._reports: int = 0
         self._verdicts_log: List[dict] = []
         self._output_dir: str | None = None
+        # sub-tiempos de la última report(): aggregate/classify/resolve/frontier/dump.
+        # ovo.py los lee tras report() y los mergea en contest_times.
+        self.last_timings: Dict[str, float] = {}
 
     def set_output_dir(self, path) -> None:
         self._output_dir = str(path)
@@ -78,24 +82,33 @@ class ContestManager:
 
         self._reports += 1
         point_ids = point_ids.flatten()
+        t = {}
+        t0 = time.time()
         if self._prune_every > 0 and self._reports % self._prune_every == 0:
             live: Set[PointId] = set(point_ids.cpu().tolist())
             self.store.prune_to_live(live)
+        t["prune"] = round(time.time() - t0, 4)
 
+        t0 = time.time()
         pairs = self.aggregator.pairs(self.store, point_ids, points_ins_ids, point_obs)
         by_loser: Dict[int, list] = {}
         for f in pairs:
             by_loser.setdefault(f.loser, []).append(f)
+        t["aggregate"] = round(time.time() - t0, 4)
 
+        t0 = time.time()
         verdicts: List[Verdict] = []
         for loser, fs in by_loser.items():
             verdicts.append(self.discriminator.classify(loser, fs, sim=sim, seam=seam, color=color))
+        t["classify"] = round(time.time() - t0, 4)
 
+        t0 = time.time()
         verdicts = self._resolve_pairs(verdicts, by_loser)
-
         if self.reeval_frontier:
             verdicts = self._reeval_frontier(verdicts, by_loser)
+        t["resolve"] = round(time.time() - t0, 4)
 
+        t0 = time.time()
         for v in verdicts:
             fs = by_loser.get(v.loser, [])
             best = self._find_pair(v.winner, fs)
@@ -114,6 +127,9 @@ class ContestManager:
             })
         if self._output_dir:
             self.dump_verdicts(self._output_dir + "/contest_verdicts.csv")
+        t["dump"] = round(time.time() - t0, 4)
+
+        self.last_timings = t
         return verdicts
 
     def _resolve_pairs(self, verdicts: List[Verdict], by_loser: Dict[int, list]) -> List[Verdict]:
