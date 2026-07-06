@@ -22,4 +22,5 @@ ovo_paper.png
 scripts/*.yaml
 manifests/*.yaml
 scripts/sam2_exploration/output/**
-segmentation_exp/output/**
+segmentation_exp/output/**ins_eval_example/replica_gt/
+ins_eval_example/scannet200_gt/
