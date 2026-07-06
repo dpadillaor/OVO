@@ -94,6 +94,7 @@
     <a href="#6">6 · Cómo se midió (y el matiz GPU)</a>
     <a href="#7">7 · Resultados de tiempo</a>
     <a href="#8">8 · ¿Está bien diseñado?</a>
+    <a href="#hallazgo">★ Hallazgo RESUELTO: denominador de persistence</a>
     <a href="#9">9 · Rediseño para tiempo real</a>
     <a href="#10">10 · Catálogo de optimizaciones</a>
     <a href="#11">11 · Ubicaciones en el código</a>
@@ -171,17 +172,19 @@
   <!-- ===================================================== -->
   <a id="2"></a>
   <h2>2 · Conceptos y glosario</h2>
-  <p>Todo el mecanismo gira alrededor de unas pocas magnitudes por par <b>(perdedor L, ganador W)</b>. "Perdedor" =
-     la instancia a la que le roban puntos; "ganador" = la que se los lleva (su máscara los cubrió).</p>
+  <p>Todo el mecanismo gira alrededor de unas pocas magnitudes por par <b>(defender, challenger)</b> — en el código,
+     los campos <code>PairFeatures.defender</code> / <code>.challenger</code>. El <b>defender</b> es la instancia a la
+     que le roban puntos (el titular); el <b>challenger</b> es la que se los lleva (su máscara los cubrió). En el hot
+     path esos roles son, por punto y KF, el <code>owner</code> y el <code>grabber</code> respectivamente.</p>
 
   <table>
     <tr><th>Magnitud</th><th>Qué es</th><th>Intuición</th></tr>
-    <tr><td class="mono">containment</td><td>fracción de puntos de L que W le disputa (strong_points / tamaño de L)</td><td>“¿qué parte de L está metida dentro de W?” Alto → L parece un trozo de W.</td></tr>
+    <tr><td class="mono">containment</td><td>fracción de puntos de L que W le disputa (firm_points / tamaño de L)</td><td>“¿qué parte de L está metida dentro de W?” Alto → L parece un trozo de W.</td></tr>
     <tr><td class="mono">reverse_containment</td><td>lo mismo al revés (parte de W metida en L)</td><td>Si ambos son altos → se contienen mutuamente → frontera simétrica, no un fragmento direccional.</td></tr>
-    <tr><td class="mono">mass</td><td>Σ sobre KFs de los votos del par</td><td>Cuánta evidencia total hay. Baja → ruido, ni mirar.</td></tr>
+    <tr><td class="mono">total_grabs</td><td>Σ sobre KFs de los votos del par</td><td>Cuánta evidencia total hay. Baja → ruido, ni mirar.</td></tr>
     <tr><td class="mono">persistence</td><td>media de (veces visto bajo W / observaciones totales del punto)</td><td>¿el robo es constante o un parpadeo? Bajo → W solo roza los puntos de refilón.</td></tr>
     <tr><td class="mono">focus</td><td>fracción de los puntos disputados de L que van a ESTE W</td><td>Alto → un solo ganador domina el robo (no repartido entre varios).</td></tr>
-    <tr><td class="mono">strong_points</td><td>nº de puntos de L vistos ≥ <code>min_count</code> KFs bajo W</td><td>El numerador de containment; votos “fuertes”, no anecdóticos.</td></tr>
+    <tr><td class="mono">firm_points</td><td>nº de puntos de L vistos ≥ <code>min_count</code> KFs bajo W</td><td>El numerador de containment; votos “fuertes”, no anecdóticos.</td></tr>
     <tr><td class="mono">split_points</td><td>los ids concretos de esos puntos disputados</td><td>Si el veredicto es SPLIT, estos son los puntos que se transfieren.</td></tr>
   </table>
 
@@ -207,12 +210,12 @@
       <!-- hot lane -->
       <rect x="20" y="30" width="250" height="120" rx="10" fill="rgba(255,107,107,.06)" stroke="rgba(255,107,107,.35)"/>
       <text x="145" y="52" text-anchor="middle" fill="#ff6b6b" font-size="12" font-weight="600">CAMINO CALIENTE · cada KF</text>
-      <rect x="45" y="66" width="200" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="145" y="86" text-anchor="middle" fill="#5ad19a" font-size="12.5" font-family="monospace">record(puntos, ganador)</text>
+      <rect x="45" y="66" width="200" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="145" y="86" text-anchor="middle" fill="#5ad19a" font-size="12.5" font-family="monospace">record_grab(puntos, grabber)</text>
       <rect x="45" y="104" width="200" height="30" rx="6" fill="#1e222b" stroke="#2a2f3a"/><text x="145" y="124" text-anchor="middle" fill="#5ad19a" font-size="12.5" font-family="monospace">on_merge / on_remove</text>
       <!-- store -->
       <rect x="330" y="66" width="150" height="68" rx="10" fill="rgba(90,169,255,.1)" stroke="#5aa9ff"/>
       <text x="405" y="92" text-anchor="middle" fill="#5aa9ff" font-size="13" font-weight="600">STORE</text>
-      <text x="405" y="112" text-anchor="middle" fill="#9aa4b2" font-size="10.5">punto → {ganador: nºKFs}</text>
+      <text x="405" y="112" text-anchor="middle" fill="#9aa4b2" font-size="10.5">punto → {grabber: nºKFs}</text>
       <text x="405" y="126" text-anchor="middle" fill="#9aa4b2" font-size="10.5">solo puntos disputados</text>
       <line x1="245" y1="81" x2="326" y2="90" stroke="#5aa9ff" stroke-width="1.5" marker-end="url(#ar)"/>
       <line x1="245" y1="119" x2="326" y2="108" stroke="#5aa9ff" stroke-width="1.5" marker-end="url(#ar)"/>
@@ -233,8 +236,8 @@
     <div class="figcap">Cuatro enganches, dos tiempos. La evidencia se acumula gota a gota; la decisión cae de golpe.</div>
   </div>
 
-  <h3>3.1 · <code>record()</code> + <code>store</code> — acumular evidencia <span class="pill hot">hot</span></h3>
-  <p>Cada keyframe, por cada máscara que roba puntos, se llama <code>record(puntos_disputados, ganador)</code>. El
+  <h3>3.1 · <code>record_grab()</code> + <code>store</code> — acumular evidencia <span class="pill hot">hot</span></h3>
+  <p>Cada keyframe, por cada máscara que roba puntos, se llama <code>record_grab(puntos_disputados, grabber)</code>. El
      store suma <b>+1</b> al contador (punto, ganador). Diseño clave: la clave es el <b>id permanente</b> del punto
      (sobrevive a que el SLAM reordene o pode la nube), y el contador <b>es</b> el número de keyframes distintos en
      que ese punto se vio bajo ese ganador → la <b>persistencia sale gratis</b>, sin estructura extra. Solo se
@@ -249,12 +252,12 @@
 
   <h3>3.2 · <code>on_merge</code> / <code>on_remove</code> / <code>prune_to_live</code> — coherencia <span class="pill cold">cold</span></h3>
   <p>Espejo del mapa: cuando dos instancias se fusionan, los votos de <code>source</code> pasan a <code>target</code>
-     (gracias al índice inverso <code>_by_winner</code>, barato). Cuando una instancia muere, se borra como ganadora.
+     (gracias al índice inverso <code>_by_grabber</code>, barato). Cuando una instancia muere, se borra como ganadora.
      <code>prune_to_live</code> limpia periódicamente los puntos que el SLAM ya podó. Todo es cirugía de diccionarios.</p>
 
   <h3>3.3 · <code>aggregator.pairs()</code> — derivar features <span class="pill warm">warm</span></h3>
   <p>En cada report, recorre el store y calcula, <b>desde cero</b>, las <code>PairFeatures</code> de §2 para cada par
-     (loser, winner): containment, reverse, mass, persistence, focus… Es <b>puro</b>: no toca el mapa. Usa
+     (defender, challenger): containment, reverse, total_grabs, persistence, focus… Es <b>puro</b>: no toca el mapa. Usa
      <code>searchsorted</code> sobre ids ordenados para saber el dueño actual de cada punto en O(M·log N) sin construir
      diccionarios gigantes.</p>
 
@@ -290,7 +293,7 @@
       </style>
       <!-- root -->
       <rect class="box" x="380" y="16" width="200" height="40" rx="8"/>
-      <text class="q" x="480" y="34" text-anchor="middle">¿mass ≥ min_mass?</text>
+      <text class="q" x="480" y="34" text-anchor="middle">¿total_grabs ≥ min_mass?</text>
       <text class="qn" x="480" y="49" text-anchor="middle">min_mass=50</text>
       <!-- ruido -->
       <path class="edge" d="M380,36 L250,36 L250,66" marker-end="url(#a2)"/>
@@ -505,7 +508,7 @@
         == nº de KFs → persistencia gratis; índice inverso para merge/remove baratos; solo guarda disputados.</li>
     <li><b>Puro y recomputable:</b> aggregator/discriminator no mutan el mapa → veredicto auditable, y por eso
         <code>observe</code> funciona sin efectos colaterales.</li>
-    <li><b>Hot path honesto:</b> <code>record()</code> es solo incrementos de dict.</li>
+    <li><b>Hot path honesto:</b> <code>record_grab()</code> es solo incrementos de dict.</li>
   </ul>
   <h4>Debilidades (todas pesan para real-time)</h4>
   <table>
@@ -513,9 +516,76 @@
     <tr><td><b>report() es un monolito batch</b>: aggregate re-deriva TODOS los pares desde cero cada vez.</td><td>La evidencia se acumula continuo pero la decisión es un pico de 1.5&nbsp;s. No cabe en un bucle a X Hz.</td></tr>
     <tr><td><b>Geometría sin caché</b>: seam/color reconstruyen KDTree y re-transfieren el ganador en cada par.</td><td>Un ganador (una pared) se re-procesa para cada loser y cada report.</td></tr>
     <tr><td><b>Geometría no-gateada</b>: classify corre seam/color aunque el veredicto no se aplique (observe/split off).</td><td>1.4&nbsp;s/report tirados en barridos de observación.</td></tr>
-    <tr><td><b>record() sincroniza la GPU cada KF</b> (<code>.cpu().tolist()</code>).</td><td>Stall pequeño pero por frame, en el hot path.</td></tr>
+    <tr><td><b>record_grab() sincroniza la GPU cada KF</b> (<code>.cpu().tolist()</code>).</td><td>Stall pequeño pero por frame, en el hot path.</td></tr>
     <tr><td><b>Decisión periódica, no dirigida.</b></td><td>El 90% de los pares no cambió desde el último report; recomputarlos es desperdicio.</td></tr>
   </table>
+
+  <!-- ===================================================== -->
+  <a id="hallazgo"></a>
+  <h2>★ Hallazgo RESUELTO — el denominador de <code>persistence</code> estaba mal definido</h2>
+  <div class="callout good">
+    <b>Estado: VERIFICADO + ARREGLADO (2026-07-06).</b> Se cruzó <code>contest.json</code> con <code>pcd_obs</code>:
+    resultado <b>peor que la hipótesis</b> — <code>max(robos/pcd_obs) = 9.0</code>, persistence <b>no acotada</b>
+    (podía dar &gt;1), no un ceiling&lt;1. Arreglado: denominador = <code>store.claims_of(p)</code> (reclamos totales
+    bajo máscara). Verificado end-to-end: persistence ahora en [0, 1] (max=1.000, 0 valores &gt;1). Detalle de
+    implementación en <code>docs/refactor_contest_signals.md</code>.
+  </div>
+
+  <h3>El síntoma</h3>
+  <p><code>persistence</code> se calcula así (aggregator):</p>
+  <div class="flow">persistence = (veces que la máscara de W robó el punto)   ← numerador: <b>reloj semántico</b> (record, cada segment_every)
+              ─────────────────────────────────────────
+              (veces que el punto se vio: pcd_obs)       ← denominador: <b>reloj geométrico</b> (mapping, cada map_every + movimiento)</div>
+  <p>Numerador y denominador <b>cuentan cosas distintas en relojes distintos</b>. El resultado no es una fracción
+     limpia “de las veces que se pudo robar, cuántas se robó”.</p>
+
+  <h3>Dos causas independientes (ambas inflan el denominador)</h3>
+  <table>
+    <tr><th>Causa</th><th>Explicación</th></tr>
+    <tr><td><b>1 · Cadencia</b></td><td><code>pcd_obs</code> sube en el paso de <b>mapping</b> (cada <code>map_every</code>=5 + movimiento). <code>record</code> sube en el paso <b>semántico</b> (cada <code>segment_every</code>=10). El denominador tic-tac ~2× más rápido → hay momentos que suman visibilidad pero donde SAM ni corrió (imposible robar).</td></tr>
+    <tr><td><b>2 · Máscaras</b></td><td>Aún con cadencias iguales: <code>pcd_obs</code> es visibilidad <b>geométrica</b>, no sabe de máscaras. SAM no es perfecto — a veces el punto se ve pero no cae bajo ninguna máscara. Esos momentos inflan el denominador sin haber sido nunca oportunidad de robo.</td></tr>
+  </table>
+
+  <h3>Los tres buckets de una “oportunidad de matching”</h3>
+  <p>Para un punto, en cada KF semántico en que se proyecta, pasa una de tres:</p>
+  <table>
+    <tr><th>Bucket</th><th>Qué pasa</th><th>¿Se registra?</th></tr>
+    <tr><td><b>1 · Leal</b></td><td>cae bajo la máscara de su PROPIA instancia</td><td>❌ nada</td></tr>
+    <tr><td><b>2 · Robo</b></td><td>cae bajo la máscara de OTRA instancia (W)</td><td>✅ store <code>{punto:{W:+1}}</code></td></tr>
+    <tr><td><b>3 · Huérfano</b></td><td>no cae bajo ninguna máscara (SAM falla / máscara &lt; track_th)</td><td>❌ nada</td></tr>
+  </table>
+  <p>El store solo ve el bucket 2. El denominador honesto de persistence sería alguna combinación de 1+2(+3),
+     <b>ninguna de las cuales se cuenta hoy</b> — se usa <code>pcd_obs</code>, que es otro reloj y otra cosa.</p>
+
+  <h3>Consecuencia</h3>
+  <div class="callout">
+    <b>Techo estructural &lt; 1.</b> Un punto robado <i>siempre que se segmenta</i> no puede alcanzar
+    persistence≈1, porque el denominador cuenta más eventos que los que el numerador puede igualar. En este run
+    (map÷5, seg÷10) el techo teórico ronda ~0.5. Además el gate de movimiento hace el denominador irregular, así
+    que el umbral empírico <code>min_persist_split=0.1</code> <b>significa cosas distintas según config y trayectoria</b>.
+    Un umbral calibrado con ÷5/÷10 no transfiere si cambian las cadencias.
+  </div>
+
+  <h3>Propuesta de arreglo</h3>
+  <ul>
+    <li>Añadir un contador <b>por punto de observaciones semánticas</b> (veces que participó en un matching de
+        instancias), y usar ESE como denominador — no <code>pcd_obs</code> (geométrico).</li>
+    <li>Decisión de modelado: ¿denominador = buckets 1+2+3 (penaliza fallos de SAM) o solo 1+2 (mide “cuando alguien
+        lo reclamó, ¿cuánto fue W?”)? Se defiende <b>1+2</b>: persistence debería medir dominancia entre reclamos,
+        no castigar a W por un mal día de SAM.</li>
+  </ul>
+
+  <h3>Verificación (hecha) y arreglo</h3>
+  <ul>
+    <li><b>Confirmado (datos):</b> cruzando <code>contest.json</code> con <code>pcd_obs</code>,
+        <code>max(robos/pcd_obs) = 9.0</code>, <code>p99 = 1.114</code> → persistence <b>no acotada</b> (podía dar &gt;1).
+        Peor que la hipótesis del ceiling&lt;1: el denominador (mapping, gateado por movimiento) sube MENOS que el
+        numerador (semántico), no más.</li>
+    <li><b>Arreglado e implementado:</b> denominador = <code>store.claims_of(p)</code> (reclamos totales bajo máscara,
+        reloj semántico). Como cada robo es un reclamo, <code>c_W ≤ claims</code> → persistence en [0,1].
+        Verificado end-to-end: <b>max=1.000, 0 valores &gt;1</b>. Además se añadieron señales por punto (P3
+        <code>sightings</code>) y telemetría Tier 2 por KF. Detalle: <code>docs/refactor_contest_signals.md</code>.</li>
+  </ul>
 
   <!-- ===================================================== -->
   <a id="9"></a>
@@ -524,8 +594,8 @@
      <b>acotado por frame</b>. Cinco cambios, de menos a más ambicioso:</p>
   <table>
     <tr><th>#</th><th>Cambio</th><th>Idea</th><th>Efecto</th></tr>
-    <tr><td><b>R1</b></td><td>Agregación incremental</td><td>Mantener las PairFeatures vivas, actualizadas en <code>record()</code> (o marcar “sucios” los pares tocados). aggregate solo re-deriva lo que cambió.</td><td>O(all) → O(cambiado). Habilita R2.</td></tr>
-    <tr><td><b>R2</b></td><td>Decisión por eventos</td><td>Cola de pares sucios. Un par se re-evalúa solo cuando su containment/mass cruza un umbral (edge-triggered), no re-scan periódico.</td><td>El ruido/borde nunca dispara classify. Se decide poco y a menudo.</td></tr>
+    <tr><td><b>R1</b></td><td>Agregación incremental</td><td>Mantener las PairFeatures vivas, actualizadas en <code>record_grab()</code> (o marcar “sucios” los pares tocados). aggregate solo re-deriva lo que cambió.</td><td>O(all) → O(cambiado). Habilita R2.</td></tr>
+    <tr><td><b>R2</b></td><td>Decisión por eventos</td><td>Cola de pares sucios. Un par se re-evalúa solo cuando su containment/total_grabs cruza un umbral (edge-triggered), no re-scan periódico.</td><td>El ruido/borde nunca dispara classify. Se decide poco y a menudo.</td></tr>
     <tr><td><b>R3</b></td><td>Presupuesto por frame</td><td>Procesar N pares sucios por frame. El pico de 1.5&nbsp;s se amortiza en micro-lotes.</td><td>Latencia por frame acotada. Es la clave del real-time.</td></tr>
     <tr><td><b>R4</b></td><td>Geometría asíncrona</td><td>seam/color en un hilo/stream de fondo; el bucle encola candidatos y aplica el veredicto unos frames después.</td><td>Saca el cuello del camino crítico. Merges baratos ya; splits geométricos diferidos.</td></tr>
     <tr><td><b>R5</b></td><td>Store/kNN GPU-resident</td><td>Contadores en GPU (scatter/segment-sum), kNN en GPU sobre ganador cropeado, medición con cuda.Event.</td><td>Quita los sync por-frame y el rebuild CPU. Máximo, mayor reescritura.</td></tr>
@@ -562,7 +632,7 @@
   <h2>11 · Ubicaciones en el código</h2>
   <table>
     <tr><th>Qué</th><th>Fichero</th></tr>
-    <tr><td>Hot path — acumular</td><td class="mono">contest/store.py · manager.record()</td></tr>
+    <tr><td>Hot path — acumular</td><td class="mono">contest/store.py · manager.record_grab()</td></tr>
     <tr><td>Agregación (features por par)</td><td class="mono">contest/aggregator.py : pairs()</td></tr>
     <tr><td>Decisión + ramas geométricas</td><td class="mono">contest/discriminator.py : classify()</td></tr>
     <tr><td>Orquestación report + buckets timing</td><td class="mono">contest/manager.py : report()</td></tr>
