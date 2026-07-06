@@ -10,4 +10,4 @@ from .loader import (
     KF_SIGNALS,
     SIGNAL_META,
 )
-from .figures_mpl import signal_figure, save_scene_figures
+from .figures_mpl import signal_figure, derivative_figure, save_scene_figures

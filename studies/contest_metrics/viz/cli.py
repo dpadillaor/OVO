@@ -41,7 +41,8 @@ def _figures_dir(exp_path: pathlib.Path, scene: str) -> pathlib.Path:
 def _run_scene(exp_path: pathlib.Path, scene: str, args: argparse.Namespace) -> None:
     data = load_scene(exp_path, scene)
     out_dir = pathlib.Path(args.out_dir) if getattr(args, "out_dir", None) else _figures_dir(exp_path, scene)
-    saved = save_scene_figures(data, out_dir, ext=args.ext, derived=not args.no_derived)
+    saved = save_scene_figures(data, out_dir, ext=args.ext, derived=not args.no_derived,
+                               derivative=args.derivative)
     print(f"[{scene}] {len(saved)} figures -> {out_dir}")
     for p in saved:
         print(f"  {p.name}")
@@ -72,11 +73,13 @@ def main() -> None:
     p_scene.add_argument("--ext", default="svg", help="Figure format (svg/pdf/png)")
     p_scene.add_argument("--out-dir", help="Override output dir (default: <exp>/<scene>/fusion/contest/figures)")
     p_scene.add_argument("--no-derived", action="store_true", help="Skip derived rate figures")
+    p_scene.add_argument("--derivative", action="store_true", help="Also write a signal+Δ/KF figure per signal")
 
     p_exp = sub.add_parser("exp", help="Per-signal figures for every scene in an experiment")
     p_exp.add_argument("--exp", required=True, help="Experiment ID or path")
     p_exp.add_argument("--ext", default="svg", help="Figure format (svg/pdf/png)")
     p_exp.add_argument("--no-derived", action="store_true", help="Skip derived rate figures")
+    p_exp.add_argument("--derivative", action="store_true", help="Also write a signal+Δ/KF figure per signal")
 
     args = parser.parse_args()
     if args.command == "scene":

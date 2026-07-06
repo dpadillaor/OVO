@@ -77,9 +77,51 @@ def signal_figure(data: SceneContestData, signal: str):
     return fig
 
 
+def _signal_values(data: SceneContestData, signal: str):
+    """Resolve a signal name to (y, title, ylabel) from raw or derived series."""
+    if signal in data.series:
+        return data.series[signal], *SIGNAL_META.get(signal, (signal, "value"))
+    if signal in data.derived:
+        return data.derived[signal], *_RATE_META.get(signal, (signal, "rate"))
+    raise KeyError(f"Signal '{signal}' not in scene {data.exp_id}/{data.scene}")
+
+
+def derivative_figure(data: SceneContestData, signal: str):
+    """Two-panel figure: signal on top, its discrete derivative (Δ/KF) below.
+
+    The derivative sharpens transients (drift shows as a steep spike) and its SIGN
+    separates a sudden collapse from a rapid recovery. Returns the matplotlib Figure.
+    """
+    import numpy as np
+
+    y, title, ylabel = _signal_values(data, signal)
+    dy = np.diff(y, prepend=y[0])
+    x = range(len(y))
+    color = SIGNAL_COLORS.get(signal, _FALLBACK)
+
+    fig, ax = plt.subplots(2, 1, figsize=(7.2, 4.6), sharex=True)
+    ax[0].plot(x, y, "-", color=color, lw=1.2, zorder=2)
+    ax[0].set_ylabel(ylabel, fontsize=9)
+    ax[0].set_title(f"{title} + derivative  ·  {data.exp_id}/{data.scene}", fontsize=9)
+    ax[1].plot(x, dy, "-", color=color, lw=1.0, zorder=2)
+    ax[1].axhline(0, color="0.6", lw=0.6)
+    ax[1].set_ylabel(f"Δ {signal} / KF", fontsize=9)
+    ax[1].set_xlabel("KF idx", fontsize=9)
+    for a in ax:
+        _mark_jumps(a, data.jumps)
+        _style(a)
+    ax[1].set_xlim(-0.5, max(len(y) - 0.5, 1))
+    fig.tight_layout()
+    return fig
+
+
 def save_scene_figures(data: SceneContestData, figures_dir: str | pathlib.Path,
-                       ext: str = "svg", derived: bool = True, dpi: int = 120) -> list[pathlib.Path]:
-    """Write one figure per raw signal (+ derived rates) into figures_dir. Returns paths."""
+                       ext: str = "svg", derived: bool = True, derivative: bool = False,
+                       dpi: int = 120) -> list[pathlib.Path]:
+    """Write one figure per raw signal (+ derived rates) into figures_dir. Returns paths.
+
+    With ``derivative=True`` also writes a two-panel signal+Δ figure per signal.
+    """
     figures_dir = pathlib.Path(figures_dir)
     figures_dir.mkdir(parents=True, exist_ok=True)
     names = list(data.signals)
@@ -93,4 +135,10 @@ def save_scene_figures(data: SceneContestData, figures_dir: str | pathlib.Path,
         fig.savefig(out, dpi=dpi)
         plt.close(fig)
         saved.append(out)
+        if derivative:
+            dfig = derivative_figure(data, signal)
+            dout = figures_dir / f"contest_{signal}_deriv.{ext}"
+            dfig.savefig(dout, dpi=dpi)
+            plt.close(dfig)
+            saved.append(dout)
     return saved
