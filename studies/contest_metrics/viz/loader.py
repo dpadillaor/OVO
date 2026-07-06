@@ -107,7 +107,7 @@ def discover_scenes(exp_path: str | pathlib.Path) -> list[str]:
         raise FileNotFoundError(f"Experiment directory not found: {p}")
     scenes = []
     for entry in sorted(p.iterdir()):
-        d = contest_log_dir(entry, entry.name)
+        d = contest_log_dir(p, entry.name)
         if entry.is_dir() and d.is_dir() and any(d.glob("*.log")):
             scenes.append(entry.name)
     return scenes
