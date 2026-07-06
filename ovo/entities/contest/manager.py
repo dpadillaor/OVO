@@ -1,6 +1,6 @@
-"""Fachada del mecanismo. OVO tiene un `ContestManager` y lo llama en 4 sitios:
+"""Fachada del mecanismo. OVO tiene un `ContestManager` y lo llama en varios sitios:
 
-  1. record(...)    en _track_objects            (camino caliente, cada KF, barato)
+  1. record_grab/record_claim/record_sighting  en _track_objects  (camino caliente, cada KF, barato)
   2. on_merge(...)  en _fuse_overlapping_instances (al fusionar, junto a cooccurrence)
   3. on_remove(...) en _remove_missing_instances   (al borrar, junto a cooccurrence)
   4. report(...)    en update_map                  (a la cadencia de la fusión)
@@ -11,6 +11,7 @@ enchufa en la siguiente fase, detrás de su propio flag.
 """
 import csv
 import json
+import os
 import time
 from typing import Dict, List, Optional, Set
 
@@ -40,7 +41,7 @@ class ContestManager:
         )
         # fase 2 opcional: reevaluar "frontera real" con el union-find de los
         # merges decididos en el MISMO batch (root real, no identidad). Resuelve
-        # el caso 95: varios IDs ganadores que en realidad son un solo objeto.
+        # el caso 95: varios challengers que en realidad son un solo objeto.
         self.reeval_frontier: bool = cfg.get("reeval_frontier", False)
         # podar el store cada N llamadas a report (la poda recorre los vivos)
         self._prune_every: int = cfg.get("prune_every", 10)
@@ -53,12 +54,26 @@ class ContestManager:
 
     def set_output_dir(self, path) -> None:
         self._output_dir = str(path)
+        os.makedirs(self._output_dir, exist_ok=True)
 
     # ---- 1. camino caliente (una llamada por máscara con puntos en disputa) ----
-    def record(self, contested_point_ids: torch.Tensor, winner: int) -> None:
-        if not self.enabled or contested_point_ids.numel() == 0:
+    def record_grab(self, grabbed_point_ids: torch.Tensor, grabber: int) -> None:
+        if not self.enabled or grabbed_point_ids.numel() == 0:
             return
-        self.store.record(contested_point_ids.cpu().flatten().tolist(), int(winner))
+        self.store.record_grab(grabbed_point_ids.cpu().flatten().tolist(), int(grabber))
+
+    def record_claim(self, claimed_point_ids: torch.Tensor) -> None:
+        """+1 al total de reclamos de cada punto asignado bajo una máscara (leal o robo).
+        Denominador de persistence, en el reloj semántico (mismo que record_grab)."""
+        if not self.enabled or claimed_point_ids.numel() == 0:
+            return
+        self.store.record_claim(claimed_point_ids.cpu().flatten().tolist())
+
+    def record_sighting(self, seen_point_ids: torch.Tensor) -> None:
+        """+1 a cada punto visto este KF, con o sin máscara. Para fiabilidad/P4."""
+        if not self.enabled or seen_point_ids.numel() == 0:
+            return
+        self.store.record_sighting(seen_point_ids.cpu().flatten().tolist())
 
     # ---- 2 y 3. ciclo de vida (enganchados junto a self.cooccurrence) ----
     def on_merge(self, target: int, source: int) -> None:
@@ -91,37 +106,37 @@ class ContestManager:
 
         t0 = time.time()
         pairs = self.aggregator.pairs(self.store, point_ids, points_ins_ids, point_obs)
-        by_loser: Dict[int, list] = {}
+        by_defender: Dict[int, list] = {}
         for f in pairs:
-            by_loser.setdefault(f.loser, []).append(f)
+            by_defender.setdefault(f.defender, []).append(f)
         t["aggregate"] = round(time.time() - t0, 4)
 
         t0 = time.time()
         verdicts: List[Verdict] = []
-        for loser, fs in by_loser.items():
-            verdicts.append(self.discriminator.classify(loser, fs, sim=sim, seam=seam, color=color))
+        for defender, fs in by_defender.items():
+            verdicts.append(self.discriminator.classify(defender, fs, sim=sim, seam=seam, color=color))
         t["classify"] = round(time.time() - t0, 4)
 
         t0 = time.time()
-        verdicts = self._resolve_pairs(verdicts, by_loser)
+        verdicts = self._resolve_pairs(verdicts, by_defender)
         if self.reeval_frontier:
-            verdicts = self._reeval_frontier(verdicts, by_loser)
+            verdicts = self._reeval_frontier(verdicts, by_defender)
         t["resolve"] = round(time.time() - t0, 4)
 
         t0 = time.time()
         for v in verdicts:
-            fs = by_loser.get(v.loser, [])
-            best = self._find_pair(v.winner, fs)
+            fs = by_defender.get(v.defender, [])
+            best = self._find_pair(v.challenger, fs)
             self._verdicts_log.append({
                 "report": self._reports,
-                "loser": v.loser,
-                "winner": v.winner,
+                "defender": v.defender,
+                "challenger": v.challenger,
                 "decision": v.decision.name,
                 "reason": v.reason,
                 "containment": best.containment if best is not None else None,
                 "reverse_containment": best.reverse_containment if best is not None else None,
-                "strong_points": best.strong_points if best is not None else None,
-                "mass": best.mass if best is not None else None,
+                "firm_points": best.firm_points if best is not None else None,
+                "total_grabs": best.total_grabs if best is not None else None,
                 "persistence": best.persistence if best is not None else None,
                 "focus": best.focus if best is not None else None,
             })
@@ -132,10 +147,10 @@ class ContestManager:
         self.last_timings = t
         return verdicts
 
-    def _resolve_pairs(self, verdicts: List[Verdict], by_loser: Dict[int, list]) -> List[Verdict]:
+    def _resolve_pairs(self, verdicts: List[Verdict], by_defender: Dict[int, list]) -> List[Verdict]:
         """Decide UNA vez por par no-ordenado {A,B}, con los dos containments.
 
-        `classify` mira cada perdedor por separado (A->B y B->A son veredictos
+        `classify` mira cada defender por separado (A->B y B->A son veredictos
         distintos sobre la misma relación física). Aquí los juntamos: la decisión
         es una propiedad del PAR, no de un lado. Esto elimina de raíz las
         contradicciones (MERGE+SPLIT, SPLIT+SPLIT) sin parchear caso a caso.
@@ -143,36 +158,36 @@ class ContestManager:
         Reemplaza al antiguo `_reconcile` (que solo cubría MERGE-vs-SPLIT y dejaba
         escapar el SPLIT-vs-SPLIT, p.ej. dos trozos de una misma pared).
         """
-        # veredictos sin ganador (frontera real, ruido, borde) pasan tal cual
-        passthrough = [v for v in verdicts if v.winner is None]
-        directed = {(v.loser, v.winner): v for v in verdicts if v.winner is not None}
+        # veredictos sin challenger (frontera real, ruido, borde) pasan tal cual
+        passthrough = [v for v in verdicts if v.challenger is None]
+        directed = {(v.defender, v.challenger): v for v in verdicts if v.challenger is not None}
 
-        def cont(a: int, w: int) -> float:
-            f = self._find_pair(w, by_loser.get(a, []))
-            return f.containment if f is not None and f.winner == w else 0.0
+        def cont(a: int, ch: int) -> float:
+            f = self._find_pair(ch, by_defender.get(a, []))
+            return f.containment if f is not None and f.challenger == ch else 0.0
 
         resolved: List[Verdict] = []
         seen: Set[tuple] = set()
-        for (a, w), vab in directed.items():
-            key = (a, w) if a < w else (w, a)
+        for (a, ch), vab in directed.items():
+            key = (a, ch) if a < ch else (ch, a)
             if key in seen:
                 continue
             seen.add(key)
-            vba = directed.get((w, a))
+            vba = directed.get((ch, a))
             if vba is None:
                 resolved.append(vab)  # solo un sentido opina -> se respeta
             else:
-                resolved.append(self._join(vab, vba, cont(a, w), cont(w, a), self.discriminator.low))
+                resolved.append(self._join(vab, vba, cont(a, ch), cont(ch, a), self.discriminator.low))
         return passthrough + resolved
 
-    def _reeval_frontier(self, verdicts: List[Verdict], by_loser: Dict[int, list]) -> List[Verdict]:
+    def _reeval_frontier(self, verdicts: List[Verdict], by_defender: Dict[int, list]) -> List[Verdict]:
         """FASE 2 (opt-in): revisita las "frontera real" con el root del batch.
 
-        La rama strong marca NO_ACTION "frontera real" cuando un perdedor está muy
-        contenido en >=2 ganadores con IDs distintos. Pero esos IDs pueden ser el
+        La rama strong marca NO_ACTION "frontera real" cuando un defender está muy
+        contenido en >=2 challengers con IDs distintos. Pero esos IDs pueden ser el
         MISMO objeto si se fusionan en este mismo batch (caso 95: 78/33/81). Aquí:
           1. construimos un union-find con los MERGE_CONTAINMENT ya resueltos,
-          2. recomputamos las raíces de los ganadores fuertes con ese find,
+          2. recomputamos las raíces de los challengers fuertes con ese find,
           3. si colapsan a 1 raíz -> el "muro" era ficticio -> MERGE.
         No re-agrega geometría: solo reordena las decisiones del propio batch.
         """
@@ -188,22 +203,22 @@ class ContestManager:
         def union(a: int, b: int) -> None:
             parent[find(a)] = find(b)
 
-        # 1. union-find con los merges decididos en este batch (perdedor -> ganador)
+        # 1. union-find con los merges decididos en este batch (defender -> challenger)
         for v in verdicts:
-            if v.decision is Decision.MERGE_CONTAINMENT and v.winner is not None:
-                union(v.loser, v.winner)
+            if v.decision is Decision.MERGE_CONTAINMENT and v.challenger is not None:
+                union(v.defender, v.challenger)
 
         high = self.discriminator.high
         out: List[Verdict] = []
         for v in verdicts:
             # solo las frontera-real de la rama strong (no la frontera simétrica)
             if v.decision is Decision.NO_ACTION and "frontera real" in v.reason:
-                strong = [p for p in by_loser.get(v.loser, []) if p.containment >= high]
-                roots = {find(p.winner) for p in strong}
+                strong = [p for p in by_defender.get(v.defender, []) if p.containment >= high]
+                roots = {find(p.challenger) for p in strong}
                 if strong and len(roots) == 1:
                     best = max(strong, key=lambda p: p.containment)
                     out.append(Verdict(
-                        Decision.MERGE_CONTAINMENT, v.loser, winner=best.winner,
+                        Decision.MERGE_CONTAINMENT, v.defender, challenger=best.challenger,
                         reason=f"frontera resuelta por root real (cont={best.containment:.2f})",
                     ))
                     continue
@@ -226,18 +241,18 @@ class ContestManager:
 
         if Decision.MERGE_CONTAINMENT in decs:
             return Verdict(
-                Decision.MERGE_CONTAINMENT, hi.loser, winner=hi.winner,
+                Decision.MERGE_CONTAINMENT, hi.defender, challenger=hi.challenger,
                 reason=f"merge (resuelto por par, cont={hi_c:.2f})",
             )
 
         if vab.decision is Decision.SPLIT and vba.decision is Decision.SPLIT:
             if hi_c >= low:
                 return Verdict(
-                    Decision.MERGE_CONTAINMENT, hi.loser, winner=hi.winner,
+                    Decision.MERGE_CONTAINMENT, hi.defender, challenger=hi.challenger,
                     reason=f"split simétrico resuelto -> merge (cont={hi_c:.2f})",
                 )
             return Verdict(
-                Decision.NO_ACTION, hi.loser,
+                Decision.NO_ACTION, hi.defender,
                 reason=f"split simétrico -> frontera (cont={hi_c:.2f}<{low})",
             )
 
@@ -248,11 +263,11 @@ class ContestManager:
         return hi
 
     @staticmethod
-    def _find_pair(winner: Optional[int], pairs: List[PairFeatures]) -> Optional[PairFeatures]:
-        if winner is None:
+    def _find_pair(challenger: Optional[int], pairs: List[PairFeatures]) -> Optional[PairFeatures]:
+        if challenger is None:
             return pairs[0] if pairs else None
         for f in pairs:
-            if f.winner == winner:
+            if f.challenger == challenger:
                 return f
         return pairs[0] if pairs else None
 
@@ -266,11 +281,19 @@ class ContestManager:
 
     # ---- serialización con la escena ----
     def to_dict(self) -> dict:
-        return {"store": self.store.to_dict()}
+        # "claims"/"sightings" van como claves hermanas de "grabs" (no anidadas) para
+        # mantener el formato {punto:{grabber:count}} que consumen los lectores externos.
+        return {
+            "grabs": self.store.to_dict(),
+            "claims": self.store.claims_to_dict(),
+            "sightings": self.store.sightings_to_dict(),
+        }
 
     def load_dict(self, data: dict) -> None:
-        if data and "store" in data:
-            self.store = ContestStore.from_dict(data["store"])
+        if data and "grabs" in data:
+            self.store = ContestStore.from_dict(data["grabs"])
+            self.store.load_claims(data.get("claims", {}))
+            self.store.load_sightings(data.get("sightings", {}))
 
     def dump(self, path: str) -> None:
         """Vuelca el registro crudo por punto a JSON, al final de la escena."""
@@ -282,8 +305,8 @@ class ContestManager:
         if not self._verdicts_log:
             return
         fields = [
-            "report", "loser", "winner", "decision", "reason",
-            "containment", "reverse_containment", "strong_points", "mass", "persistence", "focus",
+            "report", "defender", "challenger", "decision", "reason",
+            "containment", "reverse_containment", "firm_points", "total_grabs", "persistence", "focus",
         ]
         with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")

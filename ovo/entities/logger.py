@@ -24,15 +24,27 @@ def _is_fusion_owned_stat(key: str) -> bool:
         key in _FUSION_OWNED_STATS
         or key.startswith("t_crit_")
         or key.startswith("t_contest_")
+        or _is_contest_stat(key)
         or key.startswith("sc_")
     )
+
+
+# Telemetría Tier 2 del contest (por KF). Se escriben a logger/contest/ (no logger/).
+_CONTEST_KF_STATS = {"n_matched", "n_pre_assign", "n_used", "n_orphans", "n_births", "n_robos"}
+
+
+def _is_contest_stat(key: str) -> bool:
+    """True para señales del contest que viven en logger/contest/ (timing + telemetría por KF)."""
+    return key.startswith("t_contest_") or key in _CONTEST_KF_STATS
 
 class Logger:
     def __init__(self, output_path: str, pid: int | None = None, use_wandb: bool = False) -> None:
         self.output_path = Path(output_path)
         (self.output_path / "logger").mkdir(exist_ok=True, parents=True)
         (self.output_path / "logger" / "segment_vis").mkdir(exist_ok=True, parents=True)
+        (self.output_path / "logger" / "contest").mkdir(exist_ok=True, parents=True)
         (self.output_path / "fusion").mkdir(exist_ok=True, parents=True)
+        (self.output_path / "fusion" / "contest").mkdir(exist_ok=True, parents=True)
         stat_keys = [
             "frame_id", "t_sam", "t_obj", "n_obj", "n_matches", "t_up", "t_seg", "t_clip",
             "avg_fps", "ram", "vram", "spf", "total_time",
@@ -181,7 +193,9 @@ class Logger:
                 stat_list = [str(v[0]) if isinstance(v, list) else str(v) for v in stat]
             else:
                 stat_list = [str(i) for i in stat]
-            with open(self.output_path/"logger"/f"{key}.log", "w") as f:
+            # las señales del contest (timing + telemetría por KF) van a logger/contest/
+            subdir = "logger/contest" if _is_contest_stat(key) else "logger"
+            with open(self.output_path/subdir/f"{key}.log", "w") as f:
                 f.write('\n'.join(stat_list))
 
     def print_final_stats(self) -> None:

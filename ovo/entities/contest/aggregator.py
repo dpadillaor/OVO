@@ -2,6 +2,9 @@
 del mapa (points_ids, points_ins_ids). Es puro: no toca el mapa, no decide nada,
 y no guarda nada (se recalcula bajo demanda, porque caduca en cada merge/poda).
 
+Cada par es (defender, challenger): el defender es el `owner` agregado de los puntos
+disputados; el challenger es el `grabber` que se los roba.
+
 Coste: O(nº de puntos en disputa). Se llama a la cadencia de la fusión, no por KF.
 """
 from collections import defaultdict
@@ -9,13 +12,13 @@ from typing import Dict, List, Tuple
 
 import torch
 
-from .types import InsId, PairFeatures
+from .types import InsId, PointId, PairFeatures
 from .store import ContestStore
 
 
 class ContestAggregator:
     def __init__(self, min_count: int = 1) -> None:
-        # un voto cuenta como "fuerte" si el punto vio al ganador en >= min_count KFs
+        # un robo cuenta como "firme" si el punto vio al challenger en >= min_count KFs
         self.min_count = min_count
 
     def _owner_lookup(
@@ -54,58 +57,58 @@ class ContestAggregator:
         owners = self._owner_lookup(point_ids, points_ins_ids, contested).tolist()
         ids = contested.tolist()
 
-        # lookup per-point total observations
-        if point_obs is not None:
-            total_obs = self._owner_lookup(point_ids, point_obs, contested).tolist()
-        else:
-            total_obs = [0] * len(ids)
+        # NOTA: point_obs (visibilidad geométrica del SLAM) ya NO es el denominador de
+        # persistence. Iba en otro reloj (mapping, gateado por movimiento) que ni acota
+        # el cociente en [0,1] (podía dar >1). El denominador correcto es store.claims_of(p):
+        # nº de reclamos del punto bajo cualquier máscara, mismo reloj semántico que los robos.
 
-        strong: Dict[Tuple[InsId, InsId], int] = defaultdict(int)
-        mass: Dict[Tuple[InsId, InsId], int] = defaultdict(int)
+        firm: Dict[Tuple[InsId, InsId], int] = defaultdict(int)
+        total_grabs: Dict[Tuple[InsId, InsId], int] = defaultdict(int)
         persistence_sum: Dict[Tuple[InsId, InsId], float] = defaultdict(float)
         persistence_cnt: Dict[Tuple[InsId, InsId], int] = defaultdict(int)
-        contested_total: Dict[InsId, int] = defaultdict(int)
+        disputed_total: Dict[InsId, int] = defaultdict(int)
         split_points: Dict[Tuple[InsId, InsId], List[PointId]] = defaultdict(list)
-        for p, a, tobs in zip(ids, owners, total_obs):
-            if a < 0:  # punto podado o sin dueño -> se ignora (y se podará del store)
+        for p, d in zip(ids, owners):
+            if d < 0:  # punto podado o sin dueño -> se ignora (y se podará del store)
                 continue
-            any_contest = False
-            for w, c in store.winners_of(p).items():
-                if w == a:
+            denom = store.claims_of(p)  # total de reclamos -> c <= denom -> persistence en [0,1]
+            any_grab = False
+            for ch, c in store.grabbers_of(p).items():
+                if ch == d:
                     continue
-                any_contest = True
-                mass[(a, w)] += c
+                any_grab = True
+                total_grabs[(d, ch)] += c
                 if c >= self.min_count:
-                    strong[(a, w)] += 1
-                    split_points[(a, w)].append(p)
-                if tobs > 0:
-                    persistence_sum[(a, w)] += c / tobs
-                    persistence_cnt[(a, w)] += 1
-            if any_contest:
-                contested_total[a] += 1
+                    firm[(d, ch)] += 1
+                    split_points[(d, ch)].append(p)
+                if denom > 0:
+                    persistence_sum[(d, ch)] += c / denom
+                    persistence_cnt[(d, ch)] += 1
+            if any_grab:
+                disputed_total[d] += 1
 
         out: List[PairFeatures] = []
-        for (a, w), sp in strong.items():
-            na = size.get(a, 0)
-            if na == 0:
+        for (d, ch), fp in firm.items():
+            nd = size.get(d, 0)
+            if nd == 0:
                 continue
-            nw = size.get(w, 0)
-            rev = (strong.get((w, a), 0) / nw) if nw else 0.0
-            pcnt = persistence_cnt.get((a, w), 0)
-            pers = persistence_sum.get((a, w), 0.0) / pcnt if pcnt > 0 else 0.0
-            ct = contested_total.get(a, 0)
-            focus_val = sp / ct if ct > 0 else 0.0
+            nch = size.get(ch, 0)
+            rev = (firm.get((ch, d), 0) / nch) if nch else 0.0
+            pcnt = persistence_cnt.get((d, ch), 0)
+            pers = persistence_sum.get((d, ch), 0.0) / pcnt if pcnt > 0 else 0.0
+            dt = disputed_total.get(d, 0)
+            focus_val = fp / dt if dt > 0 else 0.0
             out.append(
                 PairFeatures(
-                    loser=a,
-                    winner=w,
-                    containment=sp / na,
+                    defender=d,
+                    challenger=ch,
+                    containment=fp / nd,
                     reverse_containment=rev,
-                    strong_points=sp,
-                    mass=mass[(a, w)],
+                    firm_points=fp,
+                    total_grabs=total_grabs[(d, ch)],
                     persistence=pers,
                     focus=focus_val,
-                    split_points=tuple(split_points.get((a, w), ())),
+                    split_points=tuple(split_points.get((d, ch), ())),
                 )
             )
         return out

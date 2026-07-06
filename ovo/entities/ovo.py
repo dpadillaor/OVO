@@ -192,7 +192,7 @@ class OVO:
         return wrapper    
     
     def detect_and_track_objects(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor) -> torch.Tensor:
-        r""" For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
+        """ For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
             - frame_data (tuple): current frame data.
@@ -346,38 +346,65 @@ class OVO:
             - matched_ins_info (Dict[int, List[Tuple[int, int]]]]): Hash map storing for each observed 3D instance, a list of (matched mask index, mask area).
         """
 
+        # sightings: +1 a cada punto visto este KF, con o sin máscara. Denominador
+        # de fiabilidad; P4 (huérfano-asignado) = sightings - claims.
+        self.contest.record_sighting(points_ids[matched_points_idxs].flatten())
+
+        # Telemetría Tier 2 (por KF): partición de los puntos matcheados. Solo si log.
+        log_on = self.config.get("log", False)
+        n_matched = int(matched_points_idxs.numel()) if log_on else 0
+        n_pre_assign = int((points_ins_ids[matched_points_idxs] > -1).sum().item()) if log_on else 0
+        n_used = n_covered = n_births = n_robos = 0
+
         matched_ins_info = {}
         for map_idx in range(seg_map.max()+1):
             map_ins_id = -1
             map_points = matched_points_idxs[matched_seg_idxs == map_idx]
             if len(map_points)> track_th:
                 mask_area = (seg_map == map_idx).sum().item()
-                assigned_mask = points_ins_ids[map_points] > -1                    
+                assigned_mask = points_ins_ids[map_points] > -1
                 unassigned_points_ids = points_ids[map_points[~assigned_mask]].flatten().cpu().tolist()
                 #Assign points to 3D instance, or create a new instance
                 if assigned_mask.sum().item() > track_th:
                     map_ins_id = torch.mode(points_ins_ids[map_points[assigned_mask]]).values.item()
                     assigned_idx = map_points[assigned_mask]
+                    # denominador de persistence: TODO punto asignado bajo esta máscara cuenta
+                    # como reclamo (leal o robo), en el mismo reloj semántico que los robos.
+                    self.contest.record_claim(points_ids[assigned_idx].flatten())
                     contested = points_ins_ids[assigned_idx] != map_ins_id
                     if contested.any():
-                        self.contest.record(points_ids[assigned_idx[contested]].flatten(), map_ins_id)
+                        self.contest.record_grab(points_ids[assigned_idx[contested]].flatten(), map_ins_id)
+                        if log_on:
+                            n_robos += int(contested.sum().item())
                     self.objects[map_ins_id].update(unassigned_points_ids, kf_id, mask_area)
                     if map_ins_id in matched_ins_info.keys():
-                        matched_ins_info[map_ins_id].append((map_idx, mask_area))  
+                        matched_ins_info[map_ins_id].append((map_idx, mask_area))
                     else:
                         matched_ins_info[map_ins_id]=[(map_idx, mask_area)]
 
-                elif len(unassigned_points_ids) > track_th:                    
+                elif len(unassigned_points_ids) > track_th:
                     map_ins_id = self.next_ins_id
                     self.next_ins_id +=1
+                    if log_on:
+                        n_births += 1
                     #assigned points do not change obj id
                     self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, frame_id=frame_id, points_ids=unassigned_points_ids, mask_area=mask_area)
                     matched_ins_info[map_ins_id]=[(map_idx, mask_area)]
 
                 if map_ins_id > -1:
-                    # Assignto matched unassigned points (id==-1) new instance id 
+                    # Assignto matched unassigned points (id==-1) new instance id
                     points_ins_ids[map_points[~assigned_mask]] = map_ins_id
-        
+                    if log_on:
+                        n_used += 1
+                        n_covered += int(map_points.numel())
+
+        if log_on:
+            # n_orphans = matcheados no cubiertos por ninguna máscara usada (buckets 3a+3b)
+            self.logger.log_ovo_stats({
+                "n_matched": n_matched, "n_pre_assign": n_pre_assign, "n_used": n_used,
+                "n_orphans": n_matched - n_covered, "n_births": n_births, "n_robos": n_robos,
+            })
+
         return points_ins_ids, matched_ins_info
 
     def _fuse_masks_with_same_ins_id(self, binary_maps: torch.Tensor, matched_ins_info: Dict[int, List[Tuple[int, int]]], kf_id: int) -> Tuple[List[int], torch.Tensor, np.ndarray] :
@@ -654,30 +681,30 @@ class OVO:
         fused_objects = {}
         t0 = self._sync_time()
         for v in verdicts:
-            if v.decision.name == "MERGE_CONTAINMENT" and v.winner is not None:
-                loser_id = v.loser
-                winner_id = v.winner
-                if loser_id in fused_objects:
+            if v.decision.name == "MERGE_CONTAINMENT" and v.challenger is not None:
+                defender_id = v.defender
+                challenger_id = v.challenger
+                if defender_id in fused_objects:
                     continue
-                # merge encadenado: si el ganador ya fue absorbido en este batch
-                # (era a su vez perdedor de otro merge), redirige al ganador final.
-                # Sin esto, fuse_instances reasigna los puntos del perdedor a un id
+                # merge encadenado: si el challenger ya fue absorbido en este batch
+                # (era a su vez defender de otro merge), redirige al challenger final.
+                # Sin esto, fuse_instances reasigna los puntos del defender a un id
                 # que se va a borrar -> puntos huérfanos (id sin objeto) -> eval peta.
                 seen = set()
-                while winner_id in fused_objects and winner_id not in seen:
-                    seen.add(winner_id)
-                    winner_id = fused_objects[winner_id]
-                if loser_id == winner_id:
+                while challenger_id in fused_objects and challenger_id not in seen:
+                    seen.add(challenger_id)
+                    challenger_id = fused_objects[challenger_id]
+                if defender_id == challenger_id:
                     continue
-                if loser_id not in self.objects or winner_id not in self.objects:
+                if defender_id not in self.objects or challenger_id not in self.objects:
                     continue
-                winner = self.objects[winner_id]
-                loser = self.objects[loser_id]
-                winner, points_ins_ids = instance_utils.fuse_instances(winner, loser, map_data)
-                self.cooccurrence.merge(target=winner_id, source=loser_id)
-                self.contest.on_merge(target=winner_id, source=loser_id)
-                fused_objects[loser_id] = winner_id
-                self.objects[winner_id] = winner
+                challenger = self.objects[challenger_id]
+                defender = self.objects[defender_id]
+                challenger, points_ins_ids = instance_utils.fuse_instances(challenger, defender, map_data)
+                self.cooccurrence.merge(target=challenger_id, source=defender_id)
+                self.contest.on_merge(target=challenger_id, source=defender_id)
+                fused_objects[defender_id] = challenger_id
+                self.objects[challenger_id] = challenger
 
         apply_times = {"merges": round(self._sync_time() - t0, 4)}
 
@@ -686,7 +713,7 @@ class OVO:
         split_count = 0
         if split_mode != "off":
             for v in verdicts:
-                if v.decision.name != "SPLIT" or v.winner is None or not v.subset:
+                if v.decision.name != "SPLIT" or v.challenger is None or not v.split_points:
                     continue
                 is_partial = "parcial" in v.reason
                 is_dominance = "dominancia" in v.reason
@@ -694,23 +721,23 @@ class OVO:
                     continue
                 if split_mode == "dominance" and not is_dominance:
                     continue
-                loser_id = v.loser
-                winner_id = v.winner
+                defender_id = v.defender
+                challenger_id = v.challenger
                 # skip if either side was already consumed by a merge in this batch
                 # (e.g. contradictory MERGE+SPLIT verdicts on the same pair) -> avoids
                 # reassigning points to an instance that is about to be deleted.
-                if loser_id in fused_objects or winner_id in fused_objects:
+                if defender_id in fused_objects or challenger_id in fused_objects:
                     continue
-                if loser_id not in self.objects or winner_id not in self.objects:
+                if defender_id not in self.objects or challenger_id not in self.objects:
                     continue
-                subset_set = set(v.subset)
-                loser = self.objects[loser_id]
-                winner = self.objects[winner_id]
-                removed = loser.remove_points_ids(subset_set)
+                subset_set = set(v.split_points)
+                defender = self.objects[defender_id]
+                challenger = self.objects[challenger_id]
+                removed = defender.remove_points_ids(subset_set)
                 if removed > 0:
-                    winner.add_points_ids(list(subset_set))
+                    challenger.add_points_ids(list(subset_set))
                     subset_t = torch.as_tensor(list(subset_set), device=points_ins_ids.device)
-                    points_ins_ids[torch.isin(points_ids.flatten(), subset_t)] = v.winner
+                    points_ins_ids[torch.isin(points_ids.flatten(), subset_t)] = v.challenger
                     split_count += 1
         if split_count:
             print(f"  contest splits ({split_mode}): {split_count}")
