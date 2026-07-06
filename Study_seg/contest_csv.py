@@ -19,7 +19,7 @@ import csv
 import statistics as st
 from collections import Counter, defaultdict
 
-NUM = ["containment", "reverse_containment", "strong_points", "mass", "persistence", "focus"]
+NUM = ["containment", "reverse_containment", "firm_points", "total_grabs", "persistence", "focus"]
 
 
 def load(path):
@@ -73,18 +73,18 @@ def cmd_pair(args):
         print(f"--- instancia {tgt} ---")
         hits = [
             r for r in rows
-            if int(r["loser"]) == tgt
-            or (r["winner"] not in ("", None) and int(r["winner"]) == tgt)
+            if int(r["defender"]) == tgt
+            or (r["challenger"] not in ("", None) and int(r["challenger"]) == tgt)
         ]
         if not hits:
             print("  (sin filas)")
         for r in hits:
-            role = "LOSER " if int(r["loser"]) == tgt else f"win<-{r['loser']}"
+            role = "LOSER " if int(r["defender"]) == tgt else f"win<-{r['defender']}"
             feats = "  ".join(
                 f"{k.split('_')[0][:4]}={num(r,k):.3f}" if num(r, k) is not None else f"{k[:4]}=-"
                 for k in ("containment", "reverse_containment", "persistence", "focus")
             )
-            print(f"  {role:10} {r['decision']:18} {feats}  mass={r['mass']:>8} | {r['reason']}")
+            print(f"  {role:10} {r['decision']:18} {feats}  mass={r['total_grabs']:>8} | {r['reason']}")
 
 
 def cmd_filter(args):
@@ -97,12 +97,12 @@ def cmd_filter(args):
             f"{k.split('_')[0][:4]}={num(r,k):.3f}" if num(r, k) is not None else f"{k[:4]}=-"
             for k in NUM
         )
-        print(f"  {r['loser']:>4}->{str(r['winner']):>4}  {feats} | {r['reason']}")
+        print(f"  {r['defender']:>4}->{str(r['challenger']):>4}  {feats} | {r['reason']}")
 
 
 def cmd_compare(args):
-    a = {(int(r["loser"]), r["winner"]): r for r in load(args.csv_a)}
-    b = {(int(r["loser"]), r["winner"]): r for r in load(args.csv_b)}
+    a = {(int(r["defender"]), r["challenger"]): r for r in load(args.csv_a)}
+    b = {(int(r["defender"]), r["challenger"]): r for r in load(args.csv_b)}
     keys = sorted(set(a) | set(b))
     ca, cb = Counter(r["decision"] for r in a.values()), Counter(r["decision"] for r in b.values())
     print(f"A={args.csv_a}\nB={args.csv_b}\n")

@@ -17,8 +17,8 @@ tools take an explicit path, so point them at wherever the file actually is):
 
 | File | What it is | Tool |
 |---|---|---|
-| `contest_verdicts.csv` | one row per decided perdedor: decision + features | `Study_seg/contest_csv.py` |
-| `contest.json` | raw store: `{point_id: {winner: nº_KFs}}` | `Study_seg/contest_json.py` |
+| `contest_verdicts.csv` | one row per decided defender: decision + features | `Study_seg/contest_csv.py` |
+| `contest.json` | raw counters: `{"grabs": {point_id: {grabber: nº_KFs}}, "claims": {point_id: n}, "sightings": {point_id: n}}` | `Study_seg/contest_json.py` |
 | `ovo_map.ckpt` (`map_params.normals`) | per-point surface normals | `Study_seg/seam_normals_viz.py` |
 
 ## When to use which
@@ -40,9 +40,9 @@ python3 Study_seg/contest_csv.py compare  BASELINE_CSV NEW_CSV
 ```
 
 - `summary` — counts per decision, reason families, per-decision feature medians/min/max.
-- `pair ID...` — every row touching those instances (as loser or winner). The go-to for "what happened to instance N".
-- `filter --decision {MERGE_CONTAINMENT|SPLIT|NO_ACTION|DEFER_TO_FUSION}` — sort by any feature (`containment`, `reverse_containment`, `strong_points`, `mass`, `persistence`, `focus`), `--top N`, `--asc`.
-- `compare A B` — decision counts delta + the exact list of `(loser->winner)` whose verdict changed. **Use this to validate a threshold change**: run baseline vs new and read which verdicts flipped.
+- `pair ID...` — every row touching those instances (as defender or challenger). The go-to for "what happened to instance N".
+- `filter --decision {MERGE_CONTAINMENT|SPLIT|NO_ACTION|DEFER_TO_FUSION}` — sort by any feature (`containment`, `reverse_containment`, `firm_points`, `total_grabs`, `persistence`, `focus`), `--top N`, `--asc`.
+- `compare A B` — decision counts delta + the exact list of `(defender->challenger)` whose verdict changed. **Use this to validate a threshold change**: run baseline vs new and read which verdicts flipped.
 
 ## contest_json.py — the raw store (per-point dispute counts)
 
@@ -94,12 +94,12 @@ python Study_seg/seam_normals_viz.py [RUN_OFFICE_DIR] [--kw 15] [--dmax 0.05] [-
 
 | Feature | Meaning |
 |---|---|
-| `containment` | chunk / \|A\| — fraction of loser A inside winner W (directional) |
-| `reverse_containment` | same, other direction (W→A). ≈0 = unidirectional |
-| `strong_points` | nº of A's points that saw W (count ≥ min_count) |
-| `mass` | Σ KFs over those points (raw weight, noise gate ≥ min_mass) |
-| `persistence` | mean(obs_winner / total_obs) per point — temporal stability |
-| `focus` | strong_points / A's total disputed points — is the dispute concentrated on one rival |
+| `containment` | firm_points / \|defender\| — fraction of the defender inside the challenger (directional) |
+| `reverse_containment` | same, other direction (challenger→defender). ≈0 = unidirectional |
+| `firm_points` | nº of the defender's POINTS grabbed firmly by the challenger (grabs ≥ min_count) |
+| `total_grabs` | Σ grabs over those points (raw weight, noise gate ≥ min_mass) |
+| `persistence` | mean(grabs_challenger / claims) per point — temporal stability |
+| `focus` | firm_points / defender's total disputed points — is the dispute concentrated on one rival |
 
 ## Typical workflow
 

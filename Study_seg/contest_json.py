@@ -28,7 +28,7 @@ from collections import Counter, defaultdict
 
 def load(path):
     d = json.load(open(path))
-    store = d.get("store", d)
+    store = d.get("grabs", d)
     # normaliza a {int: {int: int}}
     return {int(p): {int(w): int(c) for w, c in ws.items()} for p, ws in store.items()}
 

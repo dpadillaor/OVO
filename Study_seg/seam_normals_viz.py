@@ -81,11 +81,11 @@ def main() -> None:
     nrm = mp["normals"].numpy().astype(np.float64)
     ids = mp["ids"].ravel().numpy()
     obj = mp["obj_ids"].ravel().numpy()
-    store = json.load(open(contest_file(run_dir, "contest.json")))["store"]
+    store = json.load(open(contest_file(run_dir, "contest.json")))["grabs"]
     id2row = {int(k): i for i, k in enumerate(ids.tolist())}
 
     rows = list(csv.DictReader(open(contest_file(run_dir, "contest_verdicts.csv"))))
-    dom = [(int(r["loser"]), int(r["winner"])) for r in rows
+    dom = [(int(r["defender"]), int(r["challenger"])) for r in rows
            if r["decision"] == "SPLIT" and "dominancia" in r["reason"]]
 
     def chunk_rows(A, W):
