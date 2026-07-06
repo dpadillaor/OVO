@@ -163,10 +163,42 @@ slam_config:
 ```
 Each jump entry supports either explicit vectors or random magnitudes:
 - `translation: [x, y, z]` — explicit XYZ metres, OR `translation_magnitude: float` — random direction
-- `rotation: [rx, ry, rz]` — explicit euler degrees, OR `rotation_magnitude: float` — random axis
+- `rotation: [rx, ry, rz]` — explicit euler degrees (world-frame, axis-angle via Rodrigues), OR `rotation_magnitude: float` — random axis (world-frame), OR `rotation_jump: {...}` — local-frame yaw/pitch/roll (see below, takes precedence over `rotation`/`rotation_magnitude` if both are present)
 - `forward: true` — (optional, only with `translation_magnitude`) applies the translation along the camera's forward (-Z) direction at that keyframe instead of a random world-space direction. Useful for jumps "hacia la cámara".
 
 `noise_enabled` must NOT be set (jump drift uses `jump_drift_enabled`, a separate flag).
+
+##### Local-frame rotation jump (`rotation_jump`)
+
+Models a tracking-loss-style heading flip: the rotation is expressed relative to the
+camera's own axes at the trigger instant (not a fixed world-space axis), so it reads
+the same regardless of the camera's current pitch/roll. Internally it is conjugated
+by the camera's *currently drifted* pose (`offset @ gt_pose` at trigger time), so
+chained jumps stay coherent with each other and with every subsequent frame.
+
+```yaml
+slam_config:
+  noise:
+    jump_drift_enabled: true
+    jump_seed: 42
+    jumps:
+      - frame_id: 120
+        rotation_jump:
+          yaw:   { enabled: true,  std_deg: 40, max_deg: 150 }   # heading, most common
+          pitch: { enabled: false, std_deg: 8,  max_deg: 60 }
+          roll:  { enabled: false, std_deg: 5,  max_deg: 30 }
+```
+
+Each axis (`yaw`/`pitch`/`roll`) is independent:
+- `enabled` — if `false` (or the axis block is omitted), that axis contributes 0 and is not sampled
+- `std_deg` — standard deviation (degrees) of a zero-mean normal distribution
+- `max_deg` — resampled (not clipped) until the sampled value falls within `[-max_deg, max_deg]`, so no single artifact value skews the distribution's tail
+
+Axis convention (OpenCV: X right, Y down, Z forward): `yaw` rotates about Y, `pitch` about X, `roll` about Z. Composed as `Rz(roll) @ Rx(pitch) @ Ry(yaw)` (yaw applied first) — irrelevant when only one axis is active, which is the common case.
+
+Most experiments only need `yaw` (heading is the axis that drifts most in a real tracking loss, since there's no gravity/vanishing-point reference to self-correct it).
+
+The `GTJump-J{n}` token reflects this: `rotation_jump` entries encode the enabled axes' `std_deg` (e.g. `GTJump-J1-T0p5-RY40` for yaw std=40°) instead of `R{rotation_magnitude}`.
 
 ##### Pre-fusion checkpoint (optional)
 Add `save_pre_fusion_checkpoint: true` to save the geometric + semantic state just before fusion runs. Saved to `data/checkpoints/<experiment>/<scene>/pre_fusion.ckpt`. Enables replaying only the fusion step with different parameters via `scripts/replay_fusion.py`.

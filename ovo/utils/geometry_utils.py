@@ -1,5 +1,6 @@
 from torchvision.transforms.v2.functional import gaussian_blur
 from typing import Any, Dict, List, Tuple
+import math
 import numpy as np
 import torch
 
@@ -400,6 +401,33 @@ def euler_angles_to_rotation_matrix(euler_angles: torch.Tensor) -> torch.Tensor:
     # The order of multiplication is crucial and depends on the chosen convention.
     rotation_matrix = Rz @ Ry @ Rx
     return rotation_matrix
+
+def sample_truncated_normal_deg(
+    std_deg: float, max_deg: float, generator: torch.Generator, device: str, max_tries: int = 100
+) -> float:
+    """Sample from N(0, std_deg), resampling (not clipping) until |value| <= max_deg."""
+    val = 0.0
+    for _ in range(max_tries):
+        val = torch.randn(1, generator=generator, device=device).item() * std_deg
+        if abs(val) <= max_deg:
+            return val
+    return max(-max_deg, min(max_deg, val))
+
+
+def rotation_matrix_from_ypr(yaw_rad: float, pitch_rad: float, roll_rad: float) -> torch.Tensor:
+    """Build a rotation matrix from yaw/pitch/roll (radians), OpenCV camera axes
+    (X right, Y down, Z forward): yaw about Y, pitch about X, roll about Z.
+    Composed as Rz(roll) @ Rx(pitch) @ Ry(yaw) (yaw applied first)."""
+    cy, sy = math.cos(yaw_rad), math.sin(yaw_rad)
+    cp, sp = math.cos(pitch_rad), math.sin(pitch_rad)
+    cr, sr = math.cos(roll_rad), math.sin(roll_rad)
+
+    Ry = torch.tensor([[cy, 0.0, sy], [0.0, 1.0, 0.0], [-sy, 0.0, cy]])
+    Rx = torch.tensor([[1.0, 0.0, 0.0], [0.0, cp, -sp], [0.0, sp, cp]])
+    Rz = torch.tensor([[cr, -sr, 0.0], [sr, cr, 0.0], [0.0, 0.0, 1.0]])
+
+    return Rz @ Rx @ Ry
+
 
 def create_transformation_matrix(rotation_matrix: torch.Tensor, translation_vector: torch.Tensor) -> torch.Tensor:
     """

@@ -51,7 +51,18 @@ class JumpDriftController:
         else:
             translation = torch.zeros(3, device=self.device)
 
-        if "rotation" in jump_entry:
+        is_local_rotation = False
+        if "rotation_jump" in jump_entry:
+            is_local_rotation = True
+            ypr_cfg = jump_entry["rotation_jump"]
+            deg2rad = torch.pi / 180.0
+            yaw_deg = self._sample_axis_deg(ypr_cfg.get("yaw"))
+            pitch_deg = self._sample_axis_deg(ypr_cfg.get("pitch"))
+            roll_deg = self._sample_axis_deg(ypr_cfg.get("roll"))
+            rotation_matrix = geometry_utils.rotation_matrix_from_ypr(
+                yaw_deg * deg2rad, pitch_deg * deg2rad, roll_deg * deg2rad
+            ).to(self.device)
+        elif "rotation" in jump_entry:
             euler_rad = torch.tensor(jump_entry["rotation"], dtype=torch.float32, device=self.device) * (torch.pi / 180.0)
             rotation_matrix = geometry_utils.rodrigues_rotation_matrix(euler_rad)
         elif "rotation_magnitude" in jump_entry:
@@ -66,12 +77,21 @@ class JumpDriftController:
             "kf_index": kf_index,
             "translation": translation,
             "rotation_matrix": rotation_matrix,
+            "is_local_rotation": is_local_rotation,
             "forward": forward,
             "forward_mag": forward_mag,
         }
         if frame_id is not None:
             result["frame_id"] = frame_id
         return result
+
+    def _sample_axis_deg(self, axis_cfg: Optional[Dict[str, Any]]) -> float:
+        """Sample one yaw/pitch/roll axis in degrees; 0 if missing or disabled."""
+        if not axis_cfg or not axis_cfg.get("enabled", False):
+            return 0.0
+        std_deg = float(axis_cfg["std_deg"])
+        max_deg = float(axis_cfg.get("max_deg", std_deg * 4))
+        return geometry_utils.sample_truncated_normal_deg(std_deg, max_deg, self.generator, self.device)
 
     @property
     def offset(self) -> torch.Tensor:
@@ -102,11 +122,19 @@ class JumpDriftController:
 
             if match and trigger_id not in self._applied_triggers:
                 translation = cfg["translation"]
-                if cfg.get("forward", False) and gt_pose is not None:
-                    current_pose = self._offset @ gt_pose
+                needs_current_pose = cfg.get("forward", False) or cfg.get("is_local_rotation", False)
+                current_pose = self._offset @ gt_pose if (needs_current_pose and gt_pose is not None) else None
+
+                if cfg.get("forward", False) and current_pose is not None:
                     forward_dir = current_pose[:3, :3] @ torch.tensor([0, 0, -1.0], device=self.device)
                     translation = forward_dir * cfg["forward_mag"]
-                T_jump = geometry_utils.create_transformation_matrix(cfg["rotation_matrix"], translation)
+
+                rotation_matrix = cfg["rotation_matrix"]
+                if cfg.get("is_local_rotation", False) and current_pose is not None:
+                    R_cur = current_pose[:3, :3]
+                    rotation_matrix = R_cur @ rotation_matrix @ R_cur.T
+
+                T_jump = geometry_utils.create_transformation_matrix(rotation_matrix, translation)
                 self._offset = T_jump @ self._offset
                 self._applied_triggers.add(trigger_id)
 

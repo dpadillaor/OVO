@@ -10,6 +10,8 @@ import torch
 import math
 from unittest.mock import patch, MagicMock
 
+from ovo.utils import geometry_utils
+
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures
@@ -332,3 +334,174 @@ class TestJumpSeedReproducibility:
         t1 = slam1.jump_controller.jump_configs[0]["translation"]
         t2 = slam2.jump_controller.jump_configs[0]["translation"]
         assert torch.allclose(t1, t2, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# UT-11: rotation_jump — disabled axes contribute exactly zero
+# ---------------------------------------------------------------------------
+
+class TestRotationJumpDisabledAxesContributeZero:
+    def test_disabled_axes_ignored_even_with_large_std(self):
+        noise_cfg = {
+            "jump_drift_enabled": True,
+            "jump_seed": 42,
+            "jumps": [
+                {
+                    "kf_index": 0,
+                    "rotation_jump": {
+                        "yaw": {"enabled": True, "std_deg": 0.0, "max_deg": 90.0},
+                        # disabled but with a huge std_deg: must be skipped entirely,
+                        # not sampled-then-zeroed (that would still burn RNG state).
+                        "pitch": {"enabled": False, "std_deg": 999.0, "max_deg": 999.0},
+                        "roll": {"enabled": False, "std_deg": 999.0, "max_deg": 999.0},
+                    },
+                }
+            ],
+        }
+        slam = make_slam(make_minimal_config(noise_cfg))
+        jc = slam.jump_controller.jump_configs[0]
+
+        assert jc["is_local_rotation"] is True
+        assert torch.allclose(jc["rotation_matrix"], torch.eye(3), atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# UT-12: rotation_jump — precedence over legacy rotation keys
+# ---------------------------------------------------------------------------
+
+class TestRotationJumpTakesPrecedenceOverLegacy:
+    def test_rotation_jump_wins_over_legacy_rotation(self):
+        noise_cfg = {
+            "jump_drift_enabled": True,
+            "jump_seed": 42,
+            "jumps": [
+                {
+                    "kf_index": 0,
+                    "rotation": [0.0, 90.0, 0.0],  # legacy explicit vector
+                    "rotation_jump": {
+                        "yaw": {"enabled": True, "std_deg": 0.0, "max_deg": 90.0},
+                    },
+                }
+            ],
+        }
+        slam = make_slam(make_minimal_config(noise_cfg))
+        jc = slam.jump_controller.jump_configs[0]
+
+        assert jc["is_local_rotation"] is True
+        # yaw sampled with std_deg=0 -> 0 rad -> identity, NOT the legacy 90 deg vector
+        assert torch.allclose(jc["rotation_matrix"], torch.eye(3), atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# UT-13: legacy rotation entries are flagged as world-frame (not local)
+# ---------------------------------------------------------------------------
+
+class TestLegacyRotationIsNotLocal:
+    def test_legacy_explicit_rotation_is_not_local(self):
+        noise_cfg = {
+            "jump_drift_enabled": True,
+            "jump_seed": 42,
+            "jumps": [{"kf_index": 0, "rotation": [0.0, 30.0, 0.0]}],
+        }
+        slam = make_slam(make_minimal_config(noise_cfg))
+        jc = slam.jump_controller.jump_configs[0]
+        assert jc.get("is_local_rotation", False) is False
+
+
+# ---------------------------------------------------------------------------
+# UT-14: a single local rotation jump is conjugated by the current pose
+# ---------------------------------------------------------------------------
+
+class TestMaybeTriggerConjugatesLocalRotation:
+    def test_local_rotation_conjugated_by_current_pose_not_applied_raw(self):
+        noise_cfg = {
+            "jump_drift_enabled": True,
+            "jump_seed": 42,
+            "jumps": [
+                {
+                    "frame_id": 0,
+                    "rotation_jump": {"yaw": {"enabled": True, "std_deg": 0.0, "max_deg": 90.0}},
+                }
+            ],
+        }
+        slam = make_slam(make_minimal_config(noise_cfg))
+
+        # Force a fixed, non-trivial local yaw angle (bypassing the sampler) so the
+        # test asserts on the conjugation formula, not on RNG behaviour.
+        fixed_yaw_rad = math.pi / 6
+        slam.jump_controller.jump_configs[0]["rotation_matrix"] = geometry_utils.rotation_matrix_from_ypr(
+            fixed_yaw_rad, 0.0, 0.0
+        )
+
+        # Camera pre-rotated 90 deg about Z (world) at the trigger frame - i.e. it is
+        # NOT axis-aligned with the world when the jump fires.
+        R_gt = geometry_utils.rotation_matrix_from_ypr(0.0, 0.0, math.pi / 2)
+        gt_pose = torch.eye(4)
+        gt_pose[:3, :3] = R_gt
+
+        slam.jump_controller.maybe_trigger(0, frame_id=0, gt_pose=gt_pose)
+
+        R_jump_local = geometry_utils.rotation_matrix_from_ypr(fixed_yaw_rad, 0.0, 0.0)
+        expected_offset_rot = R_gt @ R_jump_local @ R_gt.T
+        naive_offset_rot = R_jump_local  # what a (wrong) non-conjugated apply would give
+
+        assert torch.allclose(slam.jump_controller.offset[:3, :3], expected_offset_rot, atol=1e-5)
+        assert not torch.allclose(slam.jump_controller.offset[:3, :3], naive_offset_rot, atol=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# UT-15: chained local jumps stay coherent — second jump uses the ALREADY
+# DRIFTED pose (offset @ gt_pose), not the raw GT pose
+# ---------------------------------------------------------------------------
+
+class TestChainedLocalJumpsUseDriftedPose:
+    def test_second_jump_conjugates_by_drifted_pose(self):
+        noise_cfg = {
+            "jump_drift_enabled": True,
+            "jump_seed": 42,
+            "jumps": [
+                {
+                    "frame_id": 0,
+                    "rotation_jump": {"yaw": {"enabled": True, "std_deg": 0.0, "max_deg": 90.0}},
+                },
+                {
+                    "frame_id": 1,
+                    "rotation_jump": {"yaw": {"enabled": True, "std_deg": 0.0, "max_deg": 90.0}},
+                },
+            ],
+        }
+        slam = make_slam(make_minimal_config(noise_cfg))
+
+        yaw1, yaw2 = math.pi / 6, math.pi / 4
+        R_local_1 = geometry_utils.rotation_matrix_from_ypr(yaw1, 0.0, 0.0)
+        R_local_2 = geometry_utils.rotation_matrix_from_ypr(yaw2, 0.0, 0.0)
+        slam.jump_controller.jump_configs[0]["rotation_matrix"] = R_local_1
+        slam.jump_controller.jump_configs[1]["rotation_matrix"] = R_local_2
+
+        # Two different true camera orientations at the two trigger frames.
+        R_gt_0 = geometry_utils.rotation_matrix_from_ypr(0.0, 0.0, math.pi / 2)
+        R_gt_1 = geometry_utils.rotation_matrix_from_ypr(math.pi / 3, 0.0, 0.0)
+        gt_pose_0 = torch.eye(4)
+        gt_pose_0[:3, :3] = R_gt_0
+        gt_pose_1 = torch.eye(4)
+        gt_pose_1[:3, :3] = R_gt_1
+
+        slam.jump_controller.maybe_trigger(0, frame_id=0, gt_pose=gt_pose_0)
+        offset_after_first = slam.jump_controller.offset.clone()
+
+        slam.jump_controller.maybe_trigger(1, frame_id=1, gt_pose=gt_pose_1)
+
+        # Correct: second jump's local rotation must be conjugated by the pose the
+        # camera *currently believes* it has, i.e. offset_after_first @ gt_pose_1.
+        current_pose_rot = (offset_after_first @ gt_pose_1)[:3, :3]
+        R_jump2_world = current_pose_rot @ R_local_2 @ current_pose_rot.T
+        expected_offset_rot = R_jump2_world @ offset_after_first[:3, :3]
+
+        # Wrong (regression to catch): conjugating with the raw GT pose instead of
+        # the drifted one.
+        wrong_current_pose_rot = R_gt_1
+        wrong_R_jump2_world = wrong_current_pose_rot @ R_local_2 @ wrong_current_pose_rot.T
+        wrong_offset_rot = wrong_R_jump2_world @ offset_after_first[:3, :3]
+
+        assert torch.allclose(slam.jump_controller.offset[:3, :3], expected_offset_rot, atol=1e-5)
+        assert not torch.allclose(slam.jump_controller.offset[:3, :3], wrong_offset_rot, atol=1e-3)

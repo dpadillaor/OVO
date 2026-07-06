@@ -73,6 +73,18 @@ class ExperimentRunner:
         # Experiment identifier
         self.experiment_name = self._generate_experiment_name()
 
+    @staticmethod
+    def _rotation_jump_token(rotation_jump: Dict[str, Any]) -> str:
+        """Compact token for a local yaw/pitch/roll rotation jump, e.g. 'Y40P8'."""
+        letters = {"yaw": "Y", "pitch": "P", "roll": "R"}
+        parts = []
+        for axis, letter in letters.items():
+            axis_cfg = rotation_jump.get(axis) or {}
+            if axis_cfg.get("enabled", False):
+                std_deg = axis_cfg.get("std_deg", 0)
+                parts.append(f"{letter}{str(std_deg).replace('.', 'p')}")
+        return "".join(parts) if parts else "0"
+
     def _get_slam_token(self) -> str:
         """
         Generates the SLAM token part of the experiment name.
@@ -84,9 +96,12 @@ class ExperimentRunner:
                     n_jumps = len(jumps)
                     first = jumps[0] if jumps else {}
                     t_mag = first.get("translation_magnitude", 0.0)
-                    r_mag = first.get("rotation_magnitude", 0.0)
                     t_str = str(t_mag).replace('.', 'p')
-                    r_str = str(r_mag).replace('.', 'p')
+                    if "rotation_jump" in first:
+                        r_str = self._rotation_jump_token(first["rotation_jump"])
+                    else:
+                        r_mag = first.get("rotation_magnitude", 0.0)
+                        r_str = str(r_mag).replace('.', 'p')
                     return f"GTJump-J{n_jumps}-T{t_str}-R{r_str}"
                 t_std = self.experiment.slam_config.noise.get("translation_noise_std", 0.0)
                 r_std = self.experiment.slam_config.noise.get("rotation_noise_std", 0.0)
