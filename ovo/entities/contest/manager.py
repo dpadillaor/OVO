@@ -20,7 +20,7 @@ import torch
 from .types import Decision, PointId, PairFeatures, Verdict
 from .store import ContestStore
 from .aggregator import ContestAggregator
-from .discriminator import ContestDiscriminator
+from .discriminator import ContestDiscriminator, ContestThresholds
 
 
 class ContestManager:
@@ -28,17 +28,8 @@ class ContestManager:
         cfg = (config or {}).get("contest", {})
         self.enabled: bool = cfg.get("enabled", True)
         self.store = ContestStore()
-        self.aggregator = ContestAggregator(min_count=cfg.get("min_count", 1))
-        self.discriminator = ContestDiscriminator(
-            high=cfg.get("high", 0.7),
-            low=cfg.get("low", 0.5),
-            min_mass=cfg.get("min_mass", 50),
-            min_split_cont=cfg.get("min_split_cont", 0.0),
-            max_rev_split=cfg.get("max_rev_split", 0.5),
-            min_persist_split=cfg.get("min_persist_split", 0.1),
-            sim_merge=cfg.get("sim_merge", 0.81),
-            max_seam_angle=cfg.get("max_seam_angle", 15.0),
-        )
+        self.aggregator = ContestAggregator(min_grabs=cfg.get("min_grabs", 5), firm_tau=cfg.get("firm_tau", 0.30))
+        self.discriminator = ContestDiscriminator(ContestThresholds.from_cfg(cfg))
         # fase 2 opcional: reevaluar "frontera real" con el union-find de los
         # merges decididos en el MISMO batch (root real, no identidad). Resuelve
         # el caso 95: varios challengers que en realidad son un solo objeto.
@@ -89,8 +80,6 @@ class ContestManager:
         points_ins_ids: torch.Tensor,
         point_obs: torch.Tensor | None = None,
         sim=None,
-        seam=None,
-        color=None,
     ) -> List[Verdict]:
         if not self.enabled or len(self.store) == 0:
             return []
@@ -114,7 +103,7 @@ class ContestManager:
         t0 = time.time()
         verdicts: List[Verdict] = []
         for defender, fs in by_defender.items():
-            verdicts.append(self.discriminator.classify(defender, fs, sim=sim, seam=seam, color=color))
+            verdicts.extend(self.discriminator.classify(defender, fs, sim=sim))
         t["classify"] = round(time.time() - t0, 4)
 
         t0 = time.time()
@@ -126,11 +115,19 @@ class ContestManager:
         t0 = time.time()
         for v in verdicts:
             fs = by_defender.get(v.defender, [])
-            best = self._find_pair(v.challenger, fs)
+            if v.challenger is not None:
+                best = self._find_pair(v.challenger, fs)
+                challenger = v.challenger
+            else:
+                # NO_ACTION sin challenger designado (borde/frontera/ruido): registra el par
+                # de mayor containment para que la fila sea legible. Las features son de ESE
+                # par -> se ve contra quién casi actuó, aunque la decisión sea no tocar.
+                best = max(fs, key=lambda f: f.containment) if fs else None
+                challenger = best.challenger if best is not None else None
             self._verdicts_log.append({
                 "report": self._reports,
                 "defender": v.defender,
-                "challenger": v.challenger,
+                "challenger": challenger,
                 "decision": v.decision.name,
                 "reason": v.reason,
                 "containment": best.containment if best is not None else None,
@@ -139,6 +136,11 @@ class ContestManager:
                 "total_grabs": best.total_grabs if best is not None else None,
                 "persistence": best.persistence if best is not None else None,
                 "focus": best.focus if best is not None else None,
+                "exclusivity": best.exclusivity if best is not None else None,
+                "sim": v.sim,
+                "seam_angle": v.seam_angle,
+                "de_ch": v.de_ch,
+                "de_def": v.de_def,
             })
         if self._output_dir:
             self.dump_verdicts(self._output_dir + "/contest_verdicts.csv")
@@ -177,14 +179,14 @@ class ContestManager:
             if vba is None:
                 resolved.append(vab)  # solo un sentido opina -> se respeta
             else:
-                resolved.append(self._join(vab, vba, cont(a, ch), cont(ch, a), self.discriminator.low))
+                resolved.append(self._join(vab, vba, cont(a, ch), cont(ch, a), self.discriminator.th.low))
         return passthrough + resolved
 
     def _reeval_frontier(self, verdicts: List[Verdict], by_defender: Dict[int, list]) -> List[Verdict]:
-        """FASE 2 (opt-in): revisita las "frontera real" con el root del batch.
+        """FASE 2 (opt-in): revisita los empates de contención con el root del batch.
 
-        La rama strong marca NO_ACTION "frontera real" cuando un defender está muy
-        contenido en >=2 challengers con IDs distintos. Pero esos IDs pueden ser el
+        La rama strong marca NO_ACTION "mostly contained in several, tie" cuando un defender
+        está muy contenido en >=2 challengers con IDs distintos. Pero esos IDs pueden ser el
         MISMO objeto si se fusionan en este mismo batch (caso 95: 78/33/81). Aquí:
           1. construimos un union-find con los MERGE_CONTAINMENT ya resueltos,
           2. recomputamos las raíces de los challengers fuertes con ese find,
@@ -208,18 +210,18 @@ class ContestManager:
             if v.decision is Decision.MERGE_CONTAINMENT and v.challenger is not None:
                 union(v.defender, v.challenger)
 
-        high = self.discriminator.high
+        high = self.discriminator.th.high
         out: List[Verdict] = []
         for v in verdicts:
-            # solo las frontera-real de la rama strong (no la frontera simétrica)
-            if v.decision is Decision.NO_ACTION and "frontera real" in v.reason:
+            # solo los empates de contención de la rama strong
+            if v.decision is Decision.NO_ACTION and "mostly contained in several" in v.reason:
                 strong = [p for p in by_defender.get(v.defender, []) if p.containment >= high]
                 roots = {find(p.challenger) for p in strong}
                 if strong and len(roots) == 1:
                     best = max(strong, key=lambda p: p.containment)
                     out.append(Verdict(
                         Decision.MERGE_CONTAINMENT, v.defender, challenger=best.challenger,
-                        reason=f"frontera resuelta por root real (cont={best.containment:.2f})",
+                        reason=f"tie resolved by batch root (cont {best.containment:.2f}) -> merge",
                     ))
                     continue
             out.append(v)
@@ -307,6 +309,7 @@ class ContestManager:
         fields = [
             "report", "defender", "challenger", "decision", "reason",
             "containment", "reverse_containment", "firm_points", "total_grabs", "persistence", "focus",
+            "exclusivity", "sim", "seam_angle", "de_ch", "de_def",
         ]
         with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")

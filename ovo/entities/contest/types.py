@@ -22,10 +22,11 @@ class PairFeatures:
     challenger: InsId           # instancia que le disputa los puntos
     containment: float          # firm_points / |defender|: fracción del defender que el challenger le roba, en [0, 1]
     reverse_containment: float  # lo mismo en el sentido contrario (challenger -> defender)
-    firm_points: int            # nº de PUNTOS del defender robados con firmeza (grabs >= min_count)
+    firm_points: int            # nº de PUNTOS del defender robados con firmeza (grabs >= min_grabs)
     total_grabs: int            # nº de ROBOS crudos acumulados (suma de grabs, sin umbral)
     persistence: float = 0.0    # persistencia media: media de grabs_challenger / claims por punto
     focus: float = 0.0          # firm_points / total de puntos disputados del defender
+    exclusivity: float = 0.0    # fracción de firm_points que SOLO este challenger disputa (nadie más)
     split_points: tuple = ()    # ids de los puntos a reasignar en un SPLIT
 
 @dataclass(frozen=True)
@@ -36,3 +37,9 @@ class Verdict:
     challenger: Optional[InsId] = None
     split_points: Optional[List[PointId]] = None  # para SPLIT: puntos a soltar (siguiente fase)
     reason: str = ""                               # traza legible, para logs/depuración
+    # señales geométricas de la banda ambigua, cuando se calcularon (para logs/análisis; no
+    # afectan la decisión, que ya está tomada por la rama que las rellena).
+    sim: Optional[float] = None                    # cos-sim descriptor
+    seam_angle: Optional[float] = None             # giro de la normal en la costura (grados)
+    de_ch: Optional[float] = None                  # ΔE color hacia el challenger
+    de_def: Optional[float] = None                 # ΔE color hacia el defender

@@ -576,42 +576,6 @@ class OVO:
             return float(torch.nn.functional.cosine_similarity(
                 oa.clip_feature[0], ow.clip_feature[0], dim=0))
 
-        # señal geométrica: giro de la normal de superficie a través de la costura
-        # chunk<->W. Distingue fragmento real (transferir) de objeto en contacto (no).
-        ids_flat = points_ids_all.flatten()
-
-        def _contest_seam(loser: int, winner: int, chunk_ids: tuple):
-            if point_normals is None or not chunk_ids:
-                return None
-            chunk_t = torch.as_tensor(list(chunk_ids), device=ids_flat.device)
-            chunk_mask = torch.isin(ids_flat, chunk_t)
-            w_mask = points_ins_ids == winner
-            if chunk_mask.sum() == 0 or w_mask.sum() == 0:
-                return None
-            return instance_utils.seam_normal_angle(
-                points_3d[chunk_mask], point_normals[chunk_mask],
-                points_3d[w_mask], point_normals[w_mask],
-            )
-
-        # señal de color en la costura, de DOS sentidos: ¿el chunk se funde (color)
-        # mejor con W o con el resto de L? Caza coplanares de distinto color que el
-        # normal no separa. Devuelve (ΔE_W, ΔE_L); transferir solo si ΔE_W <= ΔE_L.
-        def _contest_color(loser: int, winner: int, chunk_ids: tuple):
-            if point_colors is None or not chunk_ids:
-                return None, None
-            chunk_t = torch.as_tensor(list(chunk_ids), device=ids_flat.device)
-            chunk_mask = torch.isin(ids_flat, chunk_t)
-            w_mask = points_ins_ids == winner
-            l_mask = (points_ins_ids == loser) & ~chunk_mask
-            if chunk_mask.sum() == 0 or w_mask.sum() == 0 or l_mask.sum() == 0:
-                return None, None
-            pcol = point_colors.to(points_3d.device)
-            return instance_utils.seam_color_two_sided(
-                points_3d[chunk_mask], pcol[chunk_mask],
-                points_3d[w_mask], pcol[w_mask],
-                points_3d[l_mask], pcol[l_mask],
-            )
-
         contest_mode = self.config.get("contest_fusion", "off")  # off | observe | only | both
         contest_times = {}
 
@@ -619,7 +583,7 @@ class OVO:
             verdicts = []
         else:
             t0 = self._sync_time()
-            verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim, seam=_contest_seam, color=_contest_color)
+            verdicts = self.contest.report(map_data[1], points_ins_ids, point_obs, sim=_contest_sim)
             contest_times["report"] = round(self._sync_time() - t0, 4)
             contest_times.update(self.contest.last_timings)  # aggregate/classify/resolve/dump/prune
             print("contest:", self.contest.summarize(verdicts))
@@ -630,7 +594,10 @@ class OVO:
         else:
             contest_fused = {}
 
-        if contest_mode == "only":
+        # classic_fusion=False -> salta _fuse_overlapping_instances: mapa CRUDO (loop closure
+        # aplicado, instancias sin fusionar). Con contest_fusion=observe da telemetría sin tocar.
+        classic_fusion = self.config.get("classic_fusion", True)
+        if contest_mode == "only" or not classic_fusion:
             new_objects = {k: v for k, v in self.objects.items() if k not in contest_fused}
             fused_objects = contest_fused
             fusion_decisions = []

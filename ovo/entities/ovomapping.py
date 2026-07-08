@@ -414,7 +414,9 @@ class OVOSemMap():
         self._send_stream_frame(frame_id, mpqueue)
 
         noise_cfg = self.config.get("noise", {})
-        if noise_cfg.get("jump_drift_enabled", False) and noise_cfg.get("save_pre_fusion_checkpoint", False):
+        # Guardar el estado pre-fusión no depende del jump: cualquier run que lo pida
+        # (baseline limpio incluido) captura aquí, justo antes de la fusión de este paso.
+        if noise_cfg.get("save_pre_fusion_checkpoint", False):
             self._save_pre_fusion_checkpoint(frame_id)
 
         updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
