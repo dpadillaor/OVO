@@ -62,6 +62,8 @@
         background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto;white-space:pre;color:var(--mut);line-height:1.55}
   .flow b{color:var(--acc)} .flow .c{color:var(--good)}
   .figwrap{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:18px 0;overflow-x:auto}
+  /* let a dense diagram break out of the 1000px prose column and render wider */
+  .figwrap.wide{width:1240px;max-width:92vw;margin-left:50%;transform:translateX(-50%)}
   .figcap{color:var(--mut);font-size:13px;margin-top:8px;text-align:center}
   svg{display:block;max-width:100%;height:auto;margin:0 auto}
   .legend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:10px;font-size:12.5px;color:var(--mut)}
@@ -277,8 +279,8 @@
   <p>Es el corazón lógico. Toma las features de un perdedor y sus ganadores y baja por este árbol. Los umbrales
      (entre paréntesis, valores por defecto) viven en config y son empíricos.</p>
 
-  <div class="figwrap">
-    <svg viewBox="0 0 960 640" role="img" aria-label="Árbol de decisión del discriminador">
+  <div class="figwrap wide">
+    <svg viewBox="-30 0 1020 640" role="img" aria-label="Árbol de decisión del discriminador">
       <defs>
         <marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5b6472"/></marker>
       </defs>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contest-only vs baseline raw — AP_agnostic</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#1e222b; --border:#3a4150; --fg:#e6e9ef; --muted:#8a93a3;
+    --pos:#2f9e6f; --neg:#d9534f; --accent:#5aa9ff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2rem 1rem; background:var(--bg); color:var(--fg);
+         font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:920px; margin:0 auto; }
+  h1 { font-size:1.5rem; margin:0 0 .3rem; }
+  h2 { font-size:1.1rem; margin:2rem 0 .6rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+  .sub { color:var(--muted); margin:0 0 1.5rem; }
+  .meta { color:var(--muted); font-size:.85rem; }
+  .meta code { color:var(--accent); }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; margin:1rem 0; }
+  .headline { font-size:1.05rem; }
+  .headline b { font-size:1.6rem; color:var(--pos); }
+  .scroll { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; margin:.5rem 0; font-variant-numeric:tabular-nums; }
+  th,td { padding:.5rem .7rem; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  thead th { color:var(--muted); font-weight:600; border-bottom:2px solid var(--border); }
+  tr.global td { border-top:2px solid var(--border); font-weight:700; }
+  .pos { color:var(--pos); } .neg { color:var(--neg); }
+  ul { padding-left:1.2rem; } li { margin:.25rem 0; }
+  .win { background:rgba(47,158,111,.12); } .loss { background:rgba(217,83,79,.12); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Contest-only vs baseline raw — AP<sub>agnostic</sub></h1>
+  <p class="sub">Replica · 8 escenas · GT limpio (sin ruido) · 2026-07-07</p>
+
+  <div class="card headline">
+    Ganancia global neta: <b>+3.3%</b> AP<sub>agnostic</sub> &nbsp;(0.2330 → 0.2406) · 6/8 escenas mejoran.
+  </div>
+
+  <p class="meta">
+    <b>baseline (raw):</b> <code>20260707_GT_CLIP_raw-baseline-full_32ac4</code> — mapa crudo,
+    <code>classic_fusion:false</code>, sin fusión ni contest.<br>
+    <b>contest-only:</b> <code>20260707_GT_CLIP_contest-only-full_fcfe8</code> — replay del mismo
+    <code>pre_fusion.ckpt</code>, <code>contest_fusion:only</code>, <code>contest_split_mode:all</code>.
+  </p>
+
+  <h2>AP<sub>agnostic</sub> por escena</h2>
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>escena</th><th>AP raw</th><th>AP contest</th><th>Δ</th><th>Δ%</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>office0</td><td>0.1990</td><td>0.2170</td><td class="pos">+0.0180</td><td class="pos">+9.0%</td></tr>
+      <tr><td>office1</td><td>0.1700</td><td>0.1750</td><td class="pos">+0.0050</td><td class="pos">+2.9%</td></tr>
+      <tr><td>office2</td><td>0.2100</td><td>0.2260</td><td class="pos">+0.0160</td><td class="pos">+7.6%</td></tr>
+      <tr><td>office3</td><td>0.2040</td><td>0.2070</td><td class="pos">+0.0030</td><td class="pos">+1.5%</td></tr>
+      <tr class="win"><td>office4</td><td>0.2360</td><td>0.2970</td><td class="pos">+0.0610</td><td class="pos">+25.8%</td></tr>
+      <tr><td>room0</td><td>0.2690</td><td>0.2940</td><td class="pos">+0.0250</td><td class="pos">+9.3%</td></tr>
+      <tr class="loss"><td>room1</td><td>0.3440</td><td>0.2910</td><td class="neg">−0.0530</td><td class="neg">−15.4%</td></tr>
+      <tr class="loss"><td>room2</td><td>0.2320</td><td>0.2180</td><td class="neg">−0.0140</td><td class="neg">−6.0%</td></tr>
+      <tr class="global"><td>GLOBAL</td><td>0.2330</td><td>0.2406</td><td class="pos">+0.0076</td><td class="pos">+3.3%</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Global por umbral IoU</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>métrica</th><th>raw</th><th>contest</th><th>Δ</th></tr></thead>
+    <tbody>
+      <tr><td>AP_agnostic</td><td>0.2330</td><td>0.2406</td><td class="pos">+0.0076</td></tr>
+      <tr><td>AP_agnostic_50 (estricto)</td><td>0.4095</td><td>0.4101</td><td>+0.0006</td></tr>
+      <tr><td>AP_agnostic_25 (laxo)</td><td>0.5908</td><td>0.6100</td><td class="pos">+0.0192</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Lectura</h2>
+  <ul>
+    <li><b>Neto positivo pero desigual:</b> +3.3% de media; 6 escenas suben, 2 bajan.</li>
+    <li><b>Gana reensamblando, no afinando:</b> AP_25 (laxo) +0.0192 claro, AP_50 (estricto) plano
+        (+0.0006). El contest junta fragmentos sueltos pero no mejora los límites finos.</li>
+    <li><b>office4 +25.8%</b> — mejor caso. <b>room0/office0 ~+9%</b>.</li>
+    <li><b>room1 −15.4%</b> — regresión grande, probable over-merge o splits malos.
+        Candidato #1 a diagnóstico con la herramienta de query del contest.</li>
+  </ul>
+
+  <p class="meta">
+    Escenario limpio (sin drift): el contest actúa poco pero el que actúa parte de un mapa crudo
+    (sin fusión), así que el Δ mide cuánto recupera el contest frente a no fusionar nada.
+  </p>
+</main>
+</body>
+</html>
