@@ -203,6 +203,17 @@ The `GTJump-J{n}` token reflects this: `rotation_jump` entries encode the enable
 ##### Pre-fusion checkpoint (optional)
 Add `save_pre_fusion_checkpoint: true` to save the geometric + semantic state just before fusion runs. Saved to `data/checkpoints/<experiment>/<scene>/pre_fusion.ckpt`. Enables replaying only the fusion step with different parameters via `scripts/replay_fusion.py`.
 
+**Not jump-only:** `save_pre_fusion_checkpoint` works on ANY run, independent of `jump_drift_enabled`. A clean GT baseline (no noise, no jumps) with `close_loops: true` captures the checkpoint right before its single end-of-sequence fusion — a clean pre-fusion substrate to later replay contest/fusion on. It shows up under `noise:` but does not require the other noise flags.
+
+> ⚠️ **GOTCHA — `noise:` block silently forces `noise_enabled: true`.** The batch runner does: any non-empty `noise:` block that is NOT jump-drift → it injects `noise_enabled: true` (`run_experiments_batch.py`). So putting *only* `save_pre_fusion_checkpoint: true` under `noise:` turns on trajectory drift by accident — the run is no longer clean GT. For a truly clean baseline that also saves the checkpoint, you MUST set `noise_enabled: false` explicitly (it is spread last, so it wins):
+> ```yaml
+> slam_config:
+>   noise:
+>     noise_enabled: false               # else the runner forces it true
+>     save_pre_fusion_checkpoint: true
+> ```
+> Always verify the generated config's `noise:` block in `--preview` before trusting a "clean" run.
+
 ```yaml
 slam_config:
   noise:
@@ -351,6 +362,7 @@ Two top-level `semantic:` keys control whether it acts:
 |---|---|---|---|
 | `contest_fusion` | `observe` | `observe` / `only` / `both` | `observe` = classic fusion runs, contest only logs verdicts. `only` = contest drives merges/splits, classic fusion skipped. `both` = contest merges first, classic fusion on the rest. |
 | `contest_split_mode` | `off` | `off` / `partial` / `dominance` / `all` | Which SPLIT verdicts actually get applied. `off` = none (merges only). `partial`/`dominance` = only that band. `all` = both bands. |
+| `classic_fusion` | `true` | `true` / `false` | `false` skips `_fuse_overlapping_instances` entirely → the map is left RAW (loop closure applied, instances NOT merged). Combine with `contest_fusion: observe` for a raw baseline that still logs contest telemetry, or `contest_fusion: off` for a pure untouched map. Redundant with `contest_fusion: only` (which already skips classic fusion). |
 
 Tuning lives in a nested `contest:` block under `semantic:` (overrides `ovo.yaml`):
 
@@ -377,7 +389,8 @@ ovo_config:
 | `sim_merge` | `0.81` | Descriptor cos-sim ≥ this in partial band → merge |
 | `max_seam_angle` | `15.0` | Dominance: seam normal-turn (deg) above this → object in contact → no split |
 | `reeval_frontier` | `false` | Phase-2 re-evaluation: build a union-find from the batch's merges and re-judge `frontera real (>=2 raíces)` verdicts with the real root; collapses cases where N winner-IDs are actually one object (e.g. 95→78). Logs `reason="frontera resuelta por root real"`. |
-| `min_count` | `1` | Min per-point claim count to aggregate |
+| `min_grabs` | `5` | Firmness gate (evidence floor): a point counts for a pair only if the challenger grabbed it in ≥ this many KFs. |
+| `firm_tau` | `0.30` | Firmness gate (commitment floor): a point counts only if grabs/claims ≥ this (persistence per point). AND-ed with `min_grabs`. `firm=grabs>=min_grabs AND grabs/claims>=firm_tau`. Set 0 to disable the commitment floor (pure count). Tuned 2026-07-07: 0.30 fixes room1/room2 over-merge regressions (+7.9% global AP_agnostic vs raw, vs +4.3% at firm_tau=0); plateau 0.25–0.30, erodes above 0.40. Renamed from `min_count`. |
 | `prune_every` | `10` | Prune the store every N reports |
 
 Recipes:
@@ -446,7 +459,7 @@ experiments:
         fusion_criteria: ["centroid", "cos_sim", "overlap"]
 ```
 
-Checkpoints are saved at `data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt` only when both `jump_drift_enabled: true` and `save_pre_fusion_checkpoint: true` are set in the noise config. Non-jump runs do not produce checkpoints.
+Checkpoints are saved at `data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt` whenever `save_pre_fusion_checkpoint: true` is set in the noise config — with or without `jump_drift_enabled`. A clean GT run (no jumps) with `close_loops: true` produces a checkpoint captured just before its single end-of-sequence fusion.
 
 Naming: use a new `label` that identifies the changed fusion params (e.g. `ckpt-cossim075`). The experiment name will be `{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{label}_{UID}` as usual.
 
