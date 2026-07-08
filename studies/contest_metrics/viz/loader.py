@@ -12,7 +12,7 @@ try:
 except ImportError:  # yaml is optional: only needed to mark jumps
     yaml = None
 
-OUTPUT_ROOT = pathlib.Path(__file__).resolve().parents[3] / "data" / "output" / "Replica"
+from ..common.paths import OUTPUT_ROOT  # noqa: F401 (re-exported for viz consumers)
 
 # Canonical Tier2 signals (mirror ovo/entities/logger.py::_CONTEST_KF_STATS), in read order.
 KF_SIGNALS = ["n_matched", "n_pre_assign", "n_used", "n_orphans", "n_births", "n_robos"]

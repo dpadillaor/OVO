@@ -125,6 +125,11 @@ def main():
     if args.save_rrd:
         rr.save(args.save_rrd)
 
+    # ORB-SLAM3 world frame = first camera pose, in OpenCV convention (X right,
+    # Y down, Z forward). Tell rerun so the grid/orbit-cam align to that handedness
+    # instead of rerun's default up axis.
+    rr.log("map", rr.ViewCoordinates.RDF, static=True)
+
     ds_cfg, data_cfg = load_config(args.dataset, args.scene)
     if args.frame_limit > 0:
         data_cfg["frame_limit"] = args.frame_limit
