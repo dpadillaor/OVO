@@ -23,7 +23,7 @@ class TestAggregatorPersistence(unittest.TestCase):
                 s._by_grabber[g].add(p)
         for p, c in claims.items():
             s._claims[p] = c
-        agg = ContestAggregator(min_count=1)
+        agg = ContestAggregator(min_grabs=1, firm_tau=0.0)
         pairs = agg.pairs(
             s,
             torch.tensor(point_ids, dtype=torch.long),
@@ -63,15 +63,16 @@ class TestAggregatorPersistence(unittest.TestCase):
         )
         self.assertLessEqual(pairs[(1, 2)].persistence, 1.0)
 
-    def test_persistence_zero_when_no_claims(self):
-        """Sin reclamos (p.ej. checkpoint legacy) -> persistence 0, sin dividir por cero."""
+    def test_no_pair_when_no_claims(self):
+        """Sin reclamos (p.ej. checkpoint legacy) el punto se ignora (denom 0) -> no hay par,
+        sin dividir por cero. (`_accumulate`: 'sin dueño o sin reclamos -> se ignora'.)"""
         pairs = self._run(
             grabs={5: {2: 3}},
-            claims={},            # denom 0
+            claims={},            # denom 0 -> punto ignorado
             point_ids=[5, 10, 11],
             owners=[1, 2, 2],
         )
-        self.assertAlmostEqual(pairs[(1, 2)].persistence, 0.0, places=6)
+        self.assertNotIn((1, 2), pairs)
 
     def test_persistence_averaged_over_points(self):
         # dos puntos de la instancia 1 robados por 2, distinta persistencia -> media

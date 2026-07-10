@@ -17,10 +17,12 @@ from typing import Dict, List, Optional, Set
 
 import torch
 
-from .types import Decision, PointId, PairFeatures, Verdict
+from .types import Decision, FeatureTolerance, PointId, PairFeatures, Verdict
 from .store import ContestStore
 from .aggregator import ContestAggregator
 from .discriminator import ContestDiscriminator, ContestThresholds
+from .online import OnlineContestCoordinator
+from .shadow import ShadowValidator
 
 
 class ContestManager:
@@ -42,6 +44,19 @@ class ContestManager:
         # sub-tiempos de la última report(): aggregate/classify/resolve/frontier/dump.
         # ovo.py los lee tras report() y los mergea en contest_times.
         self.last_timings: Dict[str, float] = {}
+
+        # ---- R1: agregador online en modo SOMBRA ----
+        # agg_mode: batch (default, cero cambio) | online_shadow. El online calcula en paralelo y se
+        # compara con el batch (oráculo) en cada report; el batch sigue decidiendo/actuando.
+        self.agg_mode: str = cfg.get("agg_mode", "batch")
+        self._tol = FeatureTolerance(atol=cfg.get("atol", 1e-6))
+        self._coordinator: OnlineContestCoordinator | None = None
+        self._validator: ShadowValidator | None = None
+        self._shadow_log: List[dict] = []
+        if self.agg_mode != "batch":
+            self._coordinator = OnlineContestCoordinator(
+                self.store, min_grabs=cfg.get("min_grabs", 5), firm_tau=cfg.get("firm_tau", 0.30))
+            self._validator = ShadowValidator()
 
     def set_output_dir(self, path) -> None:
         self._output_dir = str(path)
@@ -66,12 +81,27 @@ class ContestManager:
             return
         self.store.record_sighting(seen_point_ids.cpu().flatten().tolist())
 
+    def note_assignment(self, owner_ids: torch.Tensor) -> None:
+        """Owners de los puntos asignados bajo máscara este KF -> marca sucios (online). No-op en batch."""
+        if self._coordinator is not None:
+            self._coordinator.note_assignment(owner_ids)
+
     # ---- 2 y 3. ciclo de vida (enganchados junto a self.cooccurrence) ----
     def on_merge(self, target: int, source: int) -> None:
+        # coordinator ANTES del store: captura los puntos de source mientras siguen en el índice inverso.
+        if self._coordinator is not None:
+            self._coordinator.on_merge(int(target), int(source))
         self.store.on_merge(int(target), int(source))
 
     def on_remove(self, ins: int) -> None:
+        if self._coordinator is not None:
+            self._coordinator.on_remove(int(ins))
         self.store.on_remove(int(ins))
+
+    def on_split(self, defender: int, challenger: int, split_points) -> None:
+        """SPLIT aplicado: el trozo pasa de defender a challenger -> ambos sucios (online). No-op en batch."""
+        if self._coordinator is not None:
+            self._coordinator.on_split(int(defender), int(challenger), split_points)
 
     # ---- 4. cadencia de fusión: features -> clasificación -> veredictos ----
     def report(
@@ -105,6 +135,12 @@ class ContestManager:
         for defender, fs in by_defender.items():
             verdicts.extend(self.discriminator.classify(defender, fs, sim=sim))
         t["classify"] = round(time.time() - t0, 4)
+
+        # ---- R1 sombra: refrescar el online y comparar contra el batch (oráculo) ----
+        if self._coordinator is not None and self._validator is not None:
+            stats = self._coordinator.refresh(point_ids, points_ins_ids, point_obs)
+            rep = self._validator.compare(by_defender, self._coordinator.all_features(), self._tol, self._reports)
+            self._record_shadow(rep, stats)
 
         t0 = time.time()
         verdicts = self._resolve_pairs(verdicts, by_defender)
@@ -272,6 +308,35 @@ class ContestManager:
             if f.challenger == challenger:
                 return f
         return pairs[0] if pairs else None
+
+    def _record_shadow(self, rep, stats) -> None:
+        """Registra el resultado de la comparación sombra. Vuelca el CSV de mismatches si hay output_dir."""
+        for m in rep.mismatches:
+            self._shadow_log.append({
+                "report": rep.report_idx, "defender": m.defender, "challenger": m.challenger,
+                "field": m.field, "batch": m.batch, "online": m.online, "kind": m.kind,
+            })
+        if rep.ok:
+            print(f"[shadow] report {rep.report_idx}: OK ({rep.n_pairs_batch} pairs, n_dirty={stats.n_dirty})")
+        else:
+            print(f"[shadow] report {rep.report_idx}: {len(rep.mismatches)} MISMATCHES "
+                  f"(batch {rep.n_pairs_batch} / online {rep.n_pairs_online})")
+            for m in rep.mismatches[:10]:
+                print(f"    def {m.defender} ch {m.challenger} {m.field}: batch={m.batch} online={m.online} {m.kind}")
+        if self._output_dir:
+            self._dump_shadow(self._output_dir + "/shadow_report.csv")
+
+    def _dump_shadow(self, path: str) -> None:
+        fields = ["report", "defender", "challenger", "field", "batch", "online", "kind"]
+        with open(path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(self._shadow_log)
+
+    @property
+    def shadow_ok(self) -> bool:
+        """True si NINGÚN report tuvo mismatches (para tests/aserciones)."""
+        return not self._shadow_log
 
     @staticmethod
     def summarize(verdicts: List[Verdict]) -> Dict[str, int]:

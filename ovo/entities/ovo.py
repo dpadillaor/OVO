@@ -371,6 +371,9 @@ class OVO:
                     # denominador de persistence: TODO punto asignado bajo esta máscara cuenta
                     # como reclamo (leal o robo), en el mismo reloj semántico que los robos.
                     self.contest.record_claim(points_ids[assigned_idx].flatten())
+                    # online (R1): owners de los asignados -> defenders sucios (cubre grab+claim+growth,
+                    # ya que grab⊆claim⊆assigned y el ganador que crece es el owner mayoritario). No-op en batch.
+                    self.contest.note_assignment(points_ins_ids[assigned_idx])
                     contested = points_ins_ids[assigned_idx] != map_ins_id
                     if contested.any():
                         self.contest.record_grab(points_ids[assigned_idx[contested]].flatten(), map_ins_id)
@@ -705,6 +708,8 @@ class OVO:
                     challenger.add_points_ids(list(subset_set))
                     subset_t = torch.as_tensor(list(subset_set), device=points_ins_ids.device)
                     points_ins_ids[torch.isin(points_ids.flatten(), subset_t)] = v.challenger
+                    # online (R1): el trozo cambió de owner -> defender y challenger sucios. No-op en batch.
+                    self.contest.on_split(defender_id, challenger_id, list(subset_set))
                     split_count += 1
         if split_count:
             print(f"  contest splits ({split_mode}): {split_count}")

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 InsId = int
 PointId = int
@@ -43,3 +43,47 @@ class Verdict:
     seam_angle: Optional[float] = None             # giro de la normal en la costura (grados)
     de_ch: Optional[float] = None                  # ΔE color hacia el challenger
     de_def: Optional[float] = None                 # ΔE color hacia el defender
+
+
+# ---- online / shadow (R1) -------------------------------------------------
+
+@dataclass(frozen=True)
+class FeatureTolerance:
+    """Comparación batch↔online (R1). Ints exactos; floats con atol (persistence es una media -> el
+    orden de suma puede diferir en el último ULP, ver docs/contest_online_design_2026-07-09.md §11.1)."""
+    atol: float = 1e-6
+    FLOAT_FIELDS: ClassVar[Tuple[str, ...]] = (
+        "containment", "reverse_containment", "persistence", "focus", "exclusivity",
+    )
+    INT_FIELDS: ClassVar[Tuple[str, ...]] = ("firm_points", "total_grabs")
+
+
+@dataclass(frozen=True)
+class Mismatch:
+    """Una discrepancia de un campo entre las features batch y online de un par."""
+    defender: InsId
+    challenger: InsId
+    field: str                       # nombre del campo de PairFeatures
+    batch: float
+    online: float
+    kind: str = "value"              # "value" | "missing_online" | "missing_batch"
+
+
+@dataclass(frozen=True)
+class ComparisonReport:
+    """Resultado de comparar batch vs online en un report (shadow)."""
+    report_idx: int
+    n_pairs_batch: int
+    n_pairs_online: int
+    mismatches: Tuple[Mismatch, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        return not self.mismatches
+
+
+@dataclass(frozen=True)
+class RefreshStats:
+    """Stats de un refresh online (para logs/telemetría)."""
+    n_dirty: int                     # defenders recomputados este refresh
+    n_pairs: int                     # pares producidos

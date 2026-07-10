@@ -1,113 +1,88 @@
 @startuml flujo_decision_contest
 title Flujo de decision - Contest (merge/split de instancias)
-caption Umbrales: high=0.70  low=0.5  min_mass=50  min_split_cont=0.0  max_rev_split=0.5  min_persist_split=0.1  sim_merge=0.81  max_seam_angle=15  (color seam: 2 sentidos, sin umbral)
+caption Umbrales: min_mass=50 · high=0.60 low=0.40 · strong(pers>=0.5) · partial(pers>=0.6, excl>=0.8) · focus(>=0.7, excl>=0.9, pers>=0.6) · por-par(firm>=50, excl>=0.8, pers>=0.5)
 
 skinparam defaultFontName Helvetica
 skinparam ActivityDiamondBackgroundColor #FFF8E1
 skinparam ActivityBackgroundColor #ECEFF1
 
 start
-:Perdedor A + sus pares A->W;
+:Defender + sus pares defender->challenger;
 
-if (Algun par mass >= min_mass=50?) then (no)
-  #BDBDBD:NO_ACTION\n"ruido masa baja";
+if (Algun par total_grabs >= min_mass=50?) then (no)
+  #BDBDBD:NO_ACTION\n"ruido (masa baja)";
   stop
 else (si)
 endif
 
 :Clasificar pares por containment;
 
-if (Hay pares cont >= high=0.70? (strong)) then (si)
-  if (len strong == 1\nY rev_cont >= high?) then (si)
-    #CE93D8:DEFER_TO_FUSION\n"simetrico -> geometria/descriptor";
+' ================= STRONG: cont >= high =================
+if (Hay pares cont >= high=0.60?\n(strong)) then (si)
+  if (Algun dueño firme?\npers >= 0.5) then (no)
+    #BDBDBD:NO_ACTION\n"contenido sin dueño firme";
     stop
-  else (no)
-    if (roots de winners fuertes == 1?\n(union-find fusion)) then (si, 1 raiz)
-      #66BB6A:MERGE_CONTAINMENT\n"contencion alta, 1 raiz";
+  else (si)
+    if (roots de dueños firmes == 1?\n(union-find fusion)) then (si, 1 raiz)
+      #66BB6A:MERGE_CONTAINMENT\n"fragment contained (cont alta, 1 raiz)";
       stop
     else (no, >=2 raices)
-      #BDBDBD:NO_ACTION\n"frontera real >=2 raices";
+      #BDBDBD:NO_ACTION\n"frontera real (>=2 raices)";
       stop
     endif
   endif
 else (no)
 endif
 
-if (Hay pares low=0.5 <= cont < 0.70?) then (si)
-  :best = par parcial de mayor contencion;
-  note right
-    FRANJA AMBIGUA: la geometria no
-    separa fragmento de trozo.
-    El descriptor (cos-sim CLIP) desempata.
-  end note
-  if (descriptor sim >= sim_merge=0.81?) then (si, mismo objeto)
-    #66BB6A:MERGE_CONTAINMENT\n"parcial + descriptor igual -> merge";
+' ================= PARTIAL: low <= cont < high =================
+if (Hay pares low=0.40 <= cont < 0.60?\n(partial)) then (si)
+  if (Algun dueño?\npers >= 0.6  Y  excl >= 0.8) then (no)
+    #BDBDBD:NO_ACTION\n"partial sin dueño firme+exclusivo";
     stop
-  else (no, distinto / ausente)
-  endif
-  if (rev_cont >= max_rev_split=0.5?) then (si, bidireccional)
-    #BDBDBD:NO_ACTION\n"parcial bidireccional -> no split\n(frontera)";
-    stop
-  else (no)
-  endif
-  if (persistence < min_persist_split=0.1?) then (si, parpadeo)
-    #BDBDBD:NO_ACTION\n"parcial inestable -> no split";
-    stop
-  else (no, estable)
-  endif
-  #64B5F6:SPLIT "parcial"\n(descriptor distinto -> corta trozo);
-else (no)
-  if (Hay par focus >= 0.7\nY cont >= min_split_cont=0.05\nY mass >= 50?) then (si)
-    note right
-      NO merge: CLIP no distingue instancias
-      de misma clase -> over-merge sillas.
-    end note
-    if (persistence < min_persist_split=0.1?) then (si, parpadeo)
-      #BDBDBD:NO_ACTION\n"dominancia inestable -> no split\n(sillas adyacentes: ganador roza\nlos puntos del vecino, persist<0.06)";
+  else (si)
+    if (roots de dueños cualificados == 1?) then (si, 1 raiz)
+      #66BB6A:MERGE_CONTAINMENT\n"fragmento (pers+excl, 1 raiz)\n[sin descriptor, sin split]";
       stop
-    else (no, estable)
-    endif
-    if (giro_normal_costura > max_seam_angle=15deg?) then (si, quiebre)
-      #BDBDBD:NO_ACTION\n"objeto en contacto -> no split\n(cojin en sofa, cosa sobre mesa:\nnormales chunk<->W giran, hueco 10<->22deg)";
+    else (no, >=2 raices)
+      #BDBDBD:NO_ACTION\n"frontera real (>=2 raices)";
       stop
-    else (no, superficie continua ~8deg)
     endif
-    if (color costura: dE(chunk<->W) > dE(chunk<->resto-L)?) then (si, se funde con L)
-      #BDBDBD:NO_ACTION\n"color de L -> no split\n(chunk se parece mas a L que a W:\ncoplanar de distinto color que el\nnormal no separa; 2 sentidos, no umbral)";
-      stop
-    else (no, se funde con W)
-    endif
-    #64B5F6:SPLIT "dominancia"\n(fragmento real, coplanar Y color de W -> transferir);
-  else (no)
-    #BDBDBD:NO_ACTION\n"borde, contencion baja";
-    stop
   endif
+else (no, cont < low)
 endif
 
-partition "_resolve_pairs (decision por PAR, no por perdedor)" {
-  :Juntar los dos sentidos del par {A,B}\nvab(A->B) + vba(B->A), con cab y cba;
+' ================= SPLIT: cont < low -> lista 0..N =================
+partition "SPLIT: retener trozos ajenos (classify -> List[Verdict], 0..N, dedup por challenger)" {
   note right
-    Sustituye al viejo _reconcile (parche).
-    hi = direccion de mayor contencion
-    (candidato a fragmento)
+    Dos bandas COMPLEMENTARIAS, se evaluan
+    por CADA challenger de forma independiente:
+      FOCUS  = sniper alta precision (<=1 par)
+      POR-PAR = las gordas que focus omite (0..N)
+    NO se mergea: CLIP no distingue instancias
+    de misma clase -> over-merge.
   end note
 
-  if (Alguno es MERGE?) then (si)
-    #66BB6A:MERGE_CONTAINMENT\nen direccion de mayor contencion;
-    stop
-  else (no)
-  endif
-
-  if (Ambos SPLIT? (simetrico)) then (si)
-    if (hi_c >= low=0.5?) then (si, casi-merge\nej. pared 151/63)
-      #66BB6A:MERGE_CONTAINMENT\n"split simetrico resuelto -> merge";
-      stop
-    else (no, frontera\nej. silla 148/194)
-      #BDBDBD:NO_ACTION\n"split simetrico -> frontera";
-      stop
+  fork
+    :BANDA FOCUS (por par);
+    if (focus >= 0.7\nY excl >= 0.9\nY pers >= 0.6?) then (si)
+      #64B5F6:SPLIT "focus"\n(un challenger domina lo disputado;\ncualquier tamaño, rescata trozos limpios chicos);
+    else (no)
+      #BDBDBD:(no emite);
     endif
-  else (no)
-    #64B5F6:SPLIT direccional se mantiene\n(un solo sentido opina);
+  fork again
+    :BANDA POR-PAR (por par, si challenger no tomado por focus);
+    if (firm_points >= 50\nY excl >= 0.8\nY pers >= 0.5?) then (si)
+      #64B5F6:SPLIT "por-par"\n(trozo grande+exclusivo+persistente;\nrescata gordas que focus omite, ej ballena);
+    else (no)
+      #BDBDBD:(no emite);
+    endif
+  end fork
+
+  if (Alguna banda emitio algun SPLIT?) then (no)
+    #BDBDBD:NO_ACTION\n"borde";
+    stop
+  else (si)
+    :Lista de veredictos SPLIT\n(un defender puede soltar N trozos a N vecinos);
     stop
   endif
 }

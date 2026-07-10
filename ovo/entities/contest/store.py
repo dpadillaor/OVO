@@ -74,6 +74,11 @@ class ContestStore:
     def points(self) -> Iterable[PointId]:
         return self._grabs.keys()
 
+    def grabber_points(self, grabber: InsId) -> Set[PointId]:
+        """Copia de los puntos que `grabber` roba (índice inverso). Para invalidación online:
+        al fusionar/borrar `grabber`, sus puntos cambian de challenger -> hay que recomputar sus owners."""
+        return set(self._by_grabber.get(grabber, set()))
+
     def __len__(self) -> int:
         return len(self._grabs)
 
