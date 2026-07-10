@@ -30,7 +30,9 @@ def _is_fusion_owned_stat(key: str) -> bool:
 
 
 # Telemetría Tier 2 del contest (por KF). Se escriben a logger/contest/ (no logger/).
-_CONTEST_KF_STATS = {"n_matched", "n_pre_assign", "n_used", "n_orphans", "n_births", "n_robos"}
+# kf_frame_id = frame_id fuente de cada muestra Tier2 (ancla para cruzar con la pose de cámara).
+_CONTEST_KF_STATS = {"n_matched", "n_pre_assign", "n_used", "n_orphans", "n_births", "n_robos",
+                     "kf_frame_id"}
 
 
 def _is_contest_stat(key: str) -> bool:

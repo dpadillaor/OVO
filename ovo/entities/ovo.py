@@ -404,6 +404,7 @@ class OVO:
         if log_on:
             # n_orphans = matcheados no cubiertos por ninguna máscara usada (buckets 3a+3b)
             self.logger.log_ovo_stats({
+                "kf_frame_id": frame_id,
                 "n_matched": n_matched, "n_pre_assign": n_pre_assign, "n_used": n_used,
                 "n_orphans": n_matched - n_covered, "n_births": n_births, "n_robos": n_robos,
             })

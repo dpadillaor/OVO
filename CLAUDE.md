@@ -37,6 +37,10 @@ Work is organized by tasks tracked in `.agents_mapper/tasks/`.
 *   **Active Tasks**: Detailed logs and documentation for currently `IN_PROGRESS` work are found in `active_tasks/`.
 *   **Archive**: Completed or cancelled tasks are moved to `completed_tasks/` for historical reference.
 
+## Running Experiments (conda env)
+
+All experiment commands (`run_eval.py`, `scripts/run_experiments_batch.py`) must run in the **`ovo2`** conda env — it has `wandb`, torch+cuda, and the rest. The base env lacks `wandb` and fails at import. Launch with `conda run -n ovo2 python ...` (note: `conda run` buffers stdout, so a live log may look empty while the run is actually progressing — check the process/GPU, not just the log).
+
 ## Worktree Setup (Required After `git worktree add`)
 
 New worktrees ship with empty submodule stubs and no heavy data. Before running experiments in a worktree, symlink `thirdParty/` and `data/` subdirs to the primary repo at `/home/padidavid/repos/OVO/`. This reuses built submodules, model weights, datasets, and centralizes experiment outputs.
