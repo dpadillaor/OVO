@@ -840,3 +840,51 @@ actuator de producción → validar SIEMPRE con un run real antes de dar por bue
 - `ovo/entities/contest/clean_transfer.py` — **BORRADO** (redundante con la banda por-par). §7.14.
 - `ovo/entities/contest/manager.py` — split `extend`; `.th.low/.high` (fix); borrado branch/flags clean_transfer.
 - `studies/contest_metrics/viz/inspect3d.py` + `cli.py` (dominio `inspect`) — NUEVO visor 3D. §7.13.E.
+
+---
+
+## 8. HECHO (2026-07-10): SPLIT unificado — una banda en vez de dos
+
+Idea (usuario + tutor): las dos bandas de split (`focus` y `por-par`) aplicaban casi los mismos
+filtros con thresholds distintos → **unificar** para generalizar, aún a costa de ser algo **más
+restrictivo**. Predicción del usuario: poco efecto en AP_agnostic. **Confirmado.**
+
+### El cambio (`discriminator.py::_split_verdicts`)
+```
+antes:  focus  (focus≥0.7  Y excl≥0.9 Y pers≥0.6)
+        por-par(firm≥50     Y excl≥0.8 Y pers≥0.5)   # dedup por challenger, focus prioridad
+ahora:  split  (excl≥0.9    Y pers≥0.6)              # banda única, 0..N por defender
+```
+- **Fuera `focus`** (winner-take-all intrínseco, denominador `n_disputed` contaminado por concurrencia).
+- **Fuera el gate de tamaño `firm≥50`.**
+- Más **estricto en excl** (0.9 vs 0.8 del viejo por-par) y en **pers** (0.6 vs 0.5); más laxo en tamaño.
+- Params borrados: `min_split_focus`, `min_focus_excl`, `min_focus_persist`, `min_split_firm`.
+  Quedan `min_split_excl=0.9`, `min_split_persist=0.6`. `cli.py`: `min_split_firm` fuera de `_INT_KEYS`.
+- **`pers=0.6` (no 0.7): decisión del usuario** — 0.7 mataba la ballena room2 `79→46` (pers 0.644);
+  0.5 "se queda corto para fiarse de un split". 0.6 = mínimo de confianza que salva la ballena.
+
+### AP medido (replay 32ac4, manifest `20260710_GT_CLIP_contest-split-unified.yaml`, exp `5e058`)
+| config | media | tuning | held |
+|---|---|---|---|
+| raw | 0.2330 | — | — |
+| perpair (2 bandas) | 0.2495 | 0.2400 | 0.2590 |
+| **unified (1 banda)** | **0.2491** | 0.2393 | **0.2590** |
+
+- **7/8 escenas IDÉNTICAS a perpair.** Solo **room2 −0.003** (0.250→0.247). Global −0.04% = ruido.
+  **Held CERO cambio** → generaliza. Sigue **+6.9% vs raw**.
+
+### room2 −0.003 diseccionado (NO son las migajas)
+Diff de splits room2 (perpair 9 → unified 20, 6 comunes):
+- **PERDIDOS 3 (los que pesan), todos por `pers 0.55-0.58 < 0.6`:** `9→6` (firm 257), `37→32` (315),
+  `76→36` (438). Trozos medianos validados ✅ a ojo en `contest_split_visual_inspection`. El coste real
+  = subir el suelo de persistencia, justo el objetivo "más restrictivo".
+- **GANADAS 14 migajas** (firm 1–45, pers alta) al quitar `firm≥50`. **Inocuas** (net-neutral). Corrige
+  la intuición inicial: las migajas NO degradan; el −0.003 es el precio de `pers≥0.6`.
+- La ballena `79→46` (firm 9496, pers 0.644) está en los 6 comunes → **sobrevive** (por eso room2 no
+  cae ~−0.009 como con pers 0.7).
+
+### Balance
+1 banda en vez de 2, −3 params, sin `focus` ni gate de tamaño, a coste −0.04% AP global. Simplificación
++ generalización con AP plano. **Config final: `min_split_excl=0.9`, `min_split_persist=0.6`.**
+Working tree sin commit (regla). Ficheros: `discriminator.py`, `studies/contest_metrics/cli.py`,
+`manifests/20260710_GT_CLIP_contest-split-unified.yaml` (nuevo).

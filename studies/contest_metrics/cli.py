@@ -22,7 +22,7 @@ import sys
 
 from .common.resolve import resolve, resolve_exp_path
 
-_INT_KEYS = {"min_grabs", "min_mass", "min_split_firm"}
+_INT_KEYS = {"min_grabs", "min_mass"}
 
 
 # ---- helpers -----------------------------------------------------------
