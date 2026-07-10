@@ -1,6 +1,6 @@
 import pytest
 
-from ovo.entities.visualizers.rerun import stream_rerun
+from ovo.entities.visualizers.rerun import stream_rerun, stream_rerun_tracking
 from ovo.entities.visualizers.selection import resolve_rerun_visual_mode, select_visualizer_target
 from ovo.entities.visualizer import stream_pcd
 
@@ -11,6 +11,11 @@ class TestSelectVisualizerTarget:
         func, name = select_visualizer_target("rerun", "stream")
         assert func is stream_rerun
         assert name == "RerunVisualizer"
+
+    def test_selects_rerun_tracking_mode(self):
+        func, name = select_visualizer_target("rerun", "tracking")
+        assert func is stream_rerun_tracking
+        assert name == "RerunTrackingVis"
 
     def test_selects_open3d_for_non_rerun_type(self):
         func, name = select_visualizer_target("open3d", "stream")

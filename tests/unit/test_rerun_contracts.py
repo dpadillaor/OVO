@@ -64,3 +64,19 @@ class TestRerunMessageContracts:
             "c2w": np.eye(4, dtype=np.float32),
         }
         assert not is_stream_frame_message(msg)
+
+    def test_is_stream_frame_message_accepts_tracking_extras(self):
+        # tracking mode adds point_ids + track_signals; the guard must still accept it
+        msg = {
+            "type": "stream_frame",
+            "frame_id": 11,
+            "points": np.zeros((10, 3), dtype=np.float32),
+            "obj_ids": np.zeros((10,), dtype=np.int32),
+            "colors": None,
+            "c2w": np.eye(4, dtype=np.float32),
+            "rgb": None,
+            "ins_map": None,
+            "point_ids": np.arange(10, dtype=np.int64),
+            "track_signals": {"frame_id": 11, "n_robos": 3, "robbed_ids": [1, 2], "new_ids": []},
+        }
+        assert is_stream_frame_message(msg)

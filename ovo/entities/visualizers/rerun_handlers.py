@@ -431,3 +431,127 @@ class StreamRenderer(BaseRerunRenderer):
             rr.Points3D([cam_pos], colors=[[255, 50, 50]], radii=[0.06], labels=[label]),
         )
 
+
+class TrackingRenderer(StreamRenderer):
+    """Diagnostics view for tracking-error signals. Reuses the stream scene (view A) and adds:
+      - grey map with robbed points (view B) and newly-born points (view C) highlighted,
+      - per-frame telemetry scalars + their RAW derivatives (no smoothing, so a single-frame
+        spike survives), plus raw camera linear/angular speed.
+    All on the `step` (== frame_id) timeline; derivatives divide by the real Δframe.
+    """
+
+    name = "RerunTrackingVis"
+    rrd_filename = "tracking.rrd"
+
+    GREY = [90, 90, 90]
+    ROBBED_COLOR = [255, 40, 40]
+    NEW_COLOR = [40, 200, 255]
+    _COUNTS = ("n_matched", "n_pre_assign", "n_orphans", "n_births", "n_robos")
+
+    def post_setup(self):
+        super().post_setup()
+        self._prev_counts: dict[str, float] = {}
+        self._prev_frame = None
+        self._prev_cam_pos = None
+        self._prev_cam_rot = None
+
+    def build_blueprint(self):
+        return rrb.Blueprint(
+            rrb.Horizontal(
+                rrb.Vertical(
+                    rrb.Spatial3DView(
+                        name="SLAM",
+                        contents="world/**",
+                        overrides={"world/normals": rrb.EntityBehavior(visible=False)},
+                    ),
+                    rrb.Horizontal(
+                        rrb.Spatial3DView(name="Robbed", contents=["tracking/greymap", "tracking/robbed"]),
+                        rrb.Spatial3DView(name="New", contents=["tracking/greymap", "tracking/new"]),
+                    ),
+                ),
+                rrb.Vertical(
+                    rrb.TimeSeriesView(name="Counts", origin="signals/count"),
+                    rrb.TimeSeriesView(name="Derivatives (raw)", origin="signals/deriv"),
+                    rrb.TimeSeriesView(name="Camera speed", origin="signals/cam"),
+                ),
+            ),
+            collapse_panels=False,
+        )
+
+    def handle_message(self, data: Any):
+        super().handle_message(data)  # view A + camera + images
+        if not is_stream_frame_message(data):
+            return
+        ts = data.get("track_signals")
+        pids = data.get("point_ids")
+        if ts is None or pids is None:
+            return
+        self._log_tracking(
+            int(data["frame_id"]),
+            data["points"].astype(np.float32),
+            pids,
+            data["c2w"].astype(np.float32),
+            ts,
+        )
+
+    def _log_tracking(self, frame_id, points, point_ids, c2w, ts):
+        self._set_time("step", sequence=frame_id)
+
+        # grey map: ceiling-cut, capped like the base cloud. Highlights come from the FULL
+        # (uncapped) set so the sparse robbed/new points are never subsampled away.
+        mask = ceiling_mask(points)
+        pts_full, pids_full = points[mask], point_ids[mask]
+        pts_grey = pts_full
+        if len(pts_grey) > self.MAX_FILE_POINTS:
+            idx = np.random.choice(len(pts_grey), self.MAX_FILE_POINTS, replace=False)
+            idx.sort()
+            pts_grey = pts_grey[idx]
+        self._log(
+            "tracking/greymap",
+            rr.Points3D(
+                pts_grey,
+                colors=np.tile(self.GREY, (len(pts_grey), 1)).astype(np.uint8),
+                radii=np.full(len(pts_grey), 0.006, dtype=np.float32),
+            ),
+        )
+        self._log_highlight("tracking/robbed", pts_full, pids_full, ts.get("robbed_ids", []), self.ROBBED_COLOR)
+        self._log_highlight("tracking/new", pts_full, pids_full, ts.get("new_ids", []), self.NEW_COLOR)
+
+        # counts + raw derivatives (per real Δframe)
+        counts = {k: float(ts.get(k, 0)) for k in self._COUNTS}
+        for name, val in counts.items():
+            self._log(f"signals/count/{name}", rr.Scalars(val))
+        df = (frame_id - self._prev_frame) if self._prev_frame is not None else 0
+        if df > 0:
+            for name, val in counts.items():
+                if name in self._prev_counts:
+                    self._log(f"signals/deriv/d_{name}", rr.Scalars((val - self._prev_counts[name]) / df))
+        self._prev_counts = counts
+        self._prev_frame = frame_id
+
+        # raw camera speed (magnitudes)
+        pos, rot = c2w[:3, 3], c2w[:3, :3]
+        if self._prev_cam_pos is not None and df > 0:
+            self._log("signals/cam/v_lin", rr.Scalars(float(np.linalg.norm(pos - self._prev_cam_pos) / df)))
+            cos = np.clip((np.trace(rot @ self._prev_cam_rot.T) - 1) / 2, -1.0, 1.0)
+            self._log("signals/cam/v_ang", rr.Scalars(float(np.degrees(np.arccos(cos)) / df)))
+        self._prev_cam_pos, self._prev_cam_rot = pos, rot
+
+    def _log_highlight(self, path, pts, pids, ids, color):
+        if len(ids) == 0:
+            self._log(path, rr.Clear(recursive=False))
+            return
+        sel = np.isin(pids, np.asarray(list(ids), dtype=pids.dtype))
+        hp = pts[sel]
+        if len(hp) == 0:
+            self._log(path, rr.Clear(recursive=False))
+            return
+        self._log(
+            path,
+            rr.Points3D(
+                hp,
+                colors=np.tile(color, (len(hp), 1)).astype(np.uint8),
+                radii=np.full(len(hp), 0.02, dtype=np.float32),
+            ),
+        )
+

@@ -74,7 +74,12 @@ class OVO:
         self.objects=dict()
         self._time_cache = []
         self._last_visual_snapshot = None
-        
+
+        # Tracking-viz (rerun_mode=tracking): per-frame signals for the diagnostics renderer.
+        # Off by default; ovomapping flips it on only for that mode (zero cost otherwise).
+        self.track_viz_enabled = False
+        self._last_track_signals = None
+
         self.next_ins_id = 0
         self.kf_id = 0
 
@@ -350,11 +355,16 @@ class OVO:
         # de fiabilidad; P4 (huérfano-asignado) = sightings - claims.
         self.contest.record_sighting(points_ids[matched_points_idxs].flatten())
 
-        # Telemetría Tier 2 (por KF): partición de los puntos matcheados. Solo si log.
+        # Telemetría Tier 2 (por KF): partición de los puntos matcheados. Se computa si
+        # hay log O si el modo tracking está activo (necesita los mismos contadores).
         log_on = self.config.get("log", False)
-        n_matched = int(matched_points_idxs.numel()) if log_on else 0
-        n_pre_assign = int((points_ins_ids[matched_points_idxs] > -1).sum().item()) if log_on else 0
+        track_viz = self.track_viz_enabled
+        stats_on = log_on or track_viz
+        n_matched = int(matched_points_idxs.numel()) if stats_on else 0
+        n_pre_assign = int((points_ins_ids[matched_points_idxs] > -1).sum().item()) if stats_on else 0
         n_used = n_covered = n_births = n_robos = 0
+        robbed_ids: List[int] = []   # tracking-viz: puntos robados este frame (vista B)
+        new_ids: List[int] = []      # tracking-viz: puntos de instancias nacidas este frame (vista C)
 
         matched_ins_info = {}
         for map_idx in range(seg_map.max()+1):
@@ -376,9 +386,12 @@ class OVO:
                     self.contest.note_assignment(points_ins_ids[assigned_idx])
                     contested = points_ins_ids[assigned_idx] != map_ins_id
                     if contested.any():
-                        self.contest.record_grab(points_ids[assigned_idx[contested]].flatten(), map_ins_id)
-                        if log_on:
+                        robbed = points_ids[assigned_idx[contested]].flatten()
+                        self.contest.record_grab(robbed, map_ins_id)
+                        if stats_on:
                             n_robos += int(contested.sum().item())
+                        if track_viz:
+                            robbed_ids.extend(robbed.cpu().tolist())
                     self.objects[map_ins_id].update(unassigned_points_ids, kf_id, mask_area)
                     if map_ins_id in matched_ins_info.keys():
                         matched_ins_info[map_ins_id].append((map_idx, mask_area))
@@ -388,8 +401,10 @@ class OVO:
                 elif len(unassigned_points_ids) > track_th:
                     map_ins_id = self.next_ins_id
                     self.next_ins_id +=1
-                    if log_on:
+                    if stats_on:
                         n_births += 1
+                    if track_viz:
+                        new_ids.extend(unassigned_points_ids)
                     #assigned points do not change obj id
                     self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, frame_id=frame_id, points_ids=unassigned_points_ids, mask_area=mask_area)
                     matched_ins_info[map_ins_id]=[(map_idx, mask_area)]
@@ -397,7 +412,7 @@ class OVO:
                 if map_ins_id > -1:
                     # Assignto matched unassigned points (id==-1) new instance id
                     points_ins_ids[map_points[~assigned_mask]] = map_ins_id
-                    if log_on:
+                    if stats_on:
                         n_used += 1
                         n_covered += int(map_points.numel())
 
@@ -408,6 +423,14 @@ class OVO:
                 "n_matched": n_matched, "n_pre_assign": n_pre_assign, "n_used": n_used,
                 "n_orphans": n_matched - n_covered, "n_births": n_births, "n_robos": n_robos,
             })
+
+        if track_viz:
+            self._last_track_signals = {
+                "frame_id": frame_id,
+                "n_matched": n_matched, "n_pre_assign": n_pre_assign,
+                "n_orphans": n_matched - n_covered, "n_births": n_births, "n_robos": n_robos,
+                "robbed_ids": robbed_ids, "new_ids": new_ids,
+            }
 
         return points_ins_ids, matched_ins_info
 

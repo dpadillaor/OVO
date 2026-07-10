@@ -1,4 +1,4 @@
-from .rerun import stream_rerun
+from .rerun import stream_rerun, stream_rerun_tracking
 from ..visualizer import stream_pcd
 
 
@@ -22,6 +22,8 @@ def resolve_rerun_visual_mode(config_mode: str | None, legacy_show_stream: bool)
 def select_visualizer_target(vis_type: str, rerun_mode: str):
     """Resolve process target function and process name for visual streaming."""
     if vis_type == "rerun":
+        if rerun_mode == "tracking":
+            return stream_rerun_tracking, "RerunTrackingVis"
         return stream_rerun, "RerunVisualizer"
 
     return stream_pcd, "O3DVisualizer"

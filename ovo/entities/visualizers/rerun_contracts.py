@@ -22,6 +22,10 @@ class StreamFrameMessage(TypedDict):
     ins_map: np.ndarray | None
     sam_map: np.ndarray | None
     corrected_trajectory: list | None
+    # Tracking mode only (None in plain stream): permanent point ids aligned with `points`,
+    # and the per-frame diagnostics signals (counts + robbed/new point ids).
+    point_ids: np.ndarray | None
+    track_signals: dict | None
 
 
 def is_stream_message(data: Any) -> TypeGuard[tuple[np.ndarray, np.ndarray, Any, np.ndarray]]:

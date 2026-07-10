@@ -103,6 +103,8 @@ class OVOSemMap():
 
         # Semantic module and SLAM backend.
         self.ovo = OVO(config["semantic"], self.logger, config["data"]["scene_name"], cam_intrinsics, device=self.device)
+        # Diagnostics renderer: let ovo accumulate per-frame robbed/new point ids (zero cost otherwise).
+        self.ovo.track_viz_enabled = self.stream and self.rerun_mode == "tracking"
         self.ovo.contest.set_output_dir(self.output_path / "fusion" / "contest")
         self.slam_backbone = get_slam_backbone(config, self.dataset, cam_intrinsics)
 
@@ -239,10 +241,10 @@ class OVOSemMap():
 
     def _send_stream_frame(self, frame_id: int, mpqueue) -> None:
         """Capture and send a stream frame snapshot to the visualizer."""
-        if not self.stream or self.rerun_mode != "stream":
+        if not self.stream or self.rerun_mode not in ("stream", "tracking"):
             return
 
-        pcd, _, pcd_obj_ids = self.slam_backbone.get_map()
+        pcd, pcd_ids, pcd_obj_ids = self.slam_backbone.get_map()
         c2w = self.slam_backbone.get_c2w(frame_id)
         if c2w is None:
             return
@@ -276,6 +278,14 @@ class OVOSemMap():
             ]
             self._stream_traj_reset_done = True
 
+        # Tracking mode only: permanent point ids (to locate robbed/new points in 3D) +
+        # the per-frame signals stashed by ovo._track_objects.
+        point_ids = None
+        track_signals = None
+        if self.rerun_mode == "tracking":
+            point_ids = pcd_ids.cpu().numpy().reshape(-1).astype(np.int64)
+            track_signals = self.ovo._last_track_signals
+
         _queue_put_dropping(
             mpqueue,
             {
@@ -292,6 +302,8 @@ class OVOSemMap():
                 "sam_map": sam_map,
                 "kf_id": kf_id,
                 "corrected_trajectory": corrected_trajectory,
+                "point_ids": point_ids,
+                "track_signals": track_signals,
             },
         )
 
@@ -344,7 +356,7 @@ class OVOSemMap():
 
         self._send_stream_frame(frame_id, mpqueue)
 
-        if self.stream and self.rerun_mode == "stream":
+        if self.stream and self.rerun_mode in ("stream", "tracking"):
             if query_flag.value == 1:
                 query = query_pipe.recv()
                 self.ovo.complete_semantic_info()
@@ -357,7 +369,7 @@ class OVOSemMap():
         return t_sem
 
     def _dispatch_jump_events(self, frame_id: int, mpqueue) -> None:
-        if not self.stream or self.rerun_mode != "stream":
+        if not self.stream or self.rerun_mode not in ("stream", "tracking"):
             return
         pending = getattr(self.slam_backbone, "pending_jump_events", [])
         if not pending:
@@ -438,7 +450,7 @@ class OVOSemMap():
             self._send_stream_frame(frame_id, mpqueue)
 
         # Send update_map event to stream visualizer
-        if self.stream and self.rerun_mode == "stream":
+        if self.stream and self.rerun_mode in ("stream", "tracking"):
             c2w = self.slam_backbone.get_c2w(frame_id)
             if c2w is not None:
                 _queue_put_dropping(mpqueue, {
