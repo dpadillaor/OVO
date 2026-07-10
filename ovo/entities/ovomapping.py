@@ -82,7 +82,7 @@ class OVOSemMap():
         self.stream = config["vis"]["stream"]
         self.show_stream = config["vis"].get("show_stream", False)
         self.vis_type = config["vis"].get("type", "open3d")
-        self.rerun_mode = config["vis"].get("rerun_mode", "stream")  # "stream" or "fusion"
+        self.rerun_mode = config["vis"].get("rerun_mode", "stream")  # "stream"
         self.rerun_visual_mode = resolve_rerun_visual_mode(config["vis"].get("rerun_visual_mode", None), self.show_stream)
         self.save_rrd = config["vis"].get("save_rrd", False)
 
@@ -448,28 +448,6 @@ class OVOSemMap():
                     "n_fused": sum(1 for d in fusion_decisions if d["result"] == "ACCEPTED"),
                     "decisions": fusion_decisions,
                 })
-
-        # Send loop closure snapshot to visualizer
-        if (self.stream and self.rerun_mode in ("loop_closure", "fusion") and getattr(self.slam_backbone, '_lc_pcd_before', None) is not None):
-            pcd_after, ids = self._capture_points_and_ids(self.slam_backbone.get_map(), points_dtype=np.float32, ids_dtype=np.int32)
-            traj_after = {
-                k: v.cpu().numpy().astype(np.float32)
-                for k, v in self.slam_backbone.estimated_c2ws.items()
-            }
-            _queue_put_dropping(mpqueue, {
-                "type": "loop_closure",
-                "pcd_before": self.slam_backbone._lc_pcd_before.numpy().astype(np.float32),
-                "pcd_after": pcd_after,
-                "ids": ids,
-                "traj_before": {
-                    k: v.numpy().astype(np.float32)
-                    for k, v in self.slam_backbone._lc_traj_before.items()
-                },
-                "traj_after": traj_after,
-                "frame_id": frame_id,
-            })
-            self.slam_backbone._lc_pcd_before = None
-            self.slam_backbone._lc_traj_before = None
 
         self.slam_backbone.map_updated = False
         torch.cuda.synchronize()

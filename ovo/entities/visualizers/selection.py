@@ -1,4 +1,4 @@
-from .rerun import stream_rerun, stream_rerun_fusion, stream_rerun_loopclosure
+from .rerun import stream_rerun
 from ..visualizer import stream_pcd
 
 
@@ -22,10 +22,6 @@ def resolve_rerun_visual_mode(config_mode: str | None, legacy_show_stream: bool)
 def select_visualizer_target(vis_type: str, rerun_mode: str):
     """Resolve process target function and process name for visual streaming."""
     if vis_type == "rerun":
-        if rerun_mode == "fusion":
-            return stream_rerun_fusion, "RerunFusionVis"
-        if rerun_mode == "loop_closure":
-            return stream_rerun_loopclosure, "RerunLCVis"
         return stream_rerun, "RerunVisualizer"
 
     return stream_pcd, "O3DVisualizer"
