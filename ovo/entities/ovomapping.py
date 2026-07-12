@@ -267,16 +267,22 @@ class OVOSemMap():
             sam_map = visual_snapshot.get("sam_map")
             kf_id = visual_snapshot.get("kf_id")
 
+        # Re-derive the trajectory from the (BA/LC-corrected) keyframe poses whenever the map
+        # was updated this frame. ORB never sets correction_done, so the old gate left the path
+        # stale while the points moved; map_updated is the honest "poses changed" signal.
+        # correction_done + latch kept for the simulated backbone (one-shot reset, no map_updated).
         corrected_trajectory = None
-        if (
-            getattr(self.slam_backbone, "correction_done", False)
-            and not getattr(self, "_stream_traj_reset_done", False)
-        ):
+        map_was_updated = getattr(self.slam_backbone, "map_updated", False)
+        correction_pending = getattr(self.slam_backbone, "correction_done", False) and not getattr(
+            self, "_stream_traj_reset_done", False
+        )
+        if map_was_updated or correction_pending:
             corrected_trajectory = [
                 v.cpu().numpy()[:3, 3].tolist()
                 for _, v in sorted(self.slam_backbone.estimated_c2ws.items())
             ]
-            self._stream_traj_reset_done = True
+            if correction_pending:
+                self._stream_traj_reset_done = True
 
         # Tracking mode only: permanent point ids (to locate robbed/new points in 3D) +
         # the per-frame signals stashed by ovo._track_objects.
