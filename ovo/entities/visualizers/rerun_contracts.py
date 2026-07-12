@@ -10,6 +10,27 @@ class StreamMessage(TypedDict):
     c2w: np.ndarray
 
 
+class TrackSignals(TypedDict):
+    """Per-KF tracking diagnostics, snapshotted before the mask loop mutates the instance ids.
+
+    `matched_*` describe the reprojected points that survived the depth match, aligned row-wise:
+    `matched_pre` says which of them already belonged to an instance. robbed/birth ids are subsets.
+    `frame_id` is what makes them safe to consume: update_map re-sends the frame afterwards.
+    """
+
+    frame_id: int
+    n_matched: int
+    n_pre_assign: int
+    n_orphans: int
+    n_births: int
+    n_robos: int
+    matched_ids: np.ndarray  # (M,) permanent point ids
+    matched_px: np.ndarray  # (M,2) pixel (x, y) each point projects to
+    matched_pre: np.ndarray  # (M,) bool: had an instance on entry
+    robbed_ids: np.ndarray  # points that changed owner this KF
+    birth_ids: np.ndarray  # points seeding an instance created this KF
+
+
 class StreamFrameMessage(TypedDict):
     type: Literal["stream_frame"]
     frame_id: int

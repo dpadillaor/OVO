@@ -8,23 +8,25 @@ import numpy as np
 import rerun as rr
 import rerun.blueprint as rrb
 
-from .rerun_utils import (
-    ceiling_mask,
-    get_instance_cmap,
-    log_instances,
-    resolve_instance_ids,
-)
 from .rerun_contracts import (
     JumpEventMessage,
     UpdateMapMessage,
     is_jump_event_message,
-    is_stream_frame_message,
-    is_stream_message,
     is_update_map_message,
 )
+from .rerun_frame import Frame, decode
+from .rerun_scene import MapScene
+from .rerun_sink import RerunSink, log_all, set_time_all
+from .rerun_tracking import SignalsPainter, TrackingPainter, split_layers
+
+MAX_LIVE_POINTS = 80_000
+MAX_FILE_POINTS = 300_000
+TIMELINE = "step"
 
 
 class BaseRerunRenderer:
+    """Rerun lifecycle: recordings, sinks, blueprint, and the message dispatch skeleton."""
+
     name = "RerunRenderer"
     app_suffix = ""
     rrd_filename = "stream.rrd"
@@ -46,12 +48,14 @@ class BaseRerunRenderer:
         self.show = show
         self.save_rrd = save_rrd
         self.visual_mode = str(visual_mode).lower()
+        self.sinks: list[RerunSink] = []
+        self.step = 0
 
     def setup(self):
         rr.init(f"OVO_{self.scene_name}{self.app_suffix}")
 
         if self.visual_mode == "serve":
-            self.live_rec = rr.RecordingStream(
+            live_rec = rr.RecordingStream(
                 f"OVO_{self.scene_name}{self.app_suffix}_live",
                 batcher_config=rr.ChunkBatcherConfig(
                     flush_tick=timedelta(milliseconds=33),
@@ -62,62 +66,45 @@ class BaseRerunRenderer:
             rr.serve_grpc(
                 grpc_port=RERUN_PORT_LIVE,
                 server_memory_limit="200MB",
-                recording=self.live_rec,
+                recording=live_rec,
             )
-        else:
-            self.live_rec = None
+            # The live viewer never gets static data: it must stay on the timeline.
+            self.sinks.append(RerunSink(live_rec, max_points=MAX_LIVE_POINTS, allow_static=False))
 
         if self.save_rrd:
-            self.file_rec = rr.RecordingStream(
-                f"OVO_{self.scene_name}{self.app_suffix}_file",
-            )
-            rr.save(
-                str(Path(self.output_path) / self.rrd_filename),
-                recording=self.file_rec,
-            )
-        else:
-            self.file_rec = None
+            file_rec = rr.RecordingStream(f"OVO_{self.scene_name}{self.app_suffix}_file")
+            rr.save(str(Path(self.output_path) / self.rrd_filename), recording=file_rec)
+            self.sinks.append(RerunSink(file_rec, max_points=MAX_FILE_POINTS))
+
+        if not self.sinks:
+            self.sinks.append(RerunSink())
 
         if self.visual_mode == "spawn" and self.show:
             rr.spawn()
 
-        self._send_blueprint()
+        blueprint = self.build_blueprint()
+        for sink in self.sinks:
+            sink.send_blueprint(blueprint)
+
         self.post_setup()
 
-    def _send_blueprint(self):
-        bp = self.build_blueprint()
-        if self.live_rec is not None:
-            rr.send_blueprint(bp, recording=self.live_rec)
-        if self.file_rec is not None:
-            rr.send_blueprint(bp, recording=self.file_rec)
-        if self.live_rec is None and self.file_rec is None:
-            rr.send_blueprint(bp)
+    def handle_message(self, data: Any):
+        if is_update_map_message(data):
+            set_time_all(self.sinks, TIMELINE, data["frame_id"])
+            self.on_update_map(data)
+            return
+        if is_jump_event_message(data):
+            set_time_all(self.sinks, TIMELINE, data["frame_id"])
+            self.on_jump_event(data)
+            return
 
-    def _log(self, path: str, entity, *, file_static: bool = False):
-        """Log to live stream (never static) and file stream (with file_static)."""
-        if self.live_rec is not None:
-            rr.log(path, entity, recording=self.live_rec)
-        if self.file_rec is not None:
-            rr.log(path, entity, static=file_static, recording=self.file_rec)
-        if self.live_rec is None and self.file_rec is None:
-            rr.log(path, entity)
+        frame = decode(data, self.step)
+        if frame is None:
+            return
 
-    def _set_time(self, timeline: str, **kwargs):
-        if self.live_rec is not None:
-            rr.set_time(timeline, recording=self.live_rec, **kwargs)
-        if self.file_rec is not None:
-            rr.set_time(timeline, recording=self.file_rec, **kwargs)
-        if self.live_rec is None and self.file_rec is None:
-            rr.set_time(timeline, **kwargs)
-
-    def _colorize_id_map(self, id_map):
-        """Map int instance ids to RGB; -1 (background) stays dark gray."""
-        id_map = id_map.astype(np.int32)
-        vis = np.full(id_map.shape + (3,), 40, dtype=np.uint8)
-        valid = id_map >= 0
-        if valid.any():
-            vis[valid] = self.cmap[(id_map[valid] % len(self.cmap)).astype(np.int32)]
-        return vis
+        set_time_all(self.sinks, TIMELINE, frame.frame_id)
+        self.on_frame(frame)
+        self.step = max(self.step + 1, frame.frame_id + 1)
 
     def build_blueprint(self):
         raise NotImplementedError
@@ -125,77 +112,47 @@ class BaseRerunRenderer:
     def post_setup(self):
         pass
 
-    def handle_message(self, data: Any):
+    def on_frame(self, frame: Frame):
         raise NotImplementedError
 
+    def on_update_map(self, data: UpdateMapMessage):
+        pass
 
-class StreamRenderer(BaseRerunRenderer):
-    name = "RerunVis"
-    idle_sleep_s = 0.01
+    def on_jump_event(self, data: JumpEventMessage):
+        pass
 
-    MAX_LIVE_POINTS = 80_000
-    MAX_FILE_POINTS = 300_000
-    NORMAL_ARROW_LEN = 0.04  # metres; visual length of per-point normal arrows
+
+class SceneRenderer(BaseRerunRenderer):
+    """A renderer that shows the map scene under `world/`. Owns the scene and its events."""
 
     def post_setup(self):
-        width = self.cam_intrinsic["width"]
-        height = self.cam_intrinsic["height"]
-        K = self.cam_intrinsic["intrinsic"]
+        self.scene = MapScene(self.cam_intrinsic)
+        self.scene.setup(self.sinks)
 
-        pinhole = rr.Pinhole(resolution=[width, height], image_from_camera=K)
-        for rec in [r for r in [self.live_rec, self.file_rec] if r is not None]:
-            rr.log("world/camera", pinhole, static=True, recording=rec)
-        if self.live_rec is None and self.file_rec is None:
-            rr.log("world/camera", pinhole, static=True)
+    def on_update_map(self, data: UpdateMapMessage):
+        self.scene.log_update_map_event(
+            self.sinks, data["c2w"][:3, 3].astype(np.float32), data["frame_id"], data["n_fused"]
+        )
 
-        self.cmap = get_instance_cmap()
-        self.step = 0
-        self.trajectory = []
-        self._known_instance_ids: dict[int, set[int]] = {}  # keyed by id(recording) or -1 for default
-        self._normals_cache = None  # (points, instance_ids, normals); logged once at finalize
-
-    def _log_instances_3d(self, points: np.ndarray, instance_ids: np.ndarray, *, recording=None, static: bool = False):
-        radii = np.full(len(points), 0.008, dtype=np.float32)
-        kwargs = {"recording": recording} if recording is not None else {}
-        rec_key = id(recording) if recording is not None else -1
-        unique_ids = set(int(uid) for uid in np.unique(instance_ids))
-
-        for uid in self._known_instance_ids.get(rec_key, set()) - unique_ids:
-            if uid >= 0:
-                rr.log(f"world/instances/obj_{uid}", rr.Clear(recursive=False), **kwargs)
-
-        for uid in unique_ids:
-            mask = instance_ids == uid
-            pts = points[mask]
-            if uid < 0:
-                path = "world/background"
-                colors = np.full((len(pts), 3), 60, dtype=np.uint8)
-            else:
-                path = f"world/instances/obj_{uid}"
-                colors = np.tile(self.cmap[uid % len(self.cmap)], (len(pts), 1)).astype(np.uint8)
-            rr.log(path, rr.Points3D(pts, colors=colors, radii=radii[:len(pts)]), static=static, **kwargs)
-
-        self._known_instance_ids[rec_key] = unique_ids
-
-    def _log_normals_final(self):
-        """Log per-instance surface normals once, at end of stream, as static arrows
-        under world/normals/obj_<id>. Hidden by default via the blueprint override."""
-        cache = getattr(self, "_normals_cache", None)
-        if cache is None:
-            return
-        points, instance_ids, normals = cache
-        for uid in (int(u) for u in np.unique(instance_ids)):
-            if uid < 0:
-                continue
-            mask = instance_ids == uid
-            pts = points[mask]
-            colors = np.tile(self.cmap[uid % len(self.cmap)], (len(pts), 1)).astype(np.uint8)
-            arrows = rr.Arrows3D(origins=pts, vectors=normals[mask] * self.NORMAL_ARROW_LEN, colors=colors)
-            self._log(f"world/normals/obj_{uid}", arrows, file_static=True)
+    def on_jump_event(self, data: JumpEventMessage):
+        self.scene.log_jump_event(
+            self.sinks,
+            data["c2w"][:3, 3].astype(np.float32),
+            data["kf_index"],
+            data["translation_magnitude"],
+            data["rotation_magnitude"],
+        )
 
     def finalize(self):
         """Called once when the stream closes (sentinel received)."""
-        self._log_normals_final()
+        self.scene.finalize(self.sinks)
+
+
+class StreamRenderer(SceneRenderer):
+    """Live instance map plus the per-frame 2D panels (RGB, SAM masks, assigned/top-KF instances)."""
+
+    name = "RerunVis"
+    idle_sleep_s = 0.01
 
     def build_blueprint(self):
         return rrb.Blueprint(
@@ -220,242 +177,65 @@ class StreamRenderer(BaseRerunRenderer):
             collapse_panels=False,
         )
 
-    def handle_message(self, data: Any):
-        if is_update_map_message(data):
-            self._handle_update_map(data)
-            return
-        if is_jump_event_message(data):
-            self._handle_jump_event(data)
-            return
+    def on_frame(self, frame: Frame):
+        self.scene.update(self.sinks, frame)
 
-        rgb = None
-        ins_map = None
-        time_step = self.step
-
-        normals = None
-        if is_stream_frame_message(data):
-            points = data["points"]
-            obj_ids = data["obj_ids"]
-            colors = data["colors"]
-            normals = data.get("normals")
-            c2w = data["c2w"]
-            rgb = data["rgb"]
-            ins_map = data["ins_map"]
-            assigned_ins_map = data.get("assigned_ins_map")
-            sam_map = data["sam_map"]
-            kf_id = data.get("kf_id")
-            time_step = int(data["frame_id"])
-            corrected_trajectory = data.get("corrected_trajectory")
-        elif is_stream_message(data):
-            points, obj_ids, colors, c2w = data
-            ins_map = None
-            assigned_ins_map = None
-            sam_map = None
-            rgb = None
-            kf_id = None
-            corrected_trajectory = None
-        else:
-            return
-
-        points = points.astype(np.float32)
-        c2w = c2w.astype(np.float32)
-        if normals is not None:
-            normals = normals.astype(np.float32)
-
-        instance_ids = resolve_instance_ids(obj_ids, points.shape[0])
-
-        mask = ceiling_mask(points)
-        points_full = points[mask]
-        instance_ids_full = instance_ids[mask]
-        normals_full = normals[mask] if normals is not None else None
-
-        if corrected_trajectory is not None:
-            self.trajectory = corrected_trajectory
-        else:
-            self.trajectory.append(c2w[:3, 3].tolist())
-
-        if len(points_full) > self.MAX_LIVE_POINTS and self.live_rec is not None:
-            idx = np.random.choice(len(points_full), self.MAX_LIVE_POINTS, replace=False)
-            idx.sort()
-            points_live = points_full[idx]
-            instance_ids_live = instance_ids_full[idx]
-        else:
-            points_live = points_full
-            instance_ids_live = instance_ids_full
-
-        if len(points_full) > self.MAX_FILE_POINTS:
-            idx = np.random.choice(len(points_full), self.MAX_FILE_POINTS, replace=False)
-            idx.sort()
-            points_file = points_full[idx]
-            instance_ids_file = instance_ids_full[idx]
-            normals_file = normals_full[idx] if normals_full is not None else None
-        else:
-            points_file = points_full
-            instance_ids_file = instance_ids_full
-            normals_file = normals_full
-
-        # Cache the latest (capped) normals; logged once at finalize, not per frame.
-        if normals_file is not None:
-            self._normals_cache = (points_file, instance_ids_file, normals_file)
-
-        if self.live_rec is not None:
-            rr.set_time("step", sequence=time_step, recording=self.live_rec)
-            self._log_instances_3d(points_live, instance_ids_live, recording=self.live_rec)
-            rr.log(
-                "world/camera",
-                rr.Transform3D(translation=c2w[:3, 3], mat3x3=c2w[:3, :3]),
-                recording=self.live_rec,
-            )
-            if len(self.trajectory) >= 2:
-                rr.log(
-                    "world/trajectory",
-                    rr.LineStrips3D([self.trajectory], colors=[[0, 255, 255]], radii=[0.005]),
-                    recording=self.live_rec,
-                )
-
-            if rgb is not None:
-                rr.log("frame/rgb", rr.Image(rgb), recording=self.live_rec)
-            if ins_map is not None:
-                ins_map = ins_map.astype(np.int32)
-                ins_vis = np.full(ins_map.shape + (3,), 40, dtype=np.uint8)
-                valid = ins_map >= 0
-                if valid.any():
-                    ins_vis[valid] = self.cmap[(ins_map[valid] % len(self.cmap)).astype(np.int32)]
-                rr.log("frame/ins_map", rr.Image(ins_vis), recording=self.live_rec)
-            if sam_map is not None:
-                sam_map_i32 = sam_map.astype(np.int32)
-                sam_vis = np.full(sam_map_i32.shape + (3,), 40, dtype=np.uint8)
-                valid_sam = sam_map_i32 >= 0
-                if valid_sam.any():
-                    sam_vis[valid_sam] = self.cmap[(sam_map_i32[valid_sam] % len(self.cmap)).astype(np.int32)]
-                rr.log("frame/sam_map", rr.Image(sam_vis), recording=self.live_rec)
-
-        if self.file_rec is not None:
-            rr.set_time("step", sequence=time_step, recording=self.file_rec)
-            self._log_instances_3d(points_file, instance_ids_file, recording=self.file_rec)
-            rr.log(
-                "world/camera",
-                rr.Transform3D(translation=c2w[:3, 3], mat3x3=c2w[:3, :3]),
-                recording=self.file_rec,
-            )
-            if len(self.trajectory) >= 2:
-                rr.log(
-                    "world/trajectory",
-                    rr.LineStrips3D([self.trajectory], colors=[[0, 255, 255]], radii=[0.005]),
-                    recording=self.file_rec,
-                )
-
-            if rgb is not None:
-                rr.log("frame/rgb", rr.Image(rgb), recording=self.file_rec)
-            if ins_map is not None:
-                ins_map = ins_map.astype(np.int32)
-                ins_vis = np.full(ins_map.shape + (3,), 40, dtype=np.uint8)
-                valid = ins_map >= 0
-                if valid.any():
-                    ins_vis[valid] = self.cmap[(ins_map[valid] % len(self.cmap)).astype(np.int32)]
-                rr.log("frame/ins_map", rr.Image(ins_vis), recording=self.file_rec)
-            if sam_map is not None:
-                sam_map_i32 = sam_map.astype(np.int32)
-                sam_vis = np.full(sam_map_i32.shape + (3,), 40, dtype=np.uint8)
-                valid_sam = sam_map_i32 >= 0
-                if valid_sam.any():
-                    sam_vis[valid_sam] = self.cmap[(sam_map_i32[valid_sam] % len(self.cmap)).astype(np.int32)]
-                rr.log("frame/sam_map", rr.Image(sam_vis), recording=self.file_rec)
-
-        if self.live_rec is None and self.file_rec is None:
-            rr.set_time("step", sequence=time_step)
-            rr.log(
-                "world/camera",
-                rr.Transform3D(translation=c2w[:3, 3], mat3x3=c2w[:3, :3]),
-            )
-            if len(self.trajectory) >= 2:
-                rr.log(
-                    "world/trajectory",
-                    rr.LineStrips3D([self.trajectory], colors=[[0, 255, 255]], radii=[0.005]),
-                )
-            self._log_instances_3d(points_full, instance_ids_full)
-
-            if rgb is not None:
-                rr.log("frame/rgb", rr.Image(rgb))
-            if ins_map is not None:
-                ins_map = ins_map.astype(np.int32)
-                ins_vis = np.full(ins_map.shape + (3,), 40, dtype=np.uint8)
-                valid = ins_map >= 0
-                if valid.any():
-                    ins_vis[valid] = self.cmap[(ins_map[valid] % len(self.cmap)).astype(np.int32)]
-                rr.log("frame/ins_map", rr.Image(ins_vis))
-            if sam_map is not None:
-                sam_map_i32 = sam_map.astype(np.int32)
-                sam_vis = np.full(sam_map_i32.shape + (3,), 40, dtype=np.uint8)
-                valid_sam = sam_map_i32 >= 0
-                if valid_sam.any():
-                    sam_vis[valid_sam] = self.cmap[(sam_map_i32[valid_sam] % len(self.cmap)).astype(np.int32)]
-                rr.log("frame/sam_map", rr.Image(sam_vis))
-
-        # All assigned instances (pre top-kf filter) — what co-occurrence actually counts.
-        if assigned_ins_map is not None:
-            self._log("frame/assigned_map", rr.Image(self._colorize_id_map(assigned_ins_map)))
+        if frame.rgb is not None:
+            log_all(self.sinks, "frame/rgb", rr.Image(frame.rgb))
+        for path, id_map in (
+            ("frame/sam_map", frame.sam_map),
+            ("frame/ins_map", frame.ins_map),
+            # All assigned instances (pre top-kf filter) — what co-occurrence actually counts.
+            ("frame/assigned_map", frame.assigned_map),
+        ):
+            if id_map is not None:
+                log_all(self.sinks, path, rr.Image(self._colorize(id_map)))
 
         # kf_id of this frame — lets you map co-occurrence kf indices back to rrd steps.
-        if kf_id is not None:
-            self._log("frame/kf_id", rr.TextLog(f"kf_id={kf_id}"))
+        if frame.kf_id is not None:
+            log_all(self.sinks, "frame/kf_id", rr.TextLog(f"kf_id={frame.kf_id}"))
 
-        self.step = max(self.step + 1, time_step + 1)
-
-    def _handle_update_map(self, data: UpdateMapMessage):
-        frame_id = data["frame_id"]
-        cam_pos = data["c2w"][:3, 3].astype(np.float32)
-        n_fused = data["n_fused"]
-        decisions = data["decisions"]
-
-        self._set_time("step", sequence=frame_id)
-
-        label = f"update_map #{frame_id} ({n_fused} fused)"
-        self._log(
-            "world/update_map_events",
-            rr.Points3D([cam_pos], colors=[[255, 200, 0]], radii=[0.04], labels=[label]),
-        )
-
-    def _handle_jump_event(self, data: JumpEventMessage):
-        frame_id = data["frame_id"]
-        cam_pos = data["c2w"][:3, 3].astype(np.float32)
-        kf_index = data["kf_index"]
-        t_mag = data["translation_magnitude"]
-        r_mag = data["rotation_magnitude"]
-
-        self._set_time("step", sequence=frame_id)
-
-        label = f"jump KF#{kf_index} (t={t_mag:.3f}m, r={r_mag:.2f}°)"
-        self._log(
-            "world/jump_events",
-            rr.Points3D([cam_pos], colors=[[255, 50, 50]], radii=[0.06], labels=[label]),
-        )
+    def _colorize(self, id_map):
+        """Map int instance ids to RGB; -1 (background) stays dark gray."""
+        id_map = np.asarray(id_map, dtype=np.int32)
+        cmap = self.scene.cmap
+        vis = np.full(id_map.shape + (3,), 40, dtype=np.uint8)
+        valid = id_map >= 0
+        if valid.any():
+            vis[valid] = cmap[(id_map[valid] % len(cmap)).astype(np.int32)]
+        return vis
 
 
-class TrackingRenderer(StreamRenderer):
-    """Diagnostics view for tracking-error signals. Reuses the stream scene (view A) and adds:
-      - grey map with robbed points (view B) and newly-born points (view C) highlighted,
-      - per-frame telemetry scalars + their RAW derivatives (no smoothing, so a single-frame
-        spike survives), plus raw camera linear/angular speed.
-    All on the `step` (== frame_id) timeline; derivatives divide by the real Δframe.
+class TrackingRenderer(SceneRenderer):
+    """Diagnostics for mask tracking. Reuses the map scene and adds, per tracking KF:
+      - which reprojected points already had an instance (green) and which did not (orange),
+        in 3D over a grey map and in 2D over the frame, with robbed/born subsets hidden by default;
+      - SAM / top-KF / assigned masks as translucent overlays on the frame (hidden by default);
+      - counts, their RAW derivatives (no smoothing, so a single-frame spike survives) and camera speed.
+    All on the `step` (== frame_id) timeline.
     """
 
     name = "RerunTrackingVis"
     rrd_filename = "tracking.rrd"
-
-    GREY = [90, 90, 90]
-    ROBBED_COLOR = [255, 40, 40]
-    NEW_COLOR = [40, 200, 255]
-    _COUNTS = ("n_matched", "n_pre_assign", "n_orphans", "n_births", "n_robos")
+    idle_sleep_s = 0.01
 
     def post_setup(self):
         super().post_setup()
-        self._prev_counts: dict[str, float] = {}
-        self._prev_frame = None
-        self._prev_cam_pos = None
-        self._prev_cam_rot = None
+        self.tracking = TrackingPainter(self.scene.cmap)
+        self.tracking.setup(self.sinks)
+        self.signals = SignalsPainter()
+        self.signals.setup(self.sinks)
 
     def build_blueprint(self):
+        hidden = {
+            "tracking/robbed": rrb.EntityBehavior(visible=False),
+            "tracking/births": rrb.EntityBehavior(visible=False),
+        }
+        hidden_2d = {
+            "frame/pts2d/robbed": rrb.EntityBehavior(visible=False),
+            "frame/pts2d/births": rrb.EntityBehavior(visible=False),
+            "frame/seg": rrb.EntityBehavior(visible=False),
+        }
         return rrb.Blueprint(
             rrb.Horizontal(
                 rrb.Vertical(
@@ -465,93 +245,32 @@ class TrackingRenderer(StreamRenderer):
                         overrides={"world/normals": rrb.EntityBehavior(visible=False)},
                     ),
                     rrb.Horizontal(
-                        rrb.Spatial3DView(name="Robbed", contents=["tracking/greymap", "tracking/robbed"]),
-                        rrb.Spatial3DView(name="New", contents=["tracking/greymap", "tracking/new"]),
+                        rrb.Spatial3DView(
+                            name="Tracking KF",
+                            contents="tracking/**",
+                            overrides=hidden,
+                        ),
+                        rrb.Spatial2DView(
+                            name="Tracking KF (2D)",
+                            contents=["frame/rgb", "frame/pts2d/**", "frame/seg/**"],
+                            overrides=hidden_2d,
+                        ),
                     ),
                 ),
                 rrb.Vertical(
-                    rrb.TimeSeriesView(name="Counts", origin="signals/count"),
-                    rrb.TimeSeriesView(name="Derivatives (raw)", origin="signals/deriv"),
+                    rrb.TimeSeriesView(name="Points per KF", origin="signals/count"),
+                    rrb.TimeSeriesView(name="Points Δ/frame", origin="signals/deriv"),
                     rrb.TimeSeriesView(name="Camera speed", origin="signals/cam"),
+                    rrb.TimeSeriesView(name="Camera jerk", origin="signals/accel"),
                 ),
             ),
             collapse_panels=False,
         )
 
-    def handle_message(self, data: Any):
-        super().handle_message(data)  # view A + camera + images
-        if not is_stream_frame_message(data):
-            return
-        ts = data.get("track_signals")
-        pids = data.get("point_ids")
-        if ts is None or pids is None:
-            return
-        self._log_tracking(
-            int(data["frame_id"]),
-            data["points"].astype(np.float32),
-            pids,
-            data["c2w"].astype(np.float32),
-            ts,
-        )
-
-    def _log_tracking(self, frame_id, points, point_ids, c2w, ts):
-        self._set_time("step", sequence=frame_id)
-
-        # grey map: ceiling-cut, capped like the base cloud. Highlights come from the FULL
-        # (uncapped) set so the sparse robbed/new points are never subsampled away.
-        mask = ceiling_mask(points)
-        pts_full, pids_full = points[mask], point_ids[mask]
-        pts_grey = pts_full
-        if len(pts_grey) > self.MAX_FILE_POINTS:
-            idx = np.random.choice(len(pts_grey), self.MAX_FILE_POINTS, replace=False)
-            idx.sort()
-            pts_grey = pts_grey[idx]
-        self._log(
-            "tracking/greymap",
-            rr.Points3D(
-                pts_grey,
-                colors=np.tile(self.GREY, (len(pts_grey), 1)).astype(np.uint8),
-                radii=np.full(len(pts_grey), 0.006, dtype=np.float32),
-            ),
-        )
-        self._log_highlight("tracking/robbed", pts_full, pids_full, ts.get("robbed_ids", []), self.ROBBED_COLOR)
-        self._log_highlight("tracking/new", pts_full, pids_full, ts.get("new_ids", []), self.NEW_COLOR)
-
-        # counts + raw derivatives (per real Δframe)
-        counts = {k: float(ts.get(k, 0)) for k in self._COUNTS}
-        for name, val in counts.items():
-            self._log(f"signals/count/{name}", rr.Scalars(val))
-        df = (frame_id - self._prev_frame) if self._prev_frame is not None else 0
-        if df > 0:
-            for name, val in counts.items():
-                if name in self._prev_counts:
-                    self._log(f"signals/deriv/d_{name}", rr.Scalars((val - self._prev_counts[name]) / df))
-        self._prev_counts = counts
-        self._prev_frame = frame_id
-
-        # raw camera speed (magnitudes)
-        pos, rot = c2w[:3, 3], c2w[:3, :3]
-        if self._prev_cam_pos is not None and df > 0:
-            self._log("signals/cam/v_lin", rr.Scalars(float(np.linalg.norm(pos - self._prev_cam_pos) / df)))
-            cos = np.clip((np.trace(rot @ self._prev_cam_rot.T) - 1) / 2, -1.0, 1.0)
-            self._log("signals/cam/v_ang", rr.Scalars(float(np.degrees(np.arccos(cos)) / df)))
-        self._prev_cam_pos, self._prev_cam_rot = pos, rot
-
-    def _log_highlight(self, path, pts, pids, ids, color):
-        if len(ids) == 0:
-            self._log(path, rr.Clear(recursive=False))
-            return
-        sel = np.isin(pids, np.asarray(list(ids), dtype=pids.dtype))
-        hp = pts[sel]
-        if len(hp) == 0:
-            self._log(path, rr.Clear(recursive=False))
-            return
-        self._log(
-            path,
-            rr.Points3D(
-                hp,
-                colors=np.tile(color, (len(hp), 1)).astype(np.uint8),
-                radii=np.full(len(hp), 0.02, dtype=np.float32),
-            ),
-        )
-
+    def on_frame(self, frame: Frame):
+        # None when the signals belong to an older KF (update_map re-sends the frame): both
+        # painters then know to clear / skip instead of showing stale data.
+        layers = split_layers(frame)
+        self.scene.update(self.sinks, frame)
+        self.tracking.paint(self.sinks, frame, layers)
+        self.signals.paint(self.sinks, frame, layers)

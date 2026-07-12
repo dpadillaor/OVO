@@ -322,7 +322,7 @@ class OVO:
         matched_seg_idxs = seg_map[matches[:,1], matches[:,0]]
 
         frustum_points_ids, frustum_points_ins_ids = points_ids[frustum_mask], points_ins_ids[frustum_mask]
-        frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, seg_map, self.config["track_th"], kf_id, frame_id)
+        frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, matches, seg_map, self.config["track_th"], kf_id, frame_id)
         matched_ins_ids, binary_maps, assigned_ins_map = self._fuse_masks_with_same_ins_id(binary_maps, matched_ins_info, kf_id)
 
         updated_ponts_ins_ids = points_ins_ids.clone()
@@ -337,13 +337,14 @@ class OVO:
 
         return matched_ins_ids, binary_maps, len(matched_points_idxs), updated_ponts_ins_ids, assigned_ins_map
             
-    def _track_objects(self, points_ids: torch.Tensor, points_ins_ids: torch.Tensor, matched_points_idxs: torch.Tensor, matched_seg_idxs: torch.Tensor, seg_map: torch.Tensor, track_th: float, kf_id: int, frame_id: int) -> tuple[torch.Tensor, Dict[int, List[Tuple[int, int]]]]:
+    def _track_objects(self, points_ids: torch.Tensor, points_ins_ids: torch.Tensor, matched_points_idxs: torch.Tensor, matched_seg_idxs: torch.Tensor, matches: torch.Tensor, seg_map: torch.Tensor, track_th: float, kf_id: int, frame_id: int) -> tuple[torch.Tensor, Dict[int, List[Tuple[int, int]]]]:
         """  We project 3D points and match with segmentation maps. Then we assign to each segmentation map the id of the 3D instance associated with the majority of points projected into it. If the set points don't have an object assigned, a new object is created and assigned to them. Points without an object assigned get assigned the segmentation map's instance.
         Args:
             - points_ids (torch.Tensor): ids to identify 3D points in case their order changes, or any of them is pruned, between keyframes.
             - points_ins_ids (torch.Tensor): ids of 3D instances associated to each 3d point.
             - matched_points_idxs (torch.Tensor): idxs in points_3d of N matched points.
-            - matched_seg_idxs (torch.Tensor): (N) tensor of the indexes of the segmentation map matched to each of N 3D points. 
+            - matched_seg_idxs (torch.Tensor): (N) tensor of the indexes of the segmentation map matched to each of N 3D points.
+            - matches (torch.Tensor): (N,2) pixel (x,y) each matched 3D point projects to, row-aligned with matched_points_idxs.
             - seg_map (torch.Tensor): (H,W) tensor where each pixel stores the idx of the corresponding mask.
             - kf_id (int): current keyframe id.
         Return:
@@ -360,11 +361,18 @@ class OVO:
         log_on = self.config.get("log", False)
         track_viz = self.track_viz_enabled
         stats_on = log_on or track_viz
+        pre_assign_mask = points_ins_ids[matched_points_idxs] > -1 if stats_on else None
         n_matched = int(matched_points_idxs.numel()) if stats_on else 0
-        n_pre_assign = int((points_ins_ids[matched_points_idxs] > -1).sum().item()) if stats_on else 0
+        n_pre_assign = int(pre_assign_mask.sum().item()) if stats_on else 0
         n_used = n_covered = n_births = n_robos = 0
-        robbed_ids: List[int] = []   # tracking-viz: puntos robados este frame (vista B)
-        new_ids: List[int] = []      # tracking-viz: puntos de instancias nacidas este frame (vista C)
+        robbed_ids: List[int] = []   # tracking-viz: puntos que cambian de dueño este KF
+        birth_ids: List[int] = []    # tracking-viz: puntos que siembran una instancia nueva
+
+        # tracking-viz: partición de los matcheados ANTES de que el bucle mute points_ins_ids.
+        if track_viz:
+            matched_ids_np = points_ids[matched_points_idxs].flatten().cpu().numpy().astype(np.int64)
+            matched_px_np = matches.cpu().numpy().astype(np.int32)
+            matched_pre_np = pre_assign_mask.cpu().numpy().astype(bool)
 
         matched_ins_info = {}
         for map_idx in range(seg_map.max()+1):
@@ -404,7 +412,7 @@ class OVO:
                     if stats_on:
                         n_births += 1
                     if track_viz:
-                        new_ids.extend(unassigned_points_ids)
+                        birth_ids.extend(unassigned_points_ids)
                     #assigned points do not change obj id
                     self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, frame_id=frame_id, points_ids=unassigned_points_ids, mask_area=mask_area)
                     matched_ins_info[map_ins_id]=[(map_idx, mask_area)]
@@ -429,7 +437,11 @@ class OVO:
                 "frame_id": frame_id,
                 "n_matched": n_matched, "n_pre_assign": n_pre_assign,
                 "n_orphans": n_matched - n_covered, "n_births": n_births, "n_robos": n_robos,
-                "robbed_ids": robbed_ids, "new_ids": new_ids,
+                "matched_ids": matched_ids_np,
+                "matched_px": matched_px_np,
+                "matched_pre": matched_pre_np,
+                "robbed_ids": np.asarray(robbed_ids, dtype=np.int64),
+                "birth_ids": np.asarray(birth_ids, dtype=np.int64),
             }
 
         return points_ins_ids, matched_ins_info
