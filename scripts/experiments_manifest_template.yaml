@@ -2,7 +2,7 @@
 #
 # Dimensions covered:
 #   - fusion_method      : clip | pe-core | pe-spatial | sam3
-#   - slam_module        : groundtruth | orbslam3
+#   - slam_module        : simulated (GT poses) | orbslam2 | vanilla | gaussian_slam
 #   - noise              : none | t=0.001 | t=0.005 | t=0.01 | t=0.05 (r=0.01 fixed)
 #                          + rotation-only (t=0, r=0.05)
 #                          + translation-only (t=0.01, r=0)
@@ -35,7 +35,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -45,7 +45,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -59,7 +59,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -73,7 +73,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -87,7 +87,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -102,7 +102,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -116,7 +116,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -131,7 +131,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: False
       semantic:
         fusion_method: clip
@@ -149,7 +149,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -161,7 +161,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -177,7 +177,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -193,7 +193,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -209,7 +209,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -229,7 +229,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -241,7 +241,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -257,7 +257,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -273,7 +273,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -289,7 +289,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -309,7 +309,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: sam3
@@ -322,7 +322,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: sam3
@@ -339,7 +339,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: sam3
@@ -356,7 +356,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: sam3
@@ -476,7 +476,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -490,7 +490,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -501,7 +501,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -511,7 +511,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -525,7 +525,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -535,7 +535,7 @@ experiments:
     stages: [run, segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: pe
@@ -551,7 +551,7 @@ experiments:
     stages: [run]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -561,7 +561,7 @@ experiments:
     stages: [segment]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -571,7 +571,7 @@ experiments:
     stages: [eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -581,7 +581,7 @@ experiments:
     stages: [segment, eval]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -596,7 +596,7 @@ experiments:
     stages: [run]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip
@@ -609,7 +609,7 @@ experiments:
     stages: [run]
     ovo_config:
       slam:
-        slam_module: groundtruth
+        slam_module: simulated
         close_loops: True
       semantic:
         fusion_method: clip

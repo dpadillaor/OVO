@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram name="discriminador" id="contest-disc">
-        <mxGraphModel dx="1823" dy="1621" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" background="none" math="0" shadow="0">
+        <mxGraphModel dx="2552" dy="2270" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" background="none" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -189,7 +189,7 @@
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-23" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;pers ≥ 0.6 ,&lt;/span&gt;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;excl ≥ 0.8&amp;nbsp;&lt;br style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20);&quot;&gt;&lt;/span&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); background-color: transparent; font-size: 13px;&quot;&gt;1 raíz&lt;/span&gt;&lt;/font&gt;&lt;/div&gt;" vertex="1">
                     <mxGeometry height="90" width="145" x="617.5" y="694" as="geometry"/>
                 </mxCell>
-                <mxCell id="nz7t-KIRLwu6WUQHLQRY-27" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;font-size: 13px;&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;persistencia &amp;gt;0.7&lt;/font&gt;&lt;/span&gt;&lt;div style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;&lt;font style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); color: rgb(0, 0, 0);&quot;&gt;exclusividad &amp;gt; 0.9&lt;/font&gt;&lt;/div&gt;" vertex="1">
+                <mxCell id="nz7t-KIRLwu6WUQHLQRY-27" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;font-size: 13px;&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;persistencia &amp;gt;0.6&lt;/font&gt;&lt;/span&gt;&lt;div style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;&lt;font style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); color: rgb(0, 0, 0);&quot;&gt;exclusividad &amp;gt; 0.9&lt;/font&gt;&lt;/div&gt;" vertex="1">
                     <mxGeometry height="78" width="200" x="830" y="895" as="geometry"/>
                 </mxCell>
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-28" edge="1" parent="1" source="HW981nojs5aj1Gru2ZjW-6" style="endArrow=block;html=1;strokeColor=#8a93a3;fontColor=#c8cfda;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nz7t-KIRLwu6WUQHLQRY-27" value="sí">
@@ -340,7 +340,7 @@
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-81" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;pers ≥ 0.6 ,&lt;/span&gt;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;excl ≥ 0.8&amp;nbsp;&lt;br style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20);&quot;&gt;&lt;/span&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); background-color: transparent; font-size: 13px;&quot;&gt;1 raíz&lt;/span&gt;&lt;/font&gt;&lt;/div&gt;" vertex="1">
                     <mxGeometry height="90" width="145" x="1907.5" y="810" as="geometry"/>
                 </mxCell>
-                <mxCell id="nz7t-KIRLwu6WUQHLQRY-82" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;font-size: 13px;&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;persistencia &amp;gt;0.7&lt;/font&gt;&lt;/span&gt;&lt;div style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;&lt;font style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); color: rgb(0, 0, 0);&quot;&gt;exclusividad &amp;gt; 0.9&lt;/font&gt;&lt;/div&gt;" vertex="1">
+                <mxCell id="nz7t-KIRLwu6WUQHLQRY-82" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;font-size: 13px;&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;persistencia &amp;gt;0.6&lt;/font&gt;&lt;/span&gt;&lt;div style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;&lt;font style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); color: rgb(0, 0, 0);&quot;&gt;exclusividad &amp;gt; 0.9&lt;/font&gt;&lt;/div&gt;" vertex="1">
                     <mxGeometry height="78" width="200" x="1870" y="1000" as="geometry"/>
                 </mxCell>
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-83" edge="1" parent="1" source="nz7t-KIRLwu6WUQHLQRY-66" style="endArrow=block;html=1;strokeColor=#8a93a3;fontColor=#c8cfda;fontSize=11;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="nz7t-KIRLwu6WUQHLQRY-82" value="sí">
@@ -487,7 +487,7 @@
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-128" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;pers ≥ 0.6 ,&lt;/span&gt;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;excl ≥ 0.8&amp;nbsp;&lt;br style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20);&quot;&gt;&lt;/span&gt;&lt;span style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); background-color: transparent; font-size: 13px;&quot;&gt;1 raíz&lt;/span&gt;&lt;/font&gt;&lt;/div&gt;" vertex="1">
                     <mxGeometry height="90" width="145" x="1987.5" y="1880" as="geometry"/>
                 </mxCell>
-                <mxCell id="nz7t-KIRLwu6WUQHLQRY-129" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;font-size: 13px;&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;persistencia &amp;gt;0.7&lt;/font&gt;&lt;/span&gt;&lt;div style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;&lt;font style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); color: rgb(0, 0, 0);&quot;&gt;exclusividad &amp;gt; 0.9&lt;/font&gt;&lt;/div&gt;" vertex="1">
+                <mxCell id="nz7t-KIRLwu6WUQHLQRY-129" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="&lt;span style=&quot;font-size: 13px;&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;persistencia &amp;gt;0.6&lt;/font&gt;&lt;/span&gt;&lt;div style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); font-size: 13px;&quot;&gt;&lt;font style=&quot;scrollbar-color: rgba(168, 169, 170, 0.52) rgb(18, 19, 20); color: rgb(0, 0, 0);&quot;&gt;exclusividad &amp;gt; 0.9&lt;/font&gt;&lt;/div&gt;" vertex="1">
                     <mxGeometry height="78" width="200" x="1980" y="2080" as="geometry"/>
                 </mxCell>
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-130" edge="1" parent="1" source="nz7t-KIRLwu6WUQHLQRY-120" style="endArrow=block;html=1;strokeColor=#8a93a3;fontColor=#c8cfda;fontSize=11;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="nz7t-KIRLwu6WUQHLQRY-129" value="sí">
@@ -511,10 +511,10 @@
                     <mxGeometry height="44" width="160" x="2720" y="1907" as="geometry"/>
                 </mxCell>
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-135" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2f9e6f;strokeColor=#2f9e6f;fontColor=#ffffff;fontSize=12;" value="MERGE&lt;br&gt;&lt;span style=&quot;color: rgb(255, 255, 255);&quot;&gt;1 Veredicto&lt;/span&gt;" vertex="1">
-                    <mxGeometry height="44" width="130" x="2575" y="1760" as="geometry"/>
+                    <mxGeometry height="44" width="130" x="2590" y="1760" as="geometry"/>
                 </mxCell>
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-136" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2f9e6f;strokeColor=#2f9e6f;fontColor=#ffffff;fontSize=12;" value="MERGE&lt;br&gt;&lt;span style=&quot;color: rgb(255, 255, 255);&quot;&gt;1 Veredicto&lt;/span&gt;" vertex="1">
-                    <mxGeometry height="44" width="130" x="2720" y="1760" as="geometry"/>
+                    <mxGeometry height="44" width="130" x="2735" y="1760" as="geometry"/>
                 </mxCell>
                 <mxCell id="nz7t-KIRLwu6WUQHLQRY-137" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2f9e6f;strokeColor=#2f9e6f;fontColor=#ffffff;fontSize=12;" value="MERGE&lt;br&gt;&lt;span style=&quot;color: rgb(255, 255, 255);&quot;&gt;1 Veredicto&lt;/span&gt;" vertex="1">
                     <mxGeometry height="44" width="130" x="2575" y="1907" as="geometry"/>

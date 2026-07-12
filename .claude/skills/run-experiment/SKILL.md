@@ -39,7 +39,7 @@ experiments:
       vis:
         stream: true
         type: "rerun"
-        rerun_mode: stream         # stream | fusion | loop_closure
+        rerun_mode: stream         # stream | tracking
         rerun_visual_mode: "off"   # off = no live viewer; change to spawn/serve if needed
         save_rrd: true             # always save recording by default
     # slam_config block only if noise > 0:
@@ -62,7 +62,7 @@ Set `experiment_uid: <fixed>` on an entry to override the random suffix — the 
 becomes `{DATE}_{SLAM_TOKEN}_{FUSION_TOKEN}_{LABEL}_{fixed}`. Reuse the same value
 across entries to share one folder (see Shared output folder below).
 
-SLAM tokens: `GT`, `GTNoise-T{t}-R{r}`, `GTJump-J{n}`, `ORBSLAM3`, `Vanilla`
+SLAM tokens: `GT`, `GTNoise-T{t}-R{r}`, `GTJump-J{n}`, `orbslam2`, `Vanilla`
 Fusion tokens: `CLIP`, `PE-Core`, `PE-Spatial`, `SAM3`, `DINO`
 
 ---
@@ -246,14 +246,19 @@ experiments:
 ```
 When `restore_pre_fusion_checkpoint` is set, the `run` stage skips SLAM entirely and runs only fusion from the checkpoint.
 
-#### ORB-SLAM3 (real SLAM, no noise)
-Token: `ORBSLAM3`
+#### ORB-SLAM2 (real SLAM, no noise)
+Token: `orbslam2`
 ```yaml
 ovo_config:
   slam:
-    slam_module: orbslam3
+    slam_module: orbslam2
     close_loops: true
 ```
+
+> **Valid `slam_module` tokens are only** `simulated`, `orbslam2`, `vanilla`, `gaussian_slam`
+> (`ovo/slam/__init__.py`). The token doubles as the config directory name
+> (`data/working/configs/slam/<token>/`). Anything else (`groundtruth`, `orbslam3`) raises
+> `ValueError` in the batch runner or `FileNotFoundError` in `run_eval.py`.
 
 #### Vanilla (minimal SLAM, no loop closures)
 Token: `Vanilla`
@@ -535,14 +540,26 @@ ovo_config:
   vis:
     stream: true
     type: "rerun"                 # required
-    rerun_mode: loop_closure       # stream | fusion | loop_closure
-    rerun_visual_mode: off         # off | spawn | serve
-    save_rrd: true                 # independent from visual mode
+    rerun_mode: stream            # stream | tracking
+    rerun_visual_mode: off        # off | spawn | serve
+    save_rrd: true                # independent from visual mode
 ```
 
 Notes:
 - `show_stream` is legacy compatibility only; prefer `rerun_visual_mode`.
 - `save_rrd` works with any visual mode.
+- Any `rerun_mode` other than `stream`/`tracking` silently disables streaming entirely
+  (`_send_stream_frame` filters on it) — you get an empty viewer and no `.rrd`.
+
+### `rerun_mode` options
+
+| Mode | rrd file | Shows |
+|---|---|---|
+| `stream` | `stream.rrd` | Instance point cloud + camera + trajectory, plus 2D panels: RGB, SAM masks, assigned instances, top-KF instances. Yellow dots = `update_map` events, red = pose jumps. |
+| `tracking` | `tracking.rrd` | Mask-tracking diagnostics. Same 3D scene, plus per tracking KF: which reprojected points already had an instance (green) vs. which had none (yellow) — in 3D over a grey map and in 2D over the frame. Robbed (red) / newborn (cyan) subsets and the SAM/top-KF/assigned mask overlays are logged but **hidden by default**; toggle them in the entity tree. Right column: counts (`n_matched` = green+yellow, `n_pre_assign` = green, `n_robos` = red), their raw derivatives, and camera linear/angular speed. |
+
+`tracking` only emits its layers on segmentation keyframes (`segment_every`); on other
+frames the layers are cleared, which is expected.
 
 ### Save only (no live viewer)
 ```yaml
@@ -550,13 +567,13 @@ ovo_config:
   vis:
     stream: true
     type: "rerun"
-    rerun_mode: loop_closure
+    rerun_mode: stream
     rerun_visual_mode: off
     save_rrd: true
 ```
 
-This writes `rerun.rrd` inside each scene output folder:
-`<root>/data/output/Replica/<Experiment_ID>/<scene_name>/rerun.rrd`
+Writes the rrd inside each scene output folder:
+`<root>/data/output/Replica/<Experiment_ID>/<scene_name>/{stream,tracking}.rrd`
 
 ### Live local viewer (same machine)
 ```yaml
@@ -564,7 +581,7 @@ ovo_config:
   vis:
     stream: true
     type: "rerun"
-    rerun_mode: fusion
+    rerun_mode: tracking
     rerun_visual_mode: spawn
     save_rrd: false
 ```
@@ -576,7 +593,7 @@ ovo_config:
   vis:
     stream: true
     type: "rerun"
-    rerun_mode: loop_closure
+    rerun_mode: stream
     rerun_visual_mode: serve
     save_rrd: true
 ```
@@ -589,12 +606,6 @@ O si accedes via SSH forward: `ssh -L 9877:localhost:9877 <user>@<server>`
 
 ### Open recording
 ```bash
-rerun data/output/Replica/<Experiment_ID>/<scene_name>/rerun.rrd
+rerun data/output/Replica/<Experiment_ID>/<scene_name>/stream.rrd     # rerun_mode: stream
+rerun data/output/Replica/<Experiment_ID>/<scene_name>/tracking.rrd   # rerun_mode: tracking
 ```
-
-### `rerun_mode` options
-| Mode | Shows |
-|---|---|
-| `stream` | Basic point cloud + camera trajectory |
-| `fusion` | Instance fusion events (before/after merge) |
-| `loop_closure` | Trajectory + point cloud before and after global correction (orange = before, corrected = after) |
