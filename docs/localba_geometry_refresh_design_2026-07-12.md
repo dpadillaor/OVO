@@ -142,8 +142,76 @@ acumulada (keyed por point id, no por coordenada), membresía punto→instancia 
   añadir la guarda `mnMapChange` antes del paso semántico en `ovomapping.py`; reutilizar la lógica de
   rebuild de `orbslam2.py:update_map` sin el flag.
 
+## 9b. Notas de implementación (2026-07-12, IMPLEMENTADO)
+Diseño implementado y validado end-to-end en ScanNet `scene0011_00`.
+
+- **C++: 0 líneas.** El binding `get_map_change_index` **ya estaba expuesto y compilado** en el `.so`
+  de ovo2 (`ORBSlamPython.cpp:57` + wrapper `getMapChangeIndex` 370-377, `System::GetMapChangeIndex`
+  `System.cc:1125`). La sección 2 lo daba por pendiente; no lo estaba. Sin recompilar nada.
+- **`orbslam2.py`**: `last_map_change_id` (init 0); `update_map(trigger_refusion=True)` sincroniza el
+  contador al final y **solo** setea `map_updated` si `trigger_refusion`; nuevo
+  `refresh_geometry_if_local_ba()` → si `get_map_change_index()` cambió, llama
+  `update_map(trigger_refusion=False)`.
+- **`ovo.py`**: nuevo `refresh_geometry(map_data, kfs)` = `complete_semantic_info` +
+  `_remove_deleted_keyframes` + `_remove_missing_instances`, reconstruye `self.objects`. Sin fusión,
+  sin contest, sin recompute de descriptores.
+- **`ovomapping.py`**: engancha el refresh en `_run_semantic_step`, tras la guarda `segment_every`.
+- **Gotcha bfloat16 (bug latente destapado):** el refresh NO puede correr dentro del bloque
+  `torch.autocast(bfloat16)` del paso semántico — `update_map` usa `torch.linalg.inv`, que rechaza
+  bfloat16 (`RuntimeError: linalg.inv: Low precision dtypes not supported`). El path pesado nunca lo
+  pegó porque corre fuera de autocast. Solución: llamar al refresh **antes** del `with autocast`.
+- **Validación:** run completo, 0 crashes. 229 `update_map` totales = **227 refresh ligeros**
+  (local BA, `mnMapChange`) + **2 pesados** (big change, `mnBigChangeIdx`). Path ligero dispara y
+  mueve geometría sin re-fusión, como se diseñó.
+
+## 9c. Bugs encontrados en visualización + fixes (2026-07-13)
+Al inspeccionar en Rerun aparecieron 3 problemas, todos resueltos:
+
+1. **Huecos en el timeline (viz).** El rebuild deja `estimated_c2ws` **solo-KF** → en un frame no-KF
+   `get_c2w(frame_id)=None` → `_send_stream_frame` aborta → frame de viz perdido (~53 de 237
+   dibujados). Fix en `_run_semantic_step`: tras el refresh, restaurar la pose viva del frame actual
+   **solo si es no-KF** (`if frame_id not in estimated_c2ws`). Restaurarla incondicionalmente
+   sobrescribía el baseline BA de un KF → doble corrección acumulada (siguiente bug).
+2. **Trayectoria corregida no se redibuja.** El visor refresca la polilínea solo con `map_updated`,
+   que el path ligero NO setea. Fix: flag `geometry_refreshed` (backbone) → señal extra en
+   `_send_stream_frame` (one-shot por refresh).
+3. **Deriva geométrica (el gordo): "enmarranamiento, principio peor que final".**
+   - Síntoma: TODOS los puntos se movían cada refresh; los KF viejos peor (más refreshes acumulados).
+   - **Causa raíz — bug de binding.** `getKeyframePoints` devolvía poses **absolutas en mundo**;
+     `getLastTrajectoryPoint` (que llena `estimated_c2ws`) las da **relativas al KF0**. El comentario
+     del binding prometía anclar al KF0 pero no lo hacía. Fix C++ (recompilado en ovo2):
+     `Sophus::SE3f Two = vpKFs[0]->GetPoseInverse(); Twc = (pKF->GetPose()*Two).inverse();`.
+     **Resultó no-op** en ScanNet (ORB ya ancla el gauge en KF0), pero deja el binding consistente.
+   - **Causa real:** aun con el KF congelado (`baseline==read`), el `transform = read @ inv(baseline)`
+     daba una traslación fija de ~1.26mm (ruido de `inv()` sobre rotación no ortonormal reconstruida
+     de 9 floats). Se re-aplicaba **cada refresh sobre puntos ya movidos** (encadenado) → deriva
+     lineal, peor en los viejos (200+ refreshes).
+   - **Fix (threshold-skip):** por KF, medir el desplazamiento del centro de cámara; si
+     `< localba_refresh_min_disp` (default **5mm**), **no tocar** ese KF (puntos y baseline intactos)
+     → cero acumulación. Solo la ventana local real (~10-30 KF) se mueve. Es el TODO que dejó el autor
+     original ("if transform is identity, skip"). Config: `slam.localba_refresh_min_disp`.
+
+## 9d. Configurabilidad + timing + optimización (2026-07-13)
+- **Flag on/off:** `slam.localba_refresh` (default `true`, solo orbslam2). `false` = comportamiento
+  original (refresh solo en big change). Documentado en skill `run-experiment`.
+- **Comparativa ScanNet scene0011_00 (LC=2 ambos, justo):** OFF mIoU 0.358 / mAcc 0.494 / 152.9s →
+  ON mIoU 0.393 / mAcc 0.512 / 156.9s. BA local **+0.035 mIoU** por +2.6% tiempo. (AP class-agnostic
+  no sale en ScanNet: no hay GT de instancias, solo semántico.)
+- **Perfil de tiempo** (profiler gated en `_print_time_profile`, cuda-synced): el gasto es
+  **SAM 34% + tracking ORB 22%**. El refresh geométrico costaba 6.0s (todo en el loop por-KF que
+  computaba `convert_pose`/`inv`/matmul para los ~500 KF solo para saltar ~490).
+- **Optimización (vectorización):** el desplazamiento de un KF == desplazamiento de su centro de
+  cámara (`transform @ centro_viejo == centro_nuevo`), así que el skip-test se decide con una **resta
+  de centros en batch GPU** — sin `convert_pose`/`inv`/matmul por-KF. Solo los ~10 movidos pagan el
+  transform. **Refresh geométrico 6.0s → 1.0s (6×); coste neto del feature +4s → ~0** (ON 152.6s ≈
+  OFF 152.9s). Métricas idénticas (matemáticamente equivalente). El concat de la nube: 0.08s (inocente).
+- **No optimizado (decisión):** el loop Python de reensamblado (500 appends/refresh, ~1s = 0.7%) NO se
+  pasa a in-place — premio mínimo vs riesgo de reintroducir fantasmas/deriva en un 2º camino de código.
+
 ## 10. Cabos abiertos (los decide el experimento)
-1. **`eps`** del diff de poses: bajo → mueves de más; alto → dejas ruido. Tunear.
-2. **¿Cuántos KF se podan por ventana entre big changes?** (magnitud del trabajo del path ligero).
+1. **`localba_refresh_min_disp`** (default 5mm): separa ruido numérico (~1.3mm) de movimiento real (cm).
+2. **AP class-agnostic** del contest: solo medible en Replica (ScanNet no tiene GT de instancias).
+3. **`complete_semantic_info` en el refresh** (16s, "sem-reconcile"): trabajo semántico que se haría
+   igual, pero se llama 234× — revisar si es redundante (posible ahorro mayor que el geométrico).
 3. **Validar que el ruido baja de verdad**: correr con/sin, mirar en Rerun (validación visual).
 4. **¿Los KF podados eran redundantes de verdad?** (si sí, dropearlos no quita información real).

@@ -593,6 +593,19 @@ class OVO:
                 self.cooccurrence.remove(ins_id)
                 self.contest.on_remove(ins_id)
 
+    def refresh_geometry(self, map_data, kfs):
+        """Light map refresh after local BA: drop pruned KFs and instances that lost all points.
+        No re-fusion, no contest, no descriptor recompute (geometry-only reconciliation)."""
+        self.complete_semantic_info()
+        _, _, points_ins_ids = map_data
+        self._remove_deleted_keyframes(kfs)
+        objects_list = []
+        objects_to_del = []
+        self._remove_missing_instances(points_ins_ids, objects_list, objects_to_del)
+        self.objects = {obj.id: obj for obj in objects_list}
+        if objects_to_del:
+            print(f"Geometry refresh: removed {len(objects_to_del)} instances")
+
     def update_map(self, map_data, kfs, point_obs=None, point_normals=None, point_colors=None):
         # 0. clean the queue
         self.complete_semantic_info()

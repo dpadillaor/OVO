@@ -253,7 +253,32 @@ ovo_config:
   slam:
     slam_module: orbslam2
     close_loops: true
+    localba_refresh: true            # follow local-BA pose updates between big changes
+    localba_refresh_min_disp: 0.005  # m; skip KFs moving less than this on refresh
 ```
+
+**Local-BA geometry refresh (orbslam2 only).** Between loop closures ORB keeps refining KF
+poses via local BA; the dense OVO cloud can follow those updates instead of only snapping at
+big changes. Controlled by two `slam:` keys (ignored by other backbones):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `localba_refresh` | `true` | `false` → original behaviour (refresh only on loop-closure/GBA) |
+| `localba_refresh_min_disp` | `0.005` | metres; a KF whose points would move less than this is left untouched (below it the transform is `inv()` numerical noise; re-applying it every poll drifts old KFs) |
+| `profile_refresh` | `false` | print the refresh geometry sub-breakdown (getkf/loop/cat) at end of run — diagnostics only |
+
+A cuda-synced per-stage **time profile** (tracking / mapping / refresh / SAM / CLIP / fusion) prints at
+the end of any run with semantic `log: true`. Use it to see where wall time goes (SAM + ORB tracking
+dominate; the refresh is ~0.7% after vectorization).
+
+The refresh triggers on `mnMapChange` (bumps on local BA, unlike `mnBigChangeIdx`) and rebuilds
+geometry WITHOUT semantic re-fusion. It costs extra compute (rebuild per local BA vs only ~2× at
+big changes), so watch `total_time` when comparing on/off.
+
+> **Fair on/off comparison:** ORB-SLAM is non-deterministic → the number of loop closures (LC,
+> the `Sem LC update took` / `Semantic Map update` prints, usually 2) varies run to run. For an
+> apples-to-apples on/off comparison, both runs must have the **same LC count**. Re-launch any run
+> whose LC count differs and delete the mismatched output before comparing.
 
 > **Valid `slam_module` tokens are only** `simulated`, `orbslam2`, `vanilla`, `gaussian_slam`
 > (`ovo/slam/__init__.py`). The token doubles as the config directory name

@@ -107,6 +107,8 @@ class OVOSemMap():
         self.ovo.track_viz_enabled = self.stream and self.rerun_mode == "tracking"
         self.ovo.contest.set_output_dir(self.output_path / "fusion" / "contest")
         self.slam_backbone = get_slam_backbone(config, self.dataset, cam_intrinsics)
+        # Time profiling on when semantic logging is on (reuses the @profil / _sync_time cadence).
+        self._profile_enabled = self.config.get("log", False) or config["semantic"].get("log", False)
 
         # Optional preprocessing for SAM masks.
         if config["semantic"]["sam"].get("precomputed", False) or config["semantic"]["sam"].get("precompute", False):
@@ -271,18 +273,23 @@ class OVOSemMap():
         # was updated this frame. ORB never sets correction_done, so the old gate left the path
         # stale while the points moved; map_updated is the honest "poses changed" signal.
         # correction_done + latch kept for the simulated backbone (one-shot reset, no map_updated).
+        # geometry_refreshed: local BA moved the KF poses without setting map_updated (light path),
+        # so the trajectory would otherwise stay stale between big changes. One-shot per refresh.
         corrected_trajectory = None
         map_was_updated = getattr(self.slam_backbone, "map_updated", False)
+        geometry_refreshed = getattr(self.slam_backbone, "geometry_refreshed", False)
         correction_pending = getattr(self.slam_backbone, "correction_done", False) and not getattr(
             self, "_stream_traj_reset_done", False
         )
-        if map_was_updated or correction_pending:
+        if map_was_updated or geometry_refreshed or correction_pending:
             corrected_trajectory = [
                 v.cpu().numpy()[:3, 3].tolist()
                 for _, v in sorted(self.slam_backbone.estimated_c2ws.items())
             ]
             if correction_pending:
                 self._stream_traj_reset_done = True
+            if geometry_refreshed:
+                self.slam_backbone.geometry_refreshed = False
 
         # Tracking mode only: permanent point ids (to locate robbed/new points in 3D) +
         # the per-frame signals stashed by ovo._track_objects.
@@ -332,6 +339,23 @@ class OVOSemMap():
             return 0.0
 
         t_sem_i = time.time()
+
+        # Local-BA geometry refresh: freshen the cloud right before reprojection so the contest
+        # evidence lands on BA-corrected points, WITHOUT paying semantic re-fusion. Kept OUT of the
+        # autocast block below — the pose rebuild uses linalg.inv, which rejects bfloat16.
+        if hasattr(self.slam_backbone, "refresh_geometry_if_local_ba"):
+            # Split geometry (backbone rebuild) from semantic reconcile (queue drain) so the profile
+            # shows the NET geometric cost of the refresh vs work that would run anyway.
+            if self._timed("t_refresh_geom", self.slam_backbone.refresh_geometry_if_local_ba):
+                self._timed("t_refresh_sem", self.ovo.refresh_geometry,
+                            self.slam_backbone.get_map(), self.slam_backbone.get_kfs())
+                # The rebuild reset estimated_c2ws to KF-only poses; add the current frame's live
+                # pose ONLY if it is a non-KF (absent from the dict) so get_c2w resolves for viz.
+                # If frame_id IS a KF, its BA-refined baseline is already correct — overwriting it
+                # with the live pose desyncs the point baseline and accumulates distortion.
+                if frame_id not in self.slam_backbone.estimated_c2ws:
+                    self.slam_backbone.estimated_c2ws[frame_id] = estimated_c2w
+
         with torch.inference_mode() and torch.autocast(device_type=self.device, dtype=torch.bfloat16):
             if len(frame_data) == 5:
                 image = frame_data[-1]
@@ -416,7 +440,7 @@ class OVOSemMap():
         if frame_id % self.map_every != 0 and self.config["slam"]["slam_module"] != "orbslam2":
             return 0.0
 
-        self.slam_backbone.map(frame_data, estimated_c2w)
+        self._timed("t_orb_map", self.slam_backbone.map, frame_data, estimated_c2w)
         self._dispatch_jump_events(frame_id, mpqueue)
         if not self.slam_backbone.map_updated:
             return 0.0
@@ -565,6 +589,52 @@ class OVOSemMap():
     
 
 
+    def _timed(self, key: str, fn, *args, **kwargs):
+        """Run fn, accumulating its GPU-synced wall time under `key` in logger.stats (profiling only)."""
+        if not self._profile_enabled:
+            return fn(*args, **kwargs)
+        torch.cuda.synchronize()
+        t0 = time.time()
+        out = fn(*args, **kwargs)
+        torch.cuda.synchronize()
+        self.logger.log_ovo_stats({key: round(time.time() - t0, 4)})
+        return out
+
+    def _print_time_profile(self, total_time: float) -> None:
+        """Sum the per-stage timers accumulated in logger.stats into a run-wide time profile."""
+        s = self.logger.stats
+        def tot(k):
+            return float(np.nansum(s[k])) if k in s and len(s[k]) else 0.0
+        # (label, stats key, is-GPU) — order = pipeline order
+        rows = [
+            ("ORB tracking",        "t_track",                 False),
+            ("ORB mapping+unproj",  "t_orb_map",               True),
+            ("Refresh geometry",    "t_refresh_geom",          True),
+            ("Refresh sem-reconcile","t_refresh_sem",          True),
+            ("SAM segmentation",    "t_sam",                   True),
+            ("Track/reproject",     "t_obj",                   True),
+            ("CLIP encode",         "t_clip",                  True),
+            ("Descriptor update",   "t_up",                    True),
+            ("Fusion+contest (LC)", "t_loop_closure_refusion", True),
+        ]
+        print("\n===== TIME PROFILE (scene total {:.1f}s) =====".format(total_time))
+        print("  {:<22} {:>9} {:>7} {:>7}  {}".format("stage", "total(s)", "%", "calls", "GPU"))
+        accounted = 0.0
+        for label, key, gpu in rows:
+            t = tot(key)
+            accounted += t
+            n = len(s[key]) if key in s else 0
+            print("  {:<22} {:>9.2f} {:>6.1f}% {:>7} {:>4}".format(label, t, 100 * t / total_time if total_time else 0, n, "GPU" if gpu else "cpu"))
+        other = max(0.0, total_time - accounted)
+        print("  {:<22} {:>9.2f} {:>6.1f}%   (overhead/io/viz/gaps)".format("unaccounted", other, 100 * other / total_time if total_time else 0))
+        print("=" * 46)
+        rp = getattr(self.slam_backbone, "refresh_prof", None)
+        if rp and rp.get("n", 0):
+            print("  refresh geometry breakdown ({} rebuilds):".format(rp["n"]))
+            for k in ("getkf", "loop", "cat"):
+                print("    {:<20} {:>8.2f}s".format(k, rp[k]))
+            print("  (getkf=ORB C++ pose read, loop=per-KF transform+einsum, cat=full pcd concat)")
+
     def run(self) -> None:
         """
         Starts the main program flow, including tracking and mapping. If stream falg
@@ -584,7 +654,7 @@ class OVOSemMap():
                 for frame_id in range(self.first_frame, len(self.dataset)):
                     if self.track_every == 1 or frame_id%self.track_every==0 or frame_id%self.map_every==0 or frame_id%self.segment_every==0:
                         frame_data = self.dataset[frame_id]
-                        self.slam_backbone.track_camera(frame_data)
+                        self._timed("t_track", self.slam_backbone.track_camera, frame_data)
 
                         estimated_c2w = self.slam_backbone.get_c2w(frame_id)
                         missing_depth = not (frame_data[2]>0).any()
@@ -645,6 +715,8 @@ class OVOSemMap():
             self.logger.log_spf(s)
         self.logger.log_ovo_stats({"total_time": round(t_end - t_start, 3)})
         self.logger.log_max_memory_usage()
+        if self._profile_enabled:
+            self._print_time_profile(t_end - t_start)
         self.logger.write_stats()
         self.logger.print_final_stats()
 

@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+import time
 import orbslam3 as orbslam
 import torch
 from pathlib import Path
@@ -21,7 +22,18 @@ class WrapperORBSLAM2(VanillaMapper):
 
         self.close_loops = config["slam"].get("close_loops", True)
         self.last_big_change_id = 0
+        self.last_map_change_id = 0  # mnMapChange: bumps on local BA too (not just LC/GBA)
         self.map_updated = False
+        self.geometry_refreshed = False  # light refresh moved poses w/o map_updated (viz traj signal)
+        # Local-BA geometry refresh: move the dense cloud to follow local-BA pose updates between big
+        # changes (off => original behaviour, only refresh on loop-closure/GBA).
+        self.localba_refresh_enabled = config["slam"].get("localba_refresh", True)
+        # A KF whose points would move less than this (m) is left untouched on refresh: below it the
+        # transform is just inv() numerical noise, and re-applying it each poll drifts old KFs.
+        self.localba_min_disp = config["slam"].get("localba_refresh_min_disp", 0.005)
+        # Refresh internal profiler (getkf / per-KF loop / full pcd concat), accumulated over the run.
+        self._profile_refresh = config["slam"].get("profile_refresh", False)
+        self.refresh_prof = {"getkf": 0.0, "loop": 0.0, "cat": 0.0, "n": 0}
         self.world_ref = world_ref.to(self.device)
         self.kfs = {}
 
@@ -71,11 +83,34 @@ class WrapperORBSLAM2(VanillaMapper):
             self.last_big_change_id = last_big_change_id
             self.update_map()
 
-    def update_map(self):
-        print("Updating dense map ...")
-        # update kfs and pcd poses:
-        updated_kfs = self.orbslam.get_keyframe_points()
+    def refresh_geometry_if_local_ba(self) -> bool:
+        """Rebuild the dense cloud if local BA moved poses since the last poll, WITHOUT
+        triggering semantic re-fusion. mnMapChange (unlike mnBigChangeIdx) bumps on local BA.
+        Returns True if the geometry was rebuilt."""
+        if not self.localba_refresh_enabled:
+            return False
+        map_change_id = self.orbslam.get_map_change_index()
+        if map_change_id == self.last_map_change_id:
+            return False
+        self.update_map(trigger_refusion=False)
+        self.geometry_refreshed = True  # tell the viz to re-draw the corrected trajectory
+        return True
 
+    def _psync(self):
+        if self._profile_refresh:
+            torch.cuda.synchronize()
+        return time.time()
+
+    def update_map(self, trigger_refusion: bool = True):
+        prof = self._profile_refresh
+        if trigger_refusion or prof:  # quiet on the frequent light refresh; loud on big change
+            print("Updating dense map ...")
+        # update kfs and pcd poses:
+        _t = self._psync()
+        updated_kfs = self.orbslam.get_keyframe_points()
+        if prof: self.refresh_prof["getkf"] += self._psync() - _t
+
+        _t = self._psync()
         new_kfs = {}
         new_pcd = []
         new_pcd_ids = []
@@ -84,42 +119,65 @@ class WrapperORBSLAM2(VanillaMapper):
         new_pcd_obs = []
         new_pcd_normals = []
         new_c2w = {}
-        n_points = 0
-        for updated_kf in updated_kfs: 
-            # for each keyframe, retrieve our saved keyframe,
+
+        # Gather the KFs we still track, in ORB's order (pruned KFs simply drop out).
+        entries = []  # (kf_id, s0, s1, updated_kf)
+        for updated_kf in updated_kfs:
             kf_id = int(updated_kf[0])
             kf = self.kfs.get(kf_id)
             if kf is None:
-                # Why would a kf not be in self.kfs? They are only deleted when update_map is called
-                # but then they shouldn't be anymore in orb_slam kfs list
-                # If a Keyframe is added/tracked after orb_slam starts LC/GBA, is it going to be in the retrieved list of kfs?
-                continue 
+                # Only deleted in update_map, so shouldn't still be in ORB's list — skip defensively.
+                continue
+            s0, s1 = kf["pcd_idxs"]
+            entries.append((kf_id, s0, s1, updated_kf))
 
-            kf_c2w = self.estimated_c2ws[kf["id"]]
-            updated_kf_c2w = self.world_ref@convert_pose(updated_kf[1:13], device = self.device)
+        # Vectorized skip test. A KF's point displacement equals its camera-centre shift
+        # (transform @ old_centre == new_centre), so skip-vs-move is decided from a single batched
+        # centre diff — NO per-KF convert_pose / inv / matmul. Only the few moved KFs pay the full
+        # transform below. A KF ORB left fixed yields a ~mm residual (inv of a non-orthonormal
+        # reconstructed rotation); re-applying it every refresh would drift old KFs, so we skip it.
+        moved_mask = []
+        if entries:
+            arr = torch.tensor([list(e[3]) for e in entries], device=self.device, dtype=self.world_ref.dtype)  # (M,13)
+            new_centres = arr[:, [4, 8, 12]] @ self.world_ref[:3, :3].T + self.world_ref[:3, 3]  # (M,3)
+            old_centres = torch.stack([self.estimated_c2ws[e[0]][:3, 3] for e in entries])        # (M,3)
+            disp = torch.linalg.norm(new_centres - old_centres, dim=1)                             # (M,)
+            moved_mask = (disp >= self.localba_min_disp).tolist()
 
-            transform = updated_kf_c2w@torch.linalg.inv(kf_c2w)
-            # If transform is the identityt matrix then the KF was not modified and this could be skipped.
-            # ovo.update_map() could just go over updated KFs' 3D instances to check if they should be fused with other instances
-            # Measure mIoU and number of fused instances to evaluate reduced approach.
-            updated_kf_pcd = torch.einsum('mn,bn->bm', transform, torch.cat([self.pcd[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]], torch.ones((kf["pcd_idxs"][1]-kf["pcd_idxs"][0],1), device=self.device)], dim=1))[:,:3]
-
-            # kfs that are not in updated_kfs were pruned by ORB_SLAM. They will be removed together with their associated pcd
+        n_points = 0
+        n_moved = 0
+        for idx, (kf_id, s0, s1, updated_kf) in enumerate(entries):
             old_n_points = n_points
-            n_points += len(updated_kf_pcd)
-            new_kfs[kf_id] = {"id": kf['id'] , "pcd_idxs":(old_n_points, n_points)}
-            kf_normals = self.pcd_normals[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]]
-            # Normals are directions: rotate only (no translation) by the kf transform.
-            updated_kf_normals = torch.einsum('ij,bj->bi', transform[:3, :3], kf_normals)
+            n_points += (s1 - s0)
+            new_kfs[kf_id] = {"id": kf_id, "pcd_idxs": (old_n_points, n_points)}
 
-            new_pcd.append(updated_kf_pcd)
-            new_pcd_ids.append(self.pcd_ids[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
-            new_pcd_obj_ids.append(self.pcd_obj_ids[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
-            new_pcd_colors.append(self.pcd_colors[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
-            new_pcd_obs.append(self.pcd_obs[kf["pcd_idxs"][0]:kf["pcd_idxs"][1]])
-            new_pcd_normals.append(updated_kf_normals)
-            new_c2w[kf["id"]] = updated_kf_c2w
+            if not moved_mask[idx]:
+                # unchanged: reuse the existing slice as-is, keep the old baseline
+                new_pcd.append(self.pcd[s0:s1])
+                new_pcd_normals.append(self.pcd_normals[s0:s1])
+                new_c2w[kf_id] = self.estimated_c2ws[kf_id]
+            else:
+                n_moved += 1
+                kf_c2w = self.estimated_c2ws[kf_id]
+                updated_kf_c2w = self.world_ref @ convert_pose(updated_kf[1:13], device=self.device)
+                transform = updated_kf_c2w @ torch.linalg.inv(kf_c2w)
+                updated_kf_pcd = torch.einsum('mn,bn->bm', transform, torch.cat([self.pcd[s0:s1], torch.ones((s1 - s0, 1), device=self.device)], dim=1))[:, :3]
+                # Normals are directions: rotate only (no translation) by the kf transform.
+                updated_kf_normals = torch.einsum('ij,bj->bi', transform[:3, :3], self.pcd_normals[s0:s1])
+                new_pcd.append(updated_kf_pcd)
+                new_pcd_normals.append(updated_kf_normals)
+                new_c2w[kf_id] = updated_kf_c2w
 
+            # kfs that are not in updated_kfs were pruned by ORB_SLAM -> dropped with their pcd
+            new_pcd_ids.append(self.pcd_ids[s0:s1])
+            new_pcd_obj_ids.append(self.pcd_obj_ids[s0:s1])
+            new_pcd_colors.append(self.pcd_colors[s0:s1])
+            new_pcd_obs.append(self.pcd_obs[s0:s1])
+
+        if prof:
+            self.refresh_prof["loop"] += self._psync() - _t
+            print(f"  refreshed geometry: {n_moved}/{len(new_kfs)} keyframes moved (> {self.localba_min_disp*1000:.0f}mm)")
+        _t = self._psync()
         self.estimated_c2ws = new_c2w
         self.kfs = new_kfs
         self.pcd = torch.cat(new_pcd, dim=0)
@@ -128,7 +186,14 @@ class WrapperORBSLAM2(VanillaMapper):
         self.pcd_colors = torch.cat(new_pcd_colors, dim=0)
         self.pcd_obs = torch.cat(new_pcd_obs, dim=0)
         self.pcd_normals = torch.cat(new_pcd_normals, dim=0)
-        self.map_updated = True
+        if prof:
+            self.refresh_prof["cat"] += self._psync() - _t
+            self.refresh_prof["n"] += 1
+        # Keep the local-BA guard in sync for both paths (LC/GBA also bumps mnMapChange).
+        self.last_map_change_id = self.orbslam.get_map_change_index()
+        # Only the heavy path flags a semantic re-fusion; the light refresh leaves it untouched.
+        if trigger_refusion:
+            self.map_updated = True
 
     
 
