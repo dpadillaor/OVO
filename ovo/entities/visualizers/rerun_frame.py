@@ -18,7 +18,6 @@ class Frame:
     instance_ids: np.ndarray
     c2w: np.ndarray
     point_ids: np.ndarray | None = None  # permanent point ids, aligned with `points` (tracking only)
-    normals: np.ndarray | None = None
     rgb: np.ndarray | None = None
     sam_map: np.ndarray | None = None
     ins_map: np.ndarray | None = None
@@ -42,7 +41,6 @@ def decode(data: Any, fallback_step: int) -> Frame | None:
 
     points = np.asarray(raw["points"], dtype=np.float32)
     instance_ids = resolve_instance_ids(raw["obj_ids"], points.shape[0])
-    normals = raw.get("normals")
     point_ids = raw.get("point_ids")
 
     keep = ceiling_mask(points)
@@ -53,7 +51,6 @@ def decode(data: Any, fallback_step: int) -> Frame | None:
         instance_ids=instance_ids[keep],
         c2w=np.asarray(raw["c2w"], dtype=np.float32),
         point_ids=np.asarray(point_ids)[keep] if point_ids is not None else None,
-        normals=np.asarray(normals, dtype=np.float32)[keep] if normals is not None else None,
         rgb=raw.get("rgb"),
         sam_map=raw.get("sam_map"),
         ins_map=raw.get("ins_map"),

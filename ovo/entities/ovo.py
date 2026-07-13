@@ -606,7 +606,7 @@ class OVO:
         if objects_to_del:
             print(f"Geometry refresh: removed {len(objects_to_del)} instances")
 
-    def update_map(self, map_data, kfs, point_obs=None, point_normals=None, point_colors=None):
+    def update_map(self, map_data, kfs, point_obs=None, point_colors=None):
         # 0. clean the queue
         self.complete_semantic_info()
         points_3d, points_ids_all, points_ins_ids = map_data

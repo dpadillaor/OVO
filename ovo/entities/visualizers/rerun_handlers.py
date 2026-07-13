@@ -143,10 +143,6 @@ class SceneRenderer(BaseRerunRenderer):
             data["rotation_magnitude"],
         )
 
-    def finalize(self):
-        """Called once when the stream closes (sentinel received)."""
-        self.scene.finalize(self.sinks)
-
 
 class StreamRenderer(SceneRenderer):
     """Live instance map plus the per-frame 2D panels (RGB, SAM masks, assigned/top-KF instances)."""
@@ -161,10 +157,6 @@ class StreamRenderer(SceneRenderer):
                     rrb.Spatial3DView(
                         name="Instances3D",
                         contents="world/**",
-                        # Per-instance normals (world/normals/obj_<id>) are saved but
-                        # hidden by default; toggling the parent reveals them. The user
-                        # then toggles each object under it in the entity tree.
-                        overrides={"world/normals": rrb.EntityBehavior(visible=False)},
                     ),
                 ),
                 rrb.Horizontal(
@@ -242,7 +234,6 @@ class TrackingRenderer(SceneRenderer):
                     rrb.Spatial3DView(
                         name="SLAM",
                         contents="world/**",
-                        overrides={"world/normals": rrb.EntityBehavior(visible=False)},
                     ),
                     rrb.Horizontal(
                         rrb.Spatial3DView(

@@ -117,7 +117,6 @@ class WrapperORBSLAM2(VanillaMapper):
         new_pcd_obj_ids = []
         new_pcd_colors = []
         new_pcd_obs = []
-        new_pcd_normals = []
         new_c2w = {}
 
         # Gather the KFs we still track, in ORB's order (pruned KFs simply drop out).
@@ -131,11 +130,8 @@ class WrapperORBSLAM2(VanillaMapper):
             s0, s1 = kf["pcd_idxs"]
             entries.append((kf_id, s0, s1, updated_kf))
 
-        # Vectorized skip test. A KF's point displacement equals its camera-centre shift
-        # (transform @ old_centre == new_centre), so skip-vs-move is decided from a single batched
-        # centre diff — NO per-KF convert_pose / inv / matmul. Only the few moved KFs pay the full
-        # transform below. A KF ORB left fixed yields a ~mm residual (inv of a non-orthonormal
-        # reconstructed rotation); re-applying it every refresh would drift old KFs, so we skip it.
+        # Point displacement == camera-centre shift, so decide skip-vs-move from a batched centre
+        # diff (no per-KF inv/matmul); only moved KFs pay the transform below. See design doc §9c.
         moved_mask = []
         if entries:
             arr = torch.tensor([list(e[3]) for e in entries], device=self.device, dtype=self.world_ref.dtype)  # (M,13)
@@ -154,7 +150,6 @@ class WrapperORBSLAM2(VanillaMapper):
             if not moved_mask[idx]:
                 # unchanged: reuse the existing slice as-is, keep the old baseline
                 new_pcd.append(self.pcd[s0:s1])
-                new_pcd_normals.append(self.pcd_normals[s0:s1])
                 new_c2w[kf_id] = self.estimated_c2ws[kf_id]
             else:
                 n_moved += 1
@@ -162,10 +157,7 @@ class WrapperORBSLAM2(VanillaMapper):
                 updated_kf_c2w = self.world_ref @ convert_pose(updated_kf[1:13], device=self.device)
                 transform = updated_kf_c2w @ torch.linalg.inv(kf_c2w)
                 updated_kf_pcd = torch.einsum('mn,bn->bm', transform, torch.cat([self.pcd[s0:s1], torch.ones((s1 - s0, 1), device=self.device)], dim=1))[:, :3]
-                # Normals are directions: rotate only (no translation) by the kf transform.
-                updated_kf_normals = torch.einsum('ij,bj->bi', transform[:3, :3], self.pcd_normals[s0:s1])
                 new_pcd.append(updated_kf_pcd)
-                new_pcd_normals.append(updated_kf_normals)
                 new_c2w[kf_id] = updated_kf_c2w
 
             # kfs that are not in updated_kfs were pruned by ORB_SLAM -> dropped with their pcd
@@ -185,7 +177,6 @@ class WrapperORBSLAM2(VanillaMapper):
         self.pcd_obj_ids = torch.cat(new_pcd_obj_ids, dim=0)
         self.pcd_colors = torch.cat(new_pcd_colors, dim=0)
         self.pcd_obs = torch.cat(new_pcd_obs, dim=0)
-        self.pcd_normals = torch.cat(new_pcd_normals, dim=0)
         if prof:
             self.refresh_prof["cat"] += self._psync() - _t
             self.refresh_prof["n"] += 1

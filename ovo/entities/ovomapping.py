@@ -253,8 +253,6 @@ class OVOSemMap():
 
         c2w_np = c2w.cpu().numpy().astype(np.float16)
         colors = self.slam_backbone.get_pcd_colors()
-        normals = self.slam_backbone.get_point_normals()
-        normals_np = normals.cpu().numpy().astype(np.float16) if normals is not None and normals.shape[0] == pcd.shape[0] else None
         visual_snapshot = self.ovo.get_last_visual_snapshot()
 
         rgb = None
@@ -307,7 +305,6 @@ class OVOSemMap():
                 "points": pcd.cpu().numpy().astype(np.float16),
                 "obj_ids": pcd_obj_ids.cpu().numpy().astype(np.int16),
                 "colors": colors,
-                "normals": normals_np,
                 "c2w": c2w_np,
                 "rgb": rgb,
                 "ins_map": ins_map,
@@ -449,7 +446,6 @@ class OVOSemMap():
         map_data = self.slam_backbone.get_map()
         kfs = self.slam_backbone.get_kfs()
         point_obs = self.slam_backbone.get_point_observations()
-        point_normals = self.slam_backbone.get_point_normals()
         point_colors = torch.as_tensor(self.slam_backbone.get_pcd_colors())
 
         # Send "before fusion" snapshot to stream visualizer
@@ -461,7 +457,7 @@ class OVOSemMap():
         if noise_cfg.get("save_pre_fusion_checkpoint", False):
             self._save_pre_fusion_checkpoint(frame_id)
 
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_colors=point_colors)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)
@@ -558,9 +554,8 @@ class OVOSemMap():
 
         print(f"Running fusion from checkpoint (frame_id={frame_id})...")
         point_obs = self.slam_backbone.get_point_observations()
-        point_normals = self.slam_backbone.get_point_normals()
         point_colors = torch.as_tensor(self.slam_backbone.get_pcd_colors())
-        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_normals=point_normals, point_colors=point_colors)
+        updated_points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times = self.ovo.update_map(map_data, kfs, point_obs, point_colors=point_colors)
 
         if fusion_decisions:
             self.logger.log_fusion_decisions(frame_id, fusion_decisions)

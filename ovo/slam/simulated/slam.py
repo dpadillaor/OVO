@@ -290,6 +290,3 @@ class SimulatedSLAM(VanillaMapper):
         pcd_slice = self.pcd[start:end]
         pcd_slice_hom = torch.cat([pcd_slice, torch.ones((pcd_slice.shape[0], 1), device=self.device)], dim=1)
         self.pcd[start:end] = (T @ pcd_slice_hom.T).T[:, :3]
-        # Rotate the slice's normals too (rotation part of T only).
-        if self.pcd_normals.shape[0] >= end:
-            self.pcd_normals[start:end] = (T[:3, :3] @ self.pcd_normals[start:end].T).T

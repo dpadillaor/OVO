@@ -1,4 +1,4 @@
-"""The shared 3D map scene: instance cloud, camera, trajectory, normals and map events."""
+"""The shared 3D map scene: instance cloud, camera, trajectory and map events."""
 
 from typing import Sequence
 
@@ -14,7 +14,6 @@ BACKGROUND_COLOR = (60, 60, 60)
 TRAJECTORY_COLOR = (0, 255, 255)
 UPDATE_MAP_COLOR = (255, 200, 0)
 JUMP_COLOR = (255, 50, 50)
-NORMAL_ARROW_LEN = 0.04  # metres; visual length of per-point normal arrows
 
 
 class InstanceCloudPainter:
@@ -58,14 +57,13 @@ class InstanceCloudPainter:
 
 
 class MapScene:
-    """Everything both renderers show under `world/`. Owns the trajectory and normals state."""
+    """Everything both renderers show under `world/`. Owns the trajectory state."""
 
     def __init__(self, cam_intrinsic):
         self.cam_intrinsic = cam_intrinsic
         self.cmap = get_instance_cmap()
         self.cloud = InstanceCloudPainter(self.cmap)
         self.trajectory: list = []
-        self._normals_cache: tuple | None = None
 
     def setup(self, sinks: Sequence[RerunSink]) -> None:
         pinhole = rr.Pinhole(
@@ -94,9 +92,6 @@ class MapScene:
                 rr.LineStrips3D([self.trajectory], colors=[TRAJECTORY_COLOR], radii=[0.005]),
             )
 
-        if frame.normals is not None:
-            self._normals_cache = (frame.points, frame.instance_ids, frame.normals)
-
     def log_update_map_event(self, sinks, cam_pos, frame_id: int, n_fused: int) -> None:
         log_all(
             sinks,
@@ -121,30 +116,3 @@ class MapScene:
             ),
         )
 
-    def finalize(self, sinks: Sequence[RerunSink]) -> None:
-        """Log per-instance normals once, as static arrows. Hidden by default in the blueprints."""
-        if self._normals_cache is None:
-            return
-        points, instance_ids, normals = self._normals_cache
-
-        for sink in sinks:
-            idx = sink.budget_indices(len(points))
-            pts_s, ids_s, nrm_s = (
-                (points, instance_ids, normals)
-                if idx is None
-                else (points[idx], instance_ids[idx], normals[idx])
-            )
-            for uid in (int(u) for u in np.unique(ids_s)):
-                if uid < 0:
-                    continue
-                mask = ids_s == uid
-                origins = pts_s[mask]
-                sink.log(
-                    f"world/normals/obj_{uid}",
-                    rr.Arrows3D(
-                        origins=origins,
-                        vectors=nrm_s[mask] * NORMAL_ARROW_LEN,
-                        colors=np.tile(self.cmap[uid % len(self.cmap)], (len(origins), 1)).astype(np.uint8),
-                    ),
-                    static=True,
-                )
