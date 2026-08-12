@@ -23,7 +23,8 @@ viz/                  # rendering puro; consume DecisionBreakdown
 ├── pipeline_steps.py # tríptico: crudo -> poda OVO -> segmap
 ├── masks_gallery.py  # una imagen por máscara individual, con su veredicto OVO
 ├── removed_masks.py  # por cada máscara muerta: quién la mató + solape
-└── decision_trace.py # tabla de auditoría de la poda (markdown)
+├── decision_trace.py # tabla de auditoría de la poda (markdown)
+└── point_ambiguity.py# pinchar UN punto -> las 3 máscaras dispares (agnóstico al modelo)
 cli.py                # orquesta (frame->core->viz), calcula rutas y escribe meta.json
 results/              # salida, gitignored (regenerable)
 ```
@@ -32,9 +33,12 @@ Arquitectura: **I/O (cli) -> puro (core) -> pintado (viz)**, dependencias hacia 
 
 ### Correr
 ```bash
-conda run -n ovo2 python -m studies.segmentation office0 70
+# lentes del AMG (pipeline/masks/removed/trace)
+conda run -n ovo2 python -m studies.segmentation frame office0 70
+# pinchar un punto -> 3 máscaras multimask
+conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560
 ```
-Flags: `--variant`, `--lenses pipeline masks`, `--points-per-side`, `--crop-n-layers`,
+Flags: `--variant`, `--lenses`, `--points-per-side`, `--crop-n-layers`,
 `--iou-thr/--score-thr/--inner-thr`.
 
 ### Organización de resultados (by_frame)
@@ -65,7 +69,10 @@ results/{escena}/f{frame:04d}/{variante}/
   `masks`, `removed` (detalle de cada máscara muerta) y `trace` (tabla de auditoría).
 - **Fase 2**: motor de tiempos (viene del worktree `sam2_amg_study`): Pipeline A vs B,
   coste multi-crop, agregación por escena.
-- **Fase 3**: SAM3 (frentes A y B), reusando el motor de tiempos de la Fase 2.
+- **Fase 3**: SAM3. Frente A (mismo punto, SAM2 vs SAM3): la lente `point_ambiguity`
+  ya es agnóstica al modelo; falta un `predict_point` con `SAM3InteractiveImagePredictor`
+  (rama `feature/sam3_amg_recovered`). Frente B (AMG de SAM3): máscaras vs SAM2 + coste,
+  reusando el motor de tiempos de la Fase 2.
 - **Fase 4**: figuras finales para el TFM (se curan aparte, a `tfm/figures/`).
 
 ## Notas

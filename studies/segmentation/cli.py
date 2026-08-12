@@ -16,7 +16,7 @@ import numpy as np
 
 from studies.segmentation.core.segmenters import SamConfig, SamSegmenter
 from studies.segmentation.core.nms_decision import scores_from_records, evaluate
-from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace
+from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity
 
 _RESULTS = Path(__file__).resolve().parent / "results"
 _DEFAULT_DATASET = "data/input/Datasets/Replica"
@@ -74,32 +74,55 @@ def run(scene: str, frame: int, variant: str, cfg: SamConfig, thr: dict,
     return out_dir
 
 
-def main() -> None:
-    p = argparse.ArgumentParser(description="Estudio de segmentación SAM sobre un frame de Replica.")
-    p.add_argument("scene")
-    p.add_argument("frame", type=int)
-    p.add_argument("--variant", default="sam2_baseline", help="etiqueta de la config (carpeta)")
-    p.add_argument("--lenses", nargs="+", default=list(_LENSES), choices=_LENSES)
-    p.add_argument("--dataset-root", default=_DEFAULT_DATASET)
-    p.add_argument("--ckpt", default="data/input/sam_ckpts/")
-    p.add_argument("--device", default="cuda")
-    # generación (SAM2)
-    p.add_argument("--points-per-side", type=int, default=16)
-    p.add_argument("--crop-n-layers", type=int, default=0)
-    # poda (NMS externo OVO)
-    p.add_argument("--iou-thr", type=float, default=0.8)
-    p.add_argument("--score-thr", type=float, default=0.7)
-    p.add_argument("--inner-thr", type=float, default=0.5)
-    args = p.parse_args()
+def run_point(scene: str, frame: int, variant: str, cfg: SamConfig, xy: tuple[int, int],
+              dataset_root: str, device: str) -> Path:
+    """Pincha un punto en un frame y guarda las 3 máscaras multimask en {variant}/point/."""
+    image, _ = _load_frame(dataset_root, scene, frame)
+    pm = SamSegmenter(cfg, device=device).predict_point(image, xy)
+    out_dir = _RESULTS / scene / f"f{frame:04d}" / variant / "point"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"pt_{xy[0]:04d}_{xy[1]:04d}.png"
+    point_ambiguity.render(image, pm, str(out_path))
+    return out_path
 
-    cfg = SamConfig(
-        sam_ckpt_path=args.ckpt,
-        points_per_side=args.points_per_side,
-        crop_n_layers=args.crop_n_layers,
-    )
-    thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
-    out = run(args.scene, args.frame, args.variant, cfg, thr,
-              tuple(args.lenses), args.dataset_root, args.device)
+
+def _add_common(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument("scene")
+    sp.add_argument("frame", type=int)
+    sp.add_argument("--variant", default="sam2_baseline", help="etiqueta de la config (carpeta)")
+    sp.add_argument("--dataset-root", default=_DEFAULT_DATASET)
+    sp.add_argument("--ckpt", default="data/input/sam_ckpts/")
+    sp.add_argument("--device", default="cuda")
+    sp.add_argument("--points-per-side", type=int, default=16)
+    sp.add_argument("--crop-n-layers", type=int, default=0)
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Estudio de segmentación SAM sobre Replica.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    pf = sub.add_parser("frame", help="lentes del AMG: pipeline/masks/removed/trace")
+    _add_common(pf)
+    pf.add_argument("--lenses", nargs="+", default=list(_LENSES), choices=_LENSES)
+    pf.add_argument("--iou-thr", type=float, default=0.8)
+    pf.add_argument("--score-thr", type=float, default=0.7)
+    pf.add_argument("--inner-thr", type=float, default=0.5)
+
+    pp = sub.add_parser("point", help="pincha un punto -> 3 máscaras multimask")
+    _add_common(pp)
+    pp.add_argument("--xy", type=int, nargs=2, required=True, metavar=("X", "Y"))
+
+    args = p.parse_args()
+    cfg = SamConfig(sam_ckpt_path=args.ckpt, points_per_side=args.points_per_side,
+                    crop_n_layers=args.crop_n_layers)
+
+    if args.cmd == "frame":
+        thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
+        out = run(args.scene, args.frame, args.variant, cfg, thr,
+                  tuple(args.lenses), args.dataset_root, args.device)
+    else:
+        out = run_point(args.scene, args.frame, args.variant, cfg, tuple(args.xy),
+                        args.dataset_root, args.device)
     print(f"[ok] {out}")
 
 

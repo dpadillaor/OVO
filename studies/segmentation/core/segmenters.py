@@ -15,6 +15,14 @@ from ovo.utils.segment_utils import load_sam
 
 
 @dataclass(frozen=True)
+class PointMasks:
+    """Las 3 máscaras multimask que SAM devuelve al pinchar un punto, con sus scores."""
+    point: tuple[int, int]
+    masks: list[np.ndarray]   # 3 x (H, W) bool
+    scores: list[float]
+
+
+@dataclass(frozen=True)
 class SamConfig:
     """Parámetros de generación de un AMG de SAM (semántica de SAM2, no del NMS de OVO)."""
     sam_ckpt_path: str
@@ -61,3 +69,18 @@ class SamSegmenter:
         """image (H,W,3) RGB uint8 -> máscaras crudas de SAM (cada dict: segmentation, predicted_iou, stability_score, ...)."""
         with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
             return self._amg.generate(image)
+
+    def predict_point(self, image: np.ndarray, xy: tuple[int, int]) -> PointMasks:
+        """Pincha un punto (x,y) y devuelve las 3 máscaras multimask de SAM. Reusa el predictor del AMG."""
+        pred = self._amg.predictor
+        coords = np.array([[xy[0], xy[1]]], dtype=np.float32)
+        labels = np.array([1], dtype=np.int32)
+        with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
+            pred.set_image(image)
+            masks, scores, _ = pred.predict(point_coords=coords, point_labels=labels, multimask_output=True)
+            pred.reset_predictor()
+        return PointMasks(
+            point=(int(xy[0]), int(xy[1])),
+            masks=[m.astype(bool) for m in masks],
+            scores=[float(s) for s in scores],
+        )
