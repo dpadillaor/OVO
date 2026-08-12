@@ -74,14 +74,15 @@ def run(scene: str, frame: int, variant: str, cfg: SamConfig, thr: dict,
     return out_dir
 
 
-def run_point(scene: str, frame: int, variant: str, cfg: SamConfig, xy: tuple[int, int],
+def run_point(scene: str, frame: int, cfg: SamConfig, xy: tuple[int, int],
               dataset_root: str, device: str) -> Path:
-    """Pincha un punto en un frame y guarda las 3 máscaras multimask en {variant}/point/."""
+    """Pincha un punto y guarda las 3 máscaras en point/pt_X_Y/{model}.png (cross-modelo)."""
     image, _ = _load_frame(dataset_root, scene, frame)
     pm = SamSegmenter(cfg, device=device).predict_point(image, xy)
-    out_dir = _RESULTS / scene / f"f{frame:04d}" / variant / "point"
+    model = f"sam{cfg.sam_version.split('.')[0]}"  # "2.1" -> "sam2"
+    out_dir = _RESULTS / scene / f"f{frame:04d}" / "point" / f"pt_{xy[0]:04d}_{xy[1]:04d}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"pt_{xy[0]:04d}_{xy[1]:04d}.png"
+    out_path = out_dir / f"{model}.png"
     point_ambiguity.render(image, pm, str(out_path))
     return out_path
 
@@ -89,7 +90,6 @@ def run_point(scene: str, frame: int, variant: str, cfg: SamConfig, xy: tuple[in
 def _add_common(sp: argparse.ArgumentParser) -> None:
     sp.add_argument("scene")
     sp.add_argument("frame", type=int)
-    sp.add_argument("--variant", default="sam2_baseline", help="etiqueta de la config (carpeta)")
     sp.add_argument("--dataset-root", default=_DEFAULT_DATASET)
     sp.add_argument("--ckpt", default="data/input/sam_ckpts/")
     sp.add_argument("--device", default="cuda")
@@ -103,6 +103,7 @@ def main() -> None:
 
     pf = sub.add_parser("frame", help="lentes del AMG: pipeline/masks/removed/trace")
     _add_common(pf)
+    pf.add_argument("--variant", default="sam2_baseline", help="etiqueta de la config (carpeta)")
     pf.add_argument("--lenses", nargs="+", default=list(_LENSES), choices=_LENSES)
     pf.add_argument("--iou-thr", type=float, default=0.8)
     pf.add_argument("--score-thr", type=float, default=0.7)
@@ -121,7 +122,7 @@ def main() -> None:
         out = run(args.scene, args.frame, args.variant, cfg, thr,
                   tuple(args.lenses), args.dataset_root, args.device)
     else:
-        out = run_point(args.scene, args.frame, args.variant, cfg, tuple(args.xy),
+        out = run_point(args.scene, args.frame, cfg, tuple(args.xy),
                         args.dataset_root, args.device)
     print(f"[ok] {out}")
 

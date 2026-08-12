@@ -43,14 +43,21 @@ Flags: `--variant`, `--lenses`, `--points-per-side`, `--crop-n-layers`,
 
 ### Organización de resultados (by_frame)
 ```
-results/{escena}/f{frame:04d}/{variante}/
-├── meta.json     # config completa + umbrales + counts (autodescriptivo)
-├── pipeline.png
-└── masks/
+results/{escena}/f{frame:04d}/
+├── {variante}/            # lentes del AMG (automático)
+│   ├── meta.json          # config completa + umbrales + counts
+│   ├── pipeline.png
+│   ├── masks/ · removed/ · trace.md
+└── point/                 # prompts interactivos (no AMG, cross-modelo)
+    └── pt_{X}_{Y}/
+        ├── sam2.png
+        └── sam3.png        # frente A (Fase 3)
 ```
-- **variante** = la config entera que generó las máscaras (`sam2_baseline`, luego
-  `sam2_multicrop`, `sam3`). Etiqueta corta; lo exhaustivo vive en `meta.json`.
-- La ruta y el `meta.json` los **calcula el cli**, no se nombran a mano.
+- **variante** = la config AMG entera (`sam2_baseline`, luego `sam2_multicrop`, `sam3`).
+  Etiqueta corta; lo exhaustivo vive en `meta.json`.
+- **point/** vive a nivel de frame, no dentro de una variante: el prompt interactivo no
+  usa el AMG ni el NMS de OVO, y compara modelos (SAM2 vs SAM3).
+- La ruta la **calcula el cli**, no se nombra a mano.
 
 ## Alcance actual (honesto)
 - Es **un frame suelto** (baseline cualitativa), no evolución temporal entre frames.
