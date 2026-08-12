@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from studies.segmentation.core.segmenters import SamConfig, SamSegmenter
+from studies.segmentation.core.segmenters import SamConfig, SamSegmenter, Sam3PointPredictor
 from studies.segmentation.core.nms_decision import scores_from_records, evaluate
 from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity
 
@@ -74,17 +74,28 @@ def run(scene: str, frame: int, variant: str, cfg: SamConfig, thr: dict,
     return out_dir
 
 
-def run_point(scene: str, frame: int, cfg: SamConfig, xy: tuple[int, int],
+def _point_predict(model: str, cfg: SamConfig, image: np.ndarray, xy: tuple[int, int], device: str):
+    predictor = Sam3PointPredictor(device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
+    return predictor.predict_point(image, xy)
+
+
+def run_point(scene: str, frame: int, model: str, cfg: SamConfig, xy: tuple[int, int],
               dataset_root: str, device: str) -> Path:
-    """Pincha un punto y guarda las 3 máscaras en point/pt_X_Y/{model}.png (cross-modelo)."""
+    """Pincha un punto con sam2/sam3/both y guarda en point/pt_X_Y/ ({model}.png y compare.png)."""
     image, _ = _load_frame(dataset_root, scene, frame)
-    pm = SamSegmenter(cfg, device=device).predict_point(image, xy)
-    model = f"sam{cfg.sam_version.split('.')[0]}"  # "2.1" -> "sam2"
     out_dir = _RESULTS / scene / f"f{frame:04d}" / "point" / f"pt_{xy[0]:04d}_{xy[1]:04d}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{model}.png"
-    point_ambiguity.render(image, pm, str(out_path))
-    return out_path
+
+    models = ["sam2", "sam3"] if model == "both" else [model]
+    named = {}
+    for m in models:
+        pm = _point_predict(m, cfg, image, xy, device)
+        named[m] = pm
+        point_ambiguity.render(image, pm, str(out_dir / f"{m}.png"))
+    if len(named) > 1:
+        point_ambiguity.render_compare(image, named, str(out_dir / "compare.png"))
+        return out_dir / "compare.png"
+    return out_dir / f"{model}.png"
 
 
 def _add_common(sp: argparse.ArgumentParser) -> None:
@@ -112,6 +123,7 @@ def main() -> None:
     pp = sub.add_parser("point", help="pincha un punto -> 3 máscaras multimask")
     _add_common(pp)
     pp.add_argument("--xy", type=int, nargs=2, required=True, metavar=("X", "Y"))
+    pp.add_argument("--model", default="sam2", choices=("sam2", "sam3", "both"))
 
     args = p.parse_args()
     cfg = SamConfig(sam_ckpt_path=args.ckpt, points_per_side=args.points_per_side,
@@ -122,7 +134,7 @@ def main() -> None:
         out = run(args.scene, args.frame, args.variant, cfg, thr,
                   tuple(args.lenses), args.dataset_root, args.device)
     else:
-        out = run_point(args.scene, args.frame, cfg, tuple(args.xy),
+        out = run_point(args.scene, args.frame, args.model, cfg, tuple(args.xy),
                         args.dataset_root, args.device)
     print(f"[ok] {out}")
 

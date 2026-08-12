@@ -35,8 +35,8 @@ Arquitectura: **I/O (cli) -> puro (core) -> pintado (viz)**, dependencias hacia 
 ```bash
 # lentes del AMG (pipeline/masks/removed/trace)
 conda run -n ovo2 python -m studies.segmentation frame office0 70
-# pinchar un punto -> 3 máscaras multimask
-conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560
+# pinchar un punto -> 3 máscaras multimask (--model sam2|sam3|both)
+conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560 --model both
 ```
 Flags: `--variant`, `--lenses`, `--points-per-side`, `--crop-n-layers`,
 `--iou-thr/--score-thr/--inner-thr`.
@@ -76,10 +76,12 @@ results/{escena}/f{frame:04d}/
   `masks`, `removed` (detalle de cada máscara muerta) y `trace` (tabla de auditoría).
 - **Fase 2**: motor de tiempos (viene del worktree `sam2_amg_study`): Pipeline A vs B,
   coste multi-crop, agregación por escena.
-- **Fase 3**: SAM3. Frente A (mismo punto, SAM2 vs SAM3): la lente `point_ambiguity`
-  ya es agnóstica al modelo; falta un `predict_point` con `SAM3InteractiveImagePredictor`
-  (rama `feature/sam3_amg_recovered`). Frente B (AMG de SAM3): máscaras vs SAM2 + coste,
-  reusando el motor de tiempos de la Fase 2.
+- **Fase 3**: SAM3.
+  - Frente A (mismo punto, SAM2 vs SAM3): **hecho**. `point --model both` carga SAM3
+    (`Sam3PointPredictor`, checkpoint `facebook/sam3` vía HF cache) y saca `compare.png`.
+  - Frente B (AMG de SAM3): pendiente. Máscaras del `SAM3AutomaticMaskGenerator`
+    (rama `feature/sam3_amg_recovered`) vs SAM2 + coste del encoder troceado, reusando
+    el motor de tiempos de la Fase 2.
 - **Fase 4**: figuras finales para el TFM (se curan aparte, a `tfm/figures/`).
 
 ## Notas

@@ -5,6 +5,7 @@ en `nms_decision`. Aquí vive el I/O de modelo (carga, warmup, GPU); nada de pod
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,15 +73,41 @@ class SamSegmenter:
 
     def predict_point(self, image: np.ndarray, xy: tuple[int, int]) -> PointMasks:
         """Pincha un punto (x,y) y devuelve las 3 máscaras multimask de SAM. Reusa el predictor del AMG."""
-        pred = self._amg.predictor
-        coords = np.array([[xy[0], xy[1]]], dtype=np.float32)
-        labels = np.array([1], dtype=np.int32)
-        with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
-            pred.set_image(image)
-            masks, scores, _ = pred.predict(point_coords=coords, point_labels=labels, multimask_output=True)
-            pred.reset_predictor()
-        return PointMasks(
-            point=(int(xy[0]), int(xy[1])),
-            masks=[m.astype(bool) for m in masks],
-            scores=[float(s) for s in scores],
-        )
+        return _predict_point(self._amg.predictor, image, xy, self.device, self._dtype)
+
+
+class Sam3PointPredictor:
+    """Predictor interactivo de SAM3: carga el modelo una vez y pincha puntos (frente A)."""
+
+    def __init__(self, device: str = "cuda", sam3_path: str = "thirdParty/sam3") -> None:
+        self.device = device
+        self._dtype = torch.bfloat16
+        if sam3_path not in sys.path:
+            sys.path.append(sam3_path)
+        from sam3.model_builder import build_sam3_video_model
+        from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
+
+        video_model = build_sam3_video_model(load_from_HF=True, device=device)
+        tracker = video_model.tracker
+        tracker.backbone = video_model.detector.backbone
+        self._pred = SAM3InteractiveImagePredictor(tracker)
+
+    def predict_point(self, image: np.ndarray, xy: tuple[int, int]) -> PointMasks:
+        """image RGB uint8 + punto (x,y) -> las 3 máscaras multimask de SAM3."""
+        return _predict_point(self._pred, image, xy, self.device, self._dtype)
+
+
+def _predict_point(predictor, image: np.ndarray, xy: tuple[int, int],
+                   device: str, dtype: torch.dtype) -> PointMasks:
+    """Corre un predictor interactivo (SAM2/SAM3) sobre un punto. Mismo contrato en ambos."""
+    coords = np.array([[xy[0], xy[1]]], dtype=np.float32)
+    labels = np.array([1], dtype=np.int32)
+    with torch.inference_mode(), torch.autocast(device_type=device, dtype=dtype):
+        predictor.set_image(image)
+        masks, scores, _ = predictor.predict(point_coords=coords, point_labels=labels, multimask_output=True)
+        predictor.reset_predictor()
+    return PointMasks(
+        point=(int(xy[0]), int(xy[1])),
+        masks=[np.asarray(m).astype(bool) for m in masks],
+        scores=[float(s) for s in np.asarray(scores).ravel()],
+    )
