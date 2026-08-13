@@ -16,7 +16,8 @@ import numpy as np
 
 from studies.segmentation.core.segmenters import SamConfig, SamSegmenter, Sam3Segmenter, Sam3PointPredictor
 from studies.segmentation.core.nms_decision import scores_from_records, evaluate
-from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity
+from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity, segmenter_compare
+from ovo.utils.segment_utils import mask2segmap
 
 _RESULTS = Path(__file__).resolve().parent / "results"
 _DEFAULT_DATASET = "data/input/Datasets/Replica"
@@ -76,6 +77,29 @@ def run(scene: str, frame: int, model: str, variant: str, cfg: SamConfig, thr: d
     return out_dir
 
 
+def _final_segmap(model: str, cfg: SamConfig, thr: dict, image: np.ndarray, device: str) -> np.ndarray:
+    """Corre un segmentador, poda con el NMS de OVO y devuelve las capas finales (binary_maps)."""
+    segmenter = Sam3Segmenter(cfg, device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
+    records = segmenter.segment(image)
+    masks, scores = scores_from_records(records)
+    bd = evaluate(masks, scores, thr["iou_thr"], thr["score_thr"], thr["inner_thr"])
+    kept = [records[v.index] for v in bd.kept]
+    _, binary_maps = mask2segmap(kept, image, sort=True)
+    return binary_maps
+
+
+def run_compare(scene: str, frame: int, cfg: SamConfig, thr: dict,
+                dataset_root: str, device: str) -> Path:
+    """Compara el segmap FINAL de sam2_baseline vs sam3 en un frame, lado a lado."""
+    image, _ = _load_frame(dataset_root, scene, frame)
+    named = {m: _final_segmap(m, cfg, thr, image, device) for m in ("sam2", "sam3")}
+    out_dir = _RESULTS / scene / f"f{frame:04d}" / "compare"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "final.png"
+    segmenter_compare.render(image, named, str(out_path))
+    return out_path
+
+
 def _point_predict(model: str, cfg: SamConfig, image: np.ndarray, xy: tuple[int, int], device: str):
     predictor = Sam3PointPredictor(device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
     return predictor.predict_point(image, xy)
@@ -128,6 +152,12 @@ def main() -> None:
     pp.add_argument("--xy", type=int, nargs=2, required=True, metavar=("X", "Y"))
     pp.add_argument("--model", default="sam2", choices=("sam2", "sam3", "both"))
 
+    pc = sub.add_parser("compare", help="segmap final: sam2_baseline vs sam3, lado a lado")
+    _add_common(pc)
+    pc.add_argument("--iou-thr", type=float, default=0.8)
+    pc.add_argument("--score-thr", type=float, default=0.7)
+    pc.add_argument("--inner-thr", type=float, default=0.5)
+
     args = p.parse_args()
     cfg = SamConfig(sam_ckpt_path=args.ckpt, points_per_side=args.points_per_side,
                     crop_n_layers=args.crop_n_layers)
@@ -137,6 +167,9 @@ def main() -> None:
         variant = args.variant or ("sam3" if args.model == "sam3" else "sam2_baseline")
         out = run(args.scene, args.frame, args.model, variant, cfg, thr,
                   tuple(args.lenses), args.dataset_root, args.device)
+    elif args.cmd == "compare":
+        thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
+        out = run_compare(args.scene, args.frame, cfg, thr, args.dataset_root, args.device)
     else:
         out = run_point(args.scene, args.frame, args.model, cfg, tuple(args.xy),
                         args.dataset_root, args.device)

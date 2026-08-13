@@ -25,7 +25,8 @@ viz/                  # rendering puro; consume DecisionBreakdown
 ├── masks_gallery.py  # una imagen por máscara individual, con su veredicto OVO
 ├── removed_masks.py  # por cada máscara muerta: quién la mató + solape
 ├── decision_trace.py # tabla de auditoría de la poda (markdown)
-└── point_ambiguity.py# pinchar UN punto -> las 3 máscaras dispares (agnóstico al modelo)
+├── point_ambiguity.py# pinchar UN punto -> las 3 máscaras dispares (agnóstico al modelo)
+└── segmenter_compare.py # segmap final de sam2 vs sam3, lado a lado
 cli.py                # orquesta (frame->core->viz), calcula rutas y escribe meta.json
 results/              # salida, gitignored (regenerable)
 ```
@@ -39,6 +40,8 @@ conda run -n ovo2 python -m studies.segmentation frame office0 70 --model sam2
 conda run -n ovo2 python -m studies.segmentation frame office0 70 --model sam3
 # pinchar un punto -> 3 máscaras multimask (--model sam2|sam3|both)
 conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560 --model both
+# segmap FINAL (tras poda): sam2_baseline vs sam3, lado a lado
+conda run -n ovo2 python -m studies.segmentation compare office0 70
 ```
 Flags: `--variant`, `--lenses`, `--points-per-side`, `--crop-n-layers`,
 `--iou-thr/--score-thr/--inner-thr`.
