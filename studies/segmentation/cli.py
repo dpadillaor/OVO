@@ -16,7 +16,10 @@ import numpy as np
 
 from studies.segmentation.core.segmenters import SamConfig, SamSegmenter, Sam3Segmenter, Sam3PointPredictor
 from studies.segmentation.core.nms_decision import scores_from_records, evaluate
-from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity, segmenter_compare
+from studies.segmentation.core.profiling import profile_frame
+from studies.segmentation.core.timing_stats import aggregate
+from studies.segmentation.viz import (
+    pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity, segmenter_compare, timing as viz_timing)
 from ovo.utils.segment_utils import mask2segmap
 
 _RESULTS = Path(__file__).resolve().parent / "results"
@@ -100,6 +103,28 @@ def run_compare(scene: str, frame: int, cfg: SamConfig, thr: dict,
     return out_path
 
 
+def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int,
+               dataset_root: str, device: str) -> Path:
+    """Mide el coste (total/encoder/decode/VRAM) de sam2 vs sam3 en un frame, reps veces."""
+    from dataclasses import asdict
+    image, _ = _load_frame(dataset_root, scene, frame)
+    out_dir = _RESULTS / scene / f"f{frame:04d}" / "compare"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    stats, blob = {}, {}
+    for model in ("sam2", "sam3"):
+        seg = Sam3Segmenter(cfg, device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
+        profiles = [profile_frame(seg, image, warmup=1 if r == 0 else 0) for r in range(reps)]
+        ts = aggregate(profiles)
+        stats[model] = ts
+        blob[model] = asdict(ts)
+
+    viz_timing.render(stats, str(out_dir / "timing.png"),
+                      title=f"{scene}/f{frame} coste AMG (reps={reps})")
+    (out_dir / "timing.json").write_text(json.dumps(blob, indent=2))
+    return out_dir / "timing.png"
+
+
 def _point_predict(model: str, cfg: SamConfig, image: np.ndarray, xy: tuple[int, int], device: str):
     predictor = Sam3PointPredictor(device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
     return predictor.predict_point(image, xy)
@@ -158,6 +183,10 @@ def main() -> None:
     pc.add_argument("--score-thr", type=float, default=0.7)
     pc.add_argument("--inner-thr", type=float, default=0.5)
 
+    pt = sub.add_parser("timing", help="coste (total/encoder/decode/VRAM) sam2 vs sam3")
+    _add_common(pt)
+    pt.add_argument("--reps", type=int, default=5)
+
     args = p.parse_args()
     cfg = SamConfig(sam_ckpt_path=args.ckpt, points_per_side=args.points_per_side,
                     crop_n_layers=args.crop_n_layers)
@@ -170,6 +199,8 @@ def main() -> None:
     elif args.cmd == "compare":
         thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
         out = run_compare(args.scene, args.frame, cfg, thr, args.dataset_root, args.device)
+    elif args.cmd == "timing":
+        out = run_timing(args.scene, args.frame, cfg, args.reps, args.dataset_root, args.device)
     else:
         out = run_point(args.scene, args.frame, args.model, cfg, tuple(args.xy),
                         args.dataset_root, args.device)

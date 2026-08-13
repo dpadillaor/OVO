@@ -14,10 +14,12 @@ Dos caras de la misma pregunta:
 ## Qué hay ahora (Fase 1: baseline SAM2, cualitativo)
 
 ```
-core/                 # frontera con el modelo + lógica pura de poda.
+core/                 # frontera con el modelo + lógica pura.
 ├── segmenters.py     # frame -> máscaras CRUDAS. SamSegmenter (SAM2), Sam3Segmenter
 │                     #   (AMG oficial de SAM2 + predictor SAM3), Sam3PointPredictor
 ├── nms_decision.py   # NMS externo de OVO como cálculo puro -> DecisionBreakdown
+├── profiling.py      # coste por crop (encoder/decode/VRAM) instrumentando el AMG (I/O)
+├── timing_stats.py   # PURO: List[FrameProfile] -> TimingStats (mean/std/min/max)
 │                     #   (por máscara: kept/removed + qué regla la mató y quién)
 └── tests/            # paridad exacta con ovo.utils.segment_utils.mask_nms
 viz/                  # rendering puro; consume DecisionBreakdown
@@ -42,6 +44,8 @@ conda run -n ovo2 python -m studies.segmentation frame office0 70 --model sam3
 conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560 --model both
 # segmap FINAL (tras poda): sam2_baseline vs sam3, lado a lado
 conda run -n ovo2 python -m studies.segmentation compare office0 70
+# coste: total/encoder/decode/VRAM, sam2 vs sam3 (reps para estabilidad)
+conda run -n ovo2 python -m studies.segmentation timing office0 70 --reps 5
 ```
 Flags: `--variant`, `--lenses`, `--points-per-side`, `--crop-n-layers`,
 `--iou-thr/--score-thr/--inner-thr`.
@@ -79,8 +83,10 @@ results/{escena}/f{frame:04d}/
 ### Fases
 - **Fase 1** (hecha): baseline SAM2, forense de poda completo. Lentes `pipeline`,
   `masks`, `removed` (detalle de cada máscara muerta) y `trace` (tabla de auditoría).
-- **Fase 2**: motor de tiempos (viene del worktree `sam2_amg_study`): Pipeline A vs B,
-  coste multi-crop, agregación por escena.
+- **Fase 2** (hecha): motor de tiempos re-derivado limpio del worktree `sam2_amg_study`.
+  `core/profiling.py` instrumenta el AMG por crop (encoder/decode/VRAM, con sync+warmup);
+  `core/timing_stats.py` agrega (puro); `viz/timing.py` pinta barras; `timing` en el cli.
+  Falta (opcional): barrer multi-crop (`--crop-n-layers>0`) y agregar sobre la trayectoria.
 - **Fase 3**: SAM3.
   - Frente A (mismo punto, SAM2 vs SAM3): **hecho**. `point --model both` carga SAM3
     (`Sam3PointPredictor`, checkpoint `facebook/sam3` vía HF cache) y saca `compare.png`.
@@ -88,12 +94,12 @@ results/{escena}/f{frame:04d}/
     `Sam3Processor` + `predict_inst`), la misma que `examples/sam3_for_sam1_task_example`.
     Puntos canónicos de office0/f70 (los que en el AMG dan las máscaras ID4 e ID22):
     ID4=(1012,404), ID22=(1162,21), recuperados de `record['point_coords']`.
-  - Frente B (AMG de SAM3): **máscaras hechas**. `frame --model sam3` usa `Sam3Segmenter`
-    = la maquinaria **oficial** del AMG de SAM2 (grid+filtros+NMS de Meta, intacta) con el
-    **predictor de SAM3** enchufado (swap). NO se reusa el AMG rescatado (sin verificar).
+  - Frente B (AMG de SAM3): **hecho** (máscaras + coste). `frame --model sam3` usa
+    `Sam3Segmenter` = la maquinaria **oficial** del AMG de SAM2 (grid+filtros+NMS de Meta,
+    intacta) con el predictor interactivo del **modelo de imagen** de SAM3 (misma puerta que
+    el point predictor; backbone enchufado a mano). NO se reusa el AMG rescatado (sin verificar).
     Todas las lentes de frame funcionan con SAM3 (viz agnóstica). office0/f70: SAM2 23->19,
-    SAM3 30->23. Pendiente: el **coste** (encoder troceado), que llega con el motor de
-    tiempos de la Fase 2.
+    SAM3 30->23. Coste (`timing`): SAM3 ~1.4x total, encoder ~2x, VRAM ~2.4x que SAM2.
 - **Fase 4**: figuras finales para el TFM (se curan aparte, a `tfm/figures/`).
 
 ## Notas
