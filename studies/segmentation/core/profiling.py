@@ -70,8 +70,9 @@ class FrameProfile:
         return max((c.peak_vram_mb for c in self.crops), default=0.0)
 
 
-def profile_frame(segmenter, image: np.ndarray, warmup: int = 1) -> FrameProfile:
-    """Mide el coste de segmentar un frame. `segmenter` debe exponer `_amg` y `segment`."""
+def profile_frame(segmenter, image: np.ndarray, warmup: int = 1) -> tuple[FrameProfile, list[dict]]:
+    """Mide el coste de segmentar un frame; devuelve (perfil, máscaras crudas de la pasada medida).
+    Devolver los records evita re-segmentar si además quieres guardar el resultado."""
     pred = segmenter._amg.predictor
     for _ in range(warmup):  # primeras pasadas: compilación/autotuning, se descartan
         segmenter.segment(image)
@@ -111,4 +112,4 @@ def profile_frame(segmenter, image: np.ndarray, warmup: int = 1) -> FrameProfile
     finally:
         pred.set_image, pred._predict, amg._process_crop = orig_set, orig_pred, orig_crop
 
-    return FrameProfile(total_ms=total, n_masks=len(records), crops=crops)
+    return FrameProfile(total_ms=total, n_masks=len(records), crops=crops), records

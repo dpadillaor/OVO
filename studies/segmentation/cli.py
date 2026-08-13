@@ -50,8 +50,10 @@ def main() -> None:
 
     ps = sub.add_parser("scene", help="coste sam2 vs sam3 a lo largo de una escena")
     _add_common(ps, with_frame=False)
+    _add_thresholds(ps)
     ps.add_argument("--every", type=int, default=10, help="muestreo de frames (= segment_every de OVO)")
     ps.add_argument("--limit", type=int, default=None, help="máx frames (para iterar rápido)")
+    ps.add_argument("--save-frames", action="store_true", help="guardar segmap por frame (original|sam2|sam3)")
 
     args = p.parse_args()
     cfg = SamConfig(sam_ckpt_path=args.ckpt, points_per_side=args.points_per_side,
@@ -68,7 +70,9 @@ def main() -> None:
     elif args.cmd == "timing":
         out = exp.run_timing(args.scene, args.frame, cfg, args.reps, args.dataset_root, args.device)
     elif args.cmd == "scene":
-        out = exp.run_scene(args.scene, cfg, args.every, args.dataset_root, args.device, args.limit)
+        thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
+        out = exp.run_scene(args.scene, cfg, thr, args.every, args.dataset_root, args.device,
+                            args.limit, args.save_frames)
     else:
         out = exp.run_point(args.scene, args.frame, args.model, cfg, tuple(args.xy),
                             args.dataset_root, args.device)

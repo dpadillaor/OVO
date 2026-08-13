@@ -96,8 +96,8 @@ def run_frame(scene: str, frame: int, model: str, variant: str, cfg: SamConfig, 
     return out_dir
 
 
-def _final_segmap(model: str, cfg: SamConfig, thr: dict, image: np.ndarray, device: str) -> np.ndarray:
-    records = _make_segmenter(model, cfg, device).segment(image)
+def _kept_segmap(records: list[dict], thr: dict, image: np.ndarray) -> np.ndarray:
+    """Máscaras crudas -> capas finales (binary_maps) tras la poda de OVO."""
     masks, scores = scores_from_records(records)
     bd = evaluate(masks, scores, thr["iou_thr"], thr["score_thr"], thr["inner_thr"])
     _, binary_maps = mask2segmap([records[v.index] for v in bd.kept], image, sort=True)
@@ -107,11 +107,18 @@ def _final_segmap(model: str, cfg: SamConfig, thr: dict, image: np.ndarray, devi
 def run_compare(scene: str, frame: int, cfg: SamConfig, thr: dict, dataset_root: str, device: str) -> Path:
     """Segmap final sam2 vs sam3 lado a lado -> compare/final.png."""
     image, _ = _load_frame(dataset_root, scene, frame)
-    named = {m: _final_segmap(m, cfg, thr, image, device) for m in MODELS}
+    named = {m: _kept_segmap(_make_segmenter(m, cfg, device).segment(image), thr, image) for m in MODELS}
     out_dir = RESULTS / scene / f"f{frame:04d}" / "compare"
     out_dir.mkdir(parents=True, exist_ok=True)
     segmenter_compare.render(image, named, str(out_dir / "final.png"))
     return out_dir / "final.png"
+
+
+def _label(img_rgb: np.ndarray, text: str) -> np.ndarray:
+    """Escribe una etiqueta arriba-izquierda sobre una imagen RGB."""
+    out = img_rgb.copy()
+    cv2.putText(out, text, (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+    return out
 
 
 def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int, dataset_root: str, device: str) -> Path:
@@ -122,7 +129,7 @@ def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int, dataset_root: 
     stats, blob = {}, {}
     for model in MODELS:
         seg = _make_segmenter(model, cfg, device)
-        profiles = [profile_frame(seg, image, warmup=1 if r == 0 else 0) for r in range(reps)]
+        profiles = [profile_frame(seg, image, warmup=1 if r == 0 else 0)[0] for r in range(reps)]
         stats[model] = aggregate(profiles)
         blob[model] = asdict(stats[model])
         _free(seg)
@@ -131,32 +138,60 @@ def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int, dataset_root: 
     return out_dir / "timing.png"
 
 
-def run_scene(scene: str, cfg: SamConfig, every: int, dataset_root: str, device: str,
-              limit: int | None = None) -> Path:
+def run_scene(scene: str, cfg: SamConfig, thr: dict, every: int, dataset_root: str, device: str,
+              limit: int | None = None, save_frames: bool = False) -> Path:
     """Coste sam2 vs sam3 a lo largo de una escena (cada `every` frames) -> scene/timing_scene.{png,json}.
 
     Justo: carga cada modelo UNA vez, warmup en el primer frame, recorre la escena, libera, y el otro.
+    Con save_frames, cada modelo guarda su segmap por frame en su pasada; al final se juntan lado a lado.
     """
     frames = _scene_frames(dataset_root, scene, every, limit)
+    out_dir = RESULTS / scene / "scene"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     series, blob = {}, {}
     for model in MODELS:
         seg = _make_segmenter(model, cfg, device)
         profs = []
         for i, fidx in enumerate(frames):
             image, _ = _load_frame(dataset_root, scene, fidx)
-            profs.append(profile_frame(seg, image, warmup=1 if i == 0 else 0))  # 1er frame = warmup
+            prof, records = profile_frame(seg, image, warmup=1 if i == 0 else 0)  # 1er frame = warmup
+            profs.append(prof)
+            if save_frames:  # guardar el segmap coloreado (fuera de la medida, no contamina total_ms)
+                colored = segmenter_compare.colored(image, _kept_segmap(records, thr, image))
+                _save_rgb(colored, out_dir / "frames" / model / f"f{fidx:06d}.png")
         series[model] = profs
         blob[model] = {"stats": asdict(aggregate(profs)),
                        "per_frame": [{"frame": f, "total_ms": p.total_ms, "n_masks": p.n_masks}
                                      for f, p in zip(frames, profs)]}
         _free(seg)
 
-    out_dir = RESULTS / scene / "scene"
-    out_dir.mkdir(parents=True, exist_ok=True)
     scene_timing.render(frames, series, str(out_dir / "timing_scene.png"),
                         title=f"{scene}: coste por frame (cada {every}, n={len(frames)})")
     (out_dir / "timing_scene.json").write_text(json.dumps(blob, indent=2))
+    if save_frames:
+        _join_frames(scene, frames, out_dir, dataset_root)
     return out_dir / "timing_scene.png"
+
+
+def _save_rgb(img_rgb: np.ndarray, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR))
+
+
+def _join_frames(scene: str, frames: list[int], out_dir: Path, dataset_root: str) -> None:
+    """Junta original | sam2 | sam3 por frame en scene/compare/ (cv2, barato, sin re-segmentar)."""
+    comp_dir = out_dir / "compare"
+    comp_dir.mkdir(parents=True, exist_ok=True)
+    for fidx in frames:
+        orig, _ = _load_frame(dataset_root, scene, fidx)
+        cols = [_label(orig, "original")]
+        for model in MODELS:
+            p = out_dir / "frames" / model / f"f{fidx:06d}.png"
+            seg = cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)
+            cols.append(_label(seg, model))
+        row = np.hstack(cols)
+        _save_rgb(row, comp_dir / f"f{fidx:06d}.png")
 
 
 def run_point(scene: str, frame: int, model: str, cfg: SamConfig, xy: tuple[int, int],

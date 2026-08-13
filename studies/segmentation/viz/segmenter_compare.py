@@ -11,6 +11,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
+def colored(image: np.ndarray, binary_maps: np.ndarray) -> np.ndarray:
+    """Frame apagado con las capas finales coloreadas (RGB uint8). Para juntar imágenes fuera."""
+    return _segmap(image, binary_maps)
+
+
 def _segmap(image: np.ndarray, binary_maps: np.ndarray) -> np.ndarray:
     """Colorea las capas finales sobre el frame apagado."""
     n = len(binary_maps)
