@@ -85,15 +85,18 @@ class Sam3Segmenter:
         self._dtype = torch.bfloat16
         # Maquinaria oficial de SAM2 (código de Meta, intacto). El modelo SAM2 queda inerte tras el swap.
         self._amg = load_sam(cfg._to_load_sam_dict(), device=device)
-        # Predictor interactivo de SAM3 (soporta _predict por lotes, como el de SAM2).
+        # Predictor interactivo de SAM3 del MODELO DE IMAGEN (misma puerta que el point predictor,
+        # sin cargar el modelo de vídeo). Hay que enchufarle el backbone, como en la vía de tracker.
         if sam3_path not in sys.path:
             sys.path.append(sam3_path)
-        from sam3.model_builder import build_sam3_video_model
-        from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
-        video_model = build_sam3_video_model(load_from_HF=True, device=device)
-        tracker = video_model.tracker
-        tracker.backbone = video_model.detector.backbone
-        self._amg.predictor = SAM3InteractiveImagePredictor(tracker)  # swap: mismo AMG, máscaras de SAM3
+        import os
+        import sam3
+        from sam3 import build_sam3_image_model
+        bpe = os.path.join(os.path.dirname(sam3.__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
+        model = build_sam3_image_model(bpe_path=bpe, enable_inst_interactivity=True)
+        predictor = model.inst_interactive_predictor
+        predictor.model.backbone = model.backbone
+        self._amg.predictor = predictor  # swap: mismo AMG, máscaras de SAM3
         self._warmup()
 
     def _warmup(self) -> None:
