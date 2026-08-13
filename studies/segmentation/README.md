@@ -79,6 +79,10 @@ results/{escena}/f{frame:04d}/
 - **Fase 3**: SAM3.
   - Frente A (mismo punto, SAM2 vs SAM3): **hecho**. `point --model both` carga SAM3
     (`Sam3PointPredictor`, checkpoint `facebook/sam3` vía HF cache) y saca `compare.png`.
+    SAM3 usa la vía **oficial de imagen** del repo sam3 (`build_sam3_image_model` +
+    `Sam3Processor` + `predict_inst`), la misma que `examples/sam3_for_sam1_task_example`.
+    Puntos canónicos de office0/f70 (los que en el AMG dan las máscaras ID4 e ID22):
+    ID4=(1012,404), ID22=(1162,21), recuperados de `record['point_coords']`.
   - Frente B (AMG de SAM3): pendiente. Máscaras del `SAM3AutomaticMaskGenerator`
     (rama `feature/sam3_amg_recovered`) vs SAM2 + coste del encoder troceado, reusando
     el motor de tiempos de la Fase 2.

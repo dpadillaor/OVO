@@ -77,24 +77,37 @@ class SamSegmenter:
 
 
 class Sam3PointPredictor:
-    """Predictor interactivo de SAM3: carga el modelo una vez y pincha puntos (frente A)."""
+    """Predictor de puntos de SAM3 (tarea SAM1), vía oficial de imagen del repo sam3."""
 
     def __init__(self, device: str = "cuda", sam3_path: str = "thirdParty/sam3") -> None:
         self.device = device
         self._dtype = torch.bfloat16
         if sam3_path not in sys.path:
             sys.path.append(sam3_path)
-        from sam3.model_builder import build_sam3_video_model
-        from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
+        import os
+        import sam3
+        from sam3 import build_sam3_image_model
+        from sam3.model.sam3_image_processor import Sam3Processor
 
-        video_model = build_sam3_video_model(load_from_HF=True, device=device)
-        tracker = video_model.tracker
-        tracker.backbone = video_model.detector.backbone
-        self._pred = SAM3InteractiveImagePredictor(tracker)
+        bpe = os.path.join(os.path.dirname(sam3.__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
+        self._model = build_sam3_image_model(bpe_path=bpe, enable_inst_interactivity=True)
+        self._proc = Sam3Processor(self._model)
 
     def predict_point(self, image: np.ndarray, xy: tuple[int, int]) -> PointMasks:
-        """image RGB uint8 + punto (x,y) -> las 3 máscaras multimask de SAM3."""
-        return _predict_point(self._pred, image, xy, self.device, self._dtype)
+        """image RGB uint8 + punto (x,y) -> las 3 máscaras multimask de SAM3 (predict_inst)."""
+        from PIL import Image
+        pil = Image.fromarray(image)
+        coords = np.array([[xy[0], xy[1]]])
+        labels = np.array([1])
+        with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
+            state = self._proc.set_image(pil)
+            masks, scores, _ = self._model.predict_inst(
+                state, point_coords=coords, point_labels=labels, multimask_output=True)
+        return PointMasks(
+            point=(int(xy[0]), int(xy[1])),
+            masks=[np.asarray(m).astype(bool) for m in masks],
+            scores=[float(s) for s in np.asarray(scores).ravel()],
+        )
 
 
 def _predict_point(predictor, image: np.ndarray, xy: tuple[int, int],
