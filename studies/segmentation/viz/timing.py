@@ -42,7 +42,7 @@ def render(named: dict[str, TimingStats], out_path: str, title: str = "") -> Non
     ax.set_yticklabels(labels, fontsize=12, fontweight="bold")
     ax.set_xlabel("ms")
     ax.set_title(title)
-    ax.set_xlim(0, max_total * 1.15)  # hueco a la derecha para el label del total
+    ax.set_xlim(0, max_total * 1.06)  # hueco justo a la derecha para el label del total
     ax.invert_yaxis()
     fig.tight_layout()
     fig.savefig(out_path, dpi=140, bbox_inches="tight")
