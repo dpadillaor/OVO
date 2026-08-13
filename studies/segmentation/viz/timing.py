@@ -8,14 +8,15 @@ import matplotlib.pyplot as plt
 
 from studies.segmentation.core.timing_stats import TimingStats
 
-# segmento -> (atributo, color). Los 4 suman el total.
-#   post = stability/umbral/box-NMS/RLE por crop · overhead = crop-boxes/cross-NMS/ensamblado
-_SEGMENTS = [("encoder", "#2ca02c"), ("decode", "#1f77b4"), ("post", "#ff7f0e"), ("overhead", "#9e9e9e")]
+# segmento -> (atributo, color). Los 3 suman el total.
+#   encoder = backbone sobre la imagen · decode = máscaras por punto · filtering =
+#   limpiar candidatas (pred_iou, stability, box-NMS, RLE) + glue (overhead), no-modelo.
+_SEGMENTS = [("encoder", "#2ca02c"), ("decode", "#1f77b4"), ("filtering", "#ff7f0e")]
 
 
 def _parts(ts: TimingStats) -> dict[str, float]:
     return {"encoder": ts.encoder_ms.mean, "decode": ts.decode_ms.mean,
-            "post": ts.post_ms.mean, "overhead": ts.overhead_ms.mean}
+            "filtering": ts.post_ms.mean + ts.overhead_ms.mean}
 
 
 def render(named: dict[str, TimingStats], out_path: str, title: str = "") -> None:
@@ -37,8 +38,7 @@ def render(named: dict[str, TimingStats], out_path: str, title: str = "") -> Non
         ax.text(left + 3, i, f"{named[label].total_ms.mean:.0f} ms", va="center", fontsize=10, fontweight="bold")
 
     ax.set_yticks(y)
-    ax.set_yticklabels([f"{l}\n(crops={named[l].n_crops}, masks~{named[l].n_masks.mean:.0f}, "
-                        f"vram~{named[l].peak_vram_mb.mean:.0f}MB)" for l in labels])
+    ax.set_yticklabels(labels, fontsize=12, fontweight="bold")
     ax.set_xlabel("ms")
     ax.set_title(title)
     ax.invert_yaxis()
