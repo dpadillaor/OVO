@@ -68,6 +68,26 @@ results/{escena}/f{frame:04d}/
   usa el AMG ni el NMS de OVO, y compara modelos (SAM2 vs SAM3).
 - La ruta la **calcula el cli**, no se nombra a mano.
 
+## Comparabilidad SAM2 vs SAM3 (importante para la tesis)
+El AMG es **el mismo tubo** para los dos: `generate`/`_process_crop`/`_process_batch` de
+Meta (byte a byte), mismo grid (pps=16, crop_n_layers=0), mismos filtros (pred_iou=0.8,
+stability=0.95, box_nms=0.7) y el mismo NMS de OVO después (0.8/0.7/0.5). **Lo único que
+cambia es el predictor.** Comparación apples-to-apples: mismo pipeline, otro modelo.
+
+Qué modelo usa SAM3: `build_sam3_image_model` (modelo de IMAGEN, no vídeo). Su encoder es
+un **`SAM3VLBackbone` de 816M params** (visión-lenguaje, open-vocab); el decoder de máscaras
+es minúsculo (~11M). Frente a SAM2 Hiera-L (~214M), el backbone de SAM3 solo ya es ~3.8x
+todo SAM2. De ahí: pesos ~4x, encoder ~2x en tiempo, activaciones idénticas.
+
+Cautelas (no son perfectamente comparables):
+- Cada predictor redimensiona/normaliza a la resolución nativa de su modelo: mismos puntos
+  del grid, pero cada modelo "ve" la imagen distinto.
+- `pred_iou`/`stability` son la **autoestima de cada modelo**, sin calibrar entre ellos:
+  filtrar a 0.8 no es igual de estricto para los dos, así que el "23 vs 30 máscaras" mezcla
+  diferencia real de segmentación con diferencia de calibración de score.
+- El AMG pincha solo **puntos**: pagas un encoder visión-lenguaje de 816M sin usar su parte
+  de lenguaje.
+
 ## Alcance actual (honesto)
 - Es **un frame suelto** (baseline cualitativa), no evolución temporal entre frames.
 - La evolución mostrada empieza en las máscaras **ya filtradas por el NMS interno de
