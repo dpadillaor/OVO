@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 
 from studies.segmentation.core.timing_stats import TimingStats
 
-# segmento -> (etiqueta, color). "resto" = total - encoder - decode (glue no instrumentado).
-_SEGMENTS = [("encoder", "#2ca02c"), ("decode", "#1f77b4"), ("resto", "#9e9e9e")]
+# segmento -> (atributo, color). Los 4 suman el total.
+#   post = stability/umbral/box-NMS/RLE por crop · overhead = crop-boxes/cross-NMS/ensamblado
+_SEGMENTS = [("encoder", "#2ca02c"), ("decode", "#1f77b4"), ("post", "#ff7f0e"), ("overhead", "#9e9e9e")]
 
 
 def _parts(ts: TimingStats) -> dict[str, float]:
-    enc, dec, total = ts.encoder_ms.mean, ts.decode_ms.mean, ts.total_ms.mean
-    return {"encoder": enc, "decode": dec, "resto": max(total - enc - dec, 0.0)}
+    return {"encoder": ts.encoder_ms.mean, "decode": ts.decode_ms.mean,
+            "post": ts.post_ms.mean, "overhead": ts.overhead_ms.mean}
 
 
 def render(named: dict[str, TimingStats], out_path: str, title: str = "") -> None:

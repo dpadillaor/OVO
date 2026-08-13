@@ -24,10 +24,16 @@ def _now() -> float:
 
 @dataclass
 class CropTiming:
-    """Coste de un crop: encoder (set_image) + decode (batches de _predict) + VRAM pico."""
+    """Coste de un crop: total, encoder (set_image), decode (_predict) y VRAM pico.
+    El post-proceso del crop (stability, RLE, box-NMS...) = total - encoder - decode."""
+    total_ms: float = 0.0
     encoder_ms: float = 0.0
     decode_ms: float = 0.0
     peak_vram_mb: float = 0.0
+
+    @property
+    def post_ms(self) -> float:
+        return max(self.total_ms - self.encoder_ms - self.decode_ms, 0.0)
 
 
 @dataclass
@@ -50,6 +56,16 @@ class FrameProfile:
         return sum(c.decode_ms for c in self.crops)
 
     @property
+    def post_ms(self) -> float:
+        """Post-proceso dentro de los crops: stability, umbral, box-NMS, RLE, uncrop."""
+        return sum(c.post_ms for c in self.crops)
+
+    @property
+    def overhead_ms(self) -> float:
+        """Glue a nivel generate: cajas de crop, cross-crop NMS, ensamblado final."""
+        return max(self.total_ms - sum(c.total_ms for c in self.crops), 0.0)
+
+    @property
     def peak_vram_mb(self) -> float:
         return max((c.peak_vram_mb for c in self.crops), default=0.0)
 
@@ -60,8 +76,9 @@ def profile_frame(segmenter, image: np.ndarray, warmup: int = 1) -> FrameProfile
     for _ in range(warmup):  # primeras pasadas: compilación/autotuning, se descartan
         segmenter.segment(image)
 
+    amg = segmenter._amg
     crops: list[CropTiming] = []
-    orig_set, orig_pred = pred.set_image, pred._predict
+    orig_set, orig_pred, orig_crop = pred.set_image, pred._predict, amg._process_crop
 
     def timed_set(img, *a, **k):
         if torch.cuda.is_available():
@@ -80,12 +97,18 @@ def profile_frame(segmenter, image: np.ndarray, warmup: int = 1) -> FrameProfile
             c.peak_vram_mb = max(c.peak_vram_mb, torch.cuda.max_memory_allocated() / 1024 ** 2)
         return r
 
-    pred.set_image, pred._predict = timed_set, timed_pred
+    def timed_crop(*a, **k):
+        t = _now()
+        r = orig_crop(*a, **k)  # dentro llama a set_image (crea el crop) y _predict
+        crops[-1].total_ms = (_now() - t) * 1000
+        return r
+
+    pred.set_image, pred._predict, amg._process_crop = timed_set, timed_pred, timed_crop
     try:
         t0 = _now()
         records = segmenter.segment(image)
         total = (_now() - t0) * 1000
     finally:
-        pred.set_image, pred._predict = orig_set, orig_pred
+        pred.set_image, pred._predict, amg._process_crop = orig_set, orig_pred, orig_crop
 
     return FrameProfile(total_ms=total, n_masks=len(records), crops=crops)

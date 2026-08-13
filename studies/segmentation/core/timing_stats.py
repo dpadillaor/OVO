@@ -24,11 +24,13 @@ def _stat(xs: list[float]) -> Stat:
 
 @dataclass(frozen=True)
 class TimingStats:
-    """Coste agregado sobre N perfiles (reps o frames)."""
+    """Coste agregado sobre N perfiles (reps o frames). total = encoder+decode+post+overhead."""
     n: int
     total_ms: Stat
     encoder_ms: Stat
     decode_ms: Stat
+    post_ms: Stat
+    overhead_ms: Stat
     peak_vram_mb: Stat
     n_masks: Stat
     n_crops: int
@@ -42,6 +44,8 @@ def aggregate(profiles: list[FrameProfile]) -> TimingStats:
         total_ms=_stat([p.total_ms for p in profiles]),
         encoder_ms=_stat([p.encoder_ms for p in profiles]),
         decode_ms=_stat([p.decode_ms for p in profiles]),
+        post_ms=_stat([p.post_ms for p in profiles]),
+        overhead_ms=_stat([p.overhead_ms for p in profiles]),
         peak_vram_mb=_stat([p.peak_vram_mb for p in profiles]),
         n_masks=_stat([float(p.n_masks) for p in profiles]),
         n_crops=profiles[0].n_crops,
