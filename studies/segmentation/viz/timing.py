@@ -23,6 +23,7 @@ def render(named: dict[str, TimingStats], out_path: str, title: str = "") -> Non
     """Una barra horizontal apilada por modelo; longitud total = total_ms, segmentos etiquetados."""
     labels = list(named)
     y = np.arange(len(labels))
+    max_total = max(named[l].total_ms.mean for l in labels)
     fig, ax = plt.subplots(figsize=(11, 1.6 * len(labels) + 1.5))
 
     for i, label in enumerate(labels):
@@ -41,6 +42,7 @@ def render(named: dict[str, TimingStats], out_path: str, title: str = "") -> Non
     ax.set_yticklabels(labels, fontsize=12, fontweight="bold")
     ax.set_xlabel("ms")
     ax.set_title(title)
+    ax.set_xlim(0, max_total * 1.15)  # hueco a la derecha para el label del total
     ax.invert_yaxis()
     fig.tight_layout()
     fig.savefig(out_path, dpi=140, bbox_inches="tight")
