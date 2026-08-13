@@ -29,11 +29,13 @@ viz/                  # rendering puro; consume DecisionBreakdown
 ├── decision_trace.py # tabla de auditoría de la poda (markdown)
 ├── point_ambiguity.py# pinchar UN punto -> las 3 máscaras dispares (agnóstico al modelo)
 └── segmenter_compare.py # segmap final de sam2 vs sam3, lado a lado
-cli.py                # orquesta (frame->core->viz), calcula rutas y escribe meta.json
+cli.py                # solo argparse + dispatch (fino)
+experiments.py        # orquestación: run_frame/point/compare/timing/scene (carga/libera modelos, I/O)
 results/              # salida, gitignored (regenerable)
 ```
 
-Arquitectura: **I/O (cli) -> puro (core) -> pintado (viz)**, dependencias hacia abajo.
+Arquitectura: **cli (argparse) -> experiments (I/O/orquestación) -> core (puro/medida) -> nada**;
+viz solo recibe datos. Dependencias hacia abajo, sin ciclos.
 
 ### Correr
 ```bash
@@ -46,6 +48,8 @@ conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560 -
 conda run -n ovo2 python -m studies.segmentation compare office0 70
 # coste: total/encoder/decode/VRAM, sam2 vs sam3 (reps para estabilidad)
 conda run -n ovo2 python -m studies.segmentation timing office0 70 --reps 5
+# coste a lo largo de la escena (cada 10 frames = segment_every de OVO), sam2 vs sam3
+conda run -n ovo2 python -m studies.segmentation scene office0 --every 10
 ```
 Flags: `--variant`, `--lenses`, `--points-per-side`, `--crop-n-layers`,
 `--iou-thr/--score-thr/--inner-thr`.
@@ -105,8 +109,10 @@ Cautelas (no son perfectamente comparables):
   `masks`, `removed` (detalle de cada máscara muerta) y `trace` (tabla de auditoría).
 - **Fase 2** (hecha): motor de tiempos re-derivado limpio del worktree `sam2_amg_study`.
   `core/profiling.py` instrumenta el AMG por crop (encoder/decode/VRAM, con sync+warmup);
-  `core/timing_stats.py` agrega (puro); `viz/timing.py` pinta barras; `timing` en el cli.
-  Falta (opcional): barrer multi-crop (`--crop-n-layers>0`) y agregar sobre la trayectoria.
+  `core/timing_stats.py` agrega (puro); `viz/timing.py` barras por frame, `viz/scene_timing.py`
+  líneas por escena. `timing` (1 frame x reps) y `scene` (trayectoria) en el cli. La escena
+  carga cada modelo UNA vez, warmup en el 1er frame, recorre, libera, y el otro (comparación justa).
+  Falta (opcional): barrer multi-crop (`--crop-n-layers>0`).
 - **Fase 3**: SAM3.
   - Frente A (mismo punto, SAM2 vs SAM3): **hecho**. `point --model both` carga SAM3
     (`Sam3PointPredictor`, checkpoint `facebook/sam3` vía HF cache) y saca `compare.png`.
