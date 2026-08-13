@@ -76,6 +76,37 @@ class SamSegmenter:
         return _predict_point(self._amg.predictor, image, xy, self.device, self._dtype)
 
 
+class Sam3Segmenter:
+    """AMG de SAM3: la maquinaria oficial del AMG de SAM2 (grid+filtros+NMS) con el predictor de SAM3."""
+
+    def __init__(self, cfg: SamConfig, device: str = "cuda", sam3_path: str = "thirdParty/sam3") -> None:
+        self.config = cfg
+        self.device = device
+        self._dtype = torch.bfloat16
+        # Maquinaria oficial de SAM2 (código de Meta, intacto). El modelo SAM2 queda inerte tras el swap.
+        self._amg = load_sam(cfg._to_load_sam_dict(), device=device)
+        # Predictor interactivo de SAM3 (soporta _predict por lotes, como el de SAM2).
+        if sam3_path not in sys.path:
+            sys.path.append(sam3_path)
+        from sam3.model_builder import build_sam3_video_model
+        from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
+        video_model = build_sam3_video_model(load_from_HF=True, device=device)
+        tracker = video_model.tracker
+        tracker.backbone = video_model.detector.backbone
+        self._amg.predictor = SAM3InteractiveImagePredictor(tracker)  # swap: mismo AMG, máscaras de SAM3
+        self._warmup()
+
+    def _warmup(self) -> None:
+        dummy = np.random.rand(512, 512, 3).astype(np.uint8)
+        with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
+            self._amg.generate(dummy)
+
+    def segment(self, image: np.ndarray) -> list[dict]:
+        """image (H,W,3) RGB uint8 -> máscaras crudas de SAM3 (mismo formato que SAM2)."""
+        with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
+            return self._amg.generate(image)
+
+
 class Sam3PointPredictor:
     """Predictor de puntos de SAM3 (tarea SAM1), vía oficial de imagen del repo sam3."""
 

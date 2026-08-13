@@ -14,8 +14,9 @@ Dos caras de la misma pregunta:
 ## Qué hay ahora (Fase 1: baseline SAM2, cualitativo)
 
 ```
-core/                 # PURO. Ni modelo, ni disco, ni pintado.
-├── segmenters.py     # frontera con el modelo: frame -> máscaras CRUDAS de SAM2
+core/                 # frontera con el modelo + lógica pura de poda.
+├── segmenters.py     # frame -> máscaras CRUDAS. SamSegmenter (SAM2), Sam3Segmenter
+│                     #   (AMG oficial de SAM2 + predictor SAM3), Sam3PointPredictor
 ├── nms_decision.py   # NMS externo de OVO como cálculo puro -> DecisionBreakdown
 │                     #   (por máscara: kept/removed + qué regla la mató y quién)
 └── tests/            # paridad exacta con ovo.utils.segment_utils.mask_nms
@@ -33,8 +34,9 @@ Arquitectura: **I/O (cli) -> puro (core) -> pintado (viz)**, dependencias hacia 
 
 ### Correr
 ```bash
-# lentes del AMG (pipeline/masks/removed/trace)
-conda run -n ovo2 python -m studies.segmentation frame office0 70
+# lentes del AMG (pipeline/masks/removed/trace) — SAM2 o SAM3
+conda run -n ovo2 python -m studies.segmentation frame office0 70 --model sam2
+conda run -n ovo2 python -m studies.segmentation frame office0 70 --model sam3
 # pinchar un punto -> 3 máscaras multimask (--model sam2|sam3|both)
 conda run -n ovo2 python -m studies.segmentation point office0 70 --xy 600 560 --model both
 ```
@@ -83,9 +85,12 @@ results/{escena}/f{frame:04d}/
     `Sam3Processor` + `predict_inst`), la misma que `examples/sam3_for_sam1_task_example`.
     Puntos canónicos de office0/f70 (los que en el AMG dan las máscaras ID4 e ID22):
     ID4=(1012,404), ID22=(1162,21), recuperados de `record['point_coords']`.
-  - Frente B (AMG de SAM3): pendiente. Máscaras del `SAM3AutomaticMaskGenerator`
-    (rama `feature/sam3_amg_recovered`) vs SAM2 + coste del encoder troceado, reusando
-    el motor de tiempos de la Fase 2.
+  - Frente B (AMG de SAM3): **máscaras hechas**. `frame --model sam3` usa `Sam3Segmenter`
+    = la maquinaria **oficial** del AMG de SAM2 (grid+filtros+NMS de Meta, intacta) con el
+    **predictor de SAM3** enchufado (swap). NO se reusa el AMG rescatado (sin verificar).
+    Todas las lentes de frame funcionan con SAM3 (viz agnóstica). office0/f70: SAM2 23->19,
+    SAM3 30->23. Pendiente: el **coste** (encoder troceado), que llega con el motor de
+    tiempos de la Fase 2.
 - **Fase 4**: figuras finales para el TFM (se curan aparte, a `tfm/figures/`).
 
 ## Notas

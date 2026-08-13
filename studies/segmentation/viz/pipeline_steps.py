@@ -55,7 +55,8 @@ def _overlay(image: np.ndarray, segs: list[np.ndarray], removed: set[int]) -> np
     return np.array(pil)
 
 
-def render(image: np.ndarray, records: list[dict], breakdown: DecisionBreakdown, out_path: str) -> None:
+def render(image: np.ndarray, records: list[dict], breakdown: DecisionBreakdown,
+           out_path: str, raw_label: str = "SAM2") -> None:
     """Guarda el tríptico crudo(N) | poda(kept + X) | segmap(final) en out_path."""
     segs = [r["segmentation"].astype(bool) for r in records]
     removed = {v.index for v in breakdown.removed}
@@ -67,7 +68,7 @@ def render(image: np.ndarray, records: list[dict], breakdown: DecisionBreakdown,
     segmap = _overlay(image, [b.astype(bool) for b in binary_maps], removed=set())
 
     titles = [
-        f"1) SAM2 crudo ({len(segs)})",
+        f"1) {raw_label} crudo ({len(segs)})",
         f"2) NMS OVO ({len(kept_records)} kept, X={len(removed)})",
         f"3) segmap ({binary_maps.shape[0]} capas)",
     ]

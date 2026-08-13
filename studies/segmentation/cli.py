@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from studies.segmentation.core.segmenters import SamConfig, SamSegmenter, Sam3PointPredictor
+from studies.segmentation.core.segmenters import SamConfig, SamSegmenter, Sam3Segmenter, Sam3PointPredictor
 from studies.segmentation.core.nms_decision import scores_from_records, evaluate
 from studies.segmentation.viz import pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity
 
@@ -34,26 +34,28 @@ def _load_frame(dataset_root: str, scene: str, frame: int) -> tuple[np.ndarray, 
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB), path
 
 
-def _write_meta(out_dir: Path, cfg: SamConfig, thr: dict, frame_path: str, counts: dict) -> None:
+def _write_meta(out_dir: Path, model: str, cfg: SamConfig, thr: dict, frame_path: str, counts: dict) -> None:
     """Vuelca meta.json autodescriptivo del run."""
     meta = {
         "variant": out_dir.name,
+        "model": model,  # sam2 | sam3 (con sam3 la maquinaria AMG es la de SAM2, el predictor es SAM3)
         "scene": out_dir.parent.parent.name,
         "frame": int(out_dir.parent.name.lstrip("f")),
         "frame_path": frame_path,
         "resize": list(_RESIZE),
-        "segmenter": asdict(cfg),
+        "amg_params": asdict(cfg),
         "ovo_nms": thr,
         "counts": counts,
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
 
 
-def run(scene: str, frame: int, variant: str, cfg: SamConfig, thr: dict,
+def run(scene: str, frame: int, model: str, variant: str, cfg: SamConfig, thr: dict,
         lenses: tuple[str, ...], dataset_root: str, device: str) -> Path:
     """Ejecuta el estudio sobre un frame y escribe todo en results/{scene}/f{frame}/{variant}/."""
     image, frame_path = _load_frame(dataset_root, scene, frame)
-    records = SamSegmenter(cfg, device=device).segment(image)
+    segmenter = Sam3Segmenter(cfg, device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
+    records = segmenter.segment(image)
     masks, scores = scores_from_records(records)
     breakdown = evaluate(masks, scores, thr["iou_thr"], thr["score_thr"], thr["inner_thr"])
 
@@ -61,7 +63,7 @@ def run(scene: str, frame: int, variant: str, cfg: SamConfig, thr: dict,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if "pipeline" in lenses:
-        pipeline_steps.render(image, records, breakdown, str(out_dir / "pipeline.png"))
+        pipeline_steps.render(image, records, breakdown, str(out_dir / "pipeline.png"), raw_label=model.upper())
     if "masks" in lenses:
         masks_gallery.render(image, records, str(out_dir / "masks"), breakdown)
     if "removed" in lenses:
@@ -70,7 +72,7 @@ def run(scene: str, frame: int, variant: str, cfg: SamConfig, thr: dict,
         decision_trace.render(breakdown, str(out_dir / "trace.md"))
 
     counts = {"n_raw": len(records), "n_kept": len(breakdown.kept), "n_removed": len(breakdown.removed)}
-    _write_meta(out_dir, cfg, thr, frame_path, counts)
+    _write_meta(out_dir, model, cfg, thr, frame_path, counts)
     return out_dir
 
 
@@ -114,7 +116,8 @@ def main() -> None:
 
     pf = sub.add_parser("frame", help="lentes del AMG: pipeline/masks/removed/trace")
     _add_common(pf)
-    pf.add_argument("--variant", default="sam2_baseline", help="etiqueta de la config (carpeta)")
+    pf.add_argument("--model", default="sam2", choices=("sam2", "sam3"))
+    pf.add_argument("--variant", default=None, help="etiqueta de la config (carpeta); por defecto según modelo")
     pf.add_argument("--lenses", nargs="+", default=list(_LENSES), choices=_LENSES)
     pf.add_argument("--iou-thr", type=float, default=0.8)
     pf.add_argument("--score-thr", type=float, default=0.7)
@@ -131,7 +134,8 @@ def main() -> None:
 
     if args.cmd == "frame":
         thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
-        out = run(args.scene, args.frame, args.variant, cfg, thr,
+        variant = args.variant or ("sam3" if args.model == "sam3" else "sam2_baseline")
+        out = run(args.scene, args.frame, args.model, variant, cfg, thr,
                   tuple(args.lenses), args.dataset_root, args.device)
     else:
         out = run_point(args.scene, args.frame, args.model, cfg, tuple(args.xy),
