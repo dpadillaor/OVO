@@ -111,13 +111,18 @@ def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int,
     out_dir = _RESULTS / scene / f"f{frame:04d}" / "compare"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    import gc
+    import torch
     stats, blob = {}, {}
     for model in ("sam2", "sam3"):
         seg = Sam3Segmenter(cfg, device=device) if model == "sam3" else SamSegmenter(cfg, device=device)
         profiles = [profile_frame(seg, image, warmup=1 if r == 0 else 0) for r in range(reps)]
-        ts = aggregate(profiles)
-        stats[model] = ts
-        blob[model] = asdict(ts)
+        stats[model] = aggregate(profiles)
+        blob[model] = asdict(stats[model])
+        del seg  # liberar el modelo antes de medir el siguiente: el pico de VRAM es global al proceso
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     viz_timing.render(stats, str(out_dir / "timing.png"),
                       title=f"{scene}/f{frame} coste AMG (reps={reps})")

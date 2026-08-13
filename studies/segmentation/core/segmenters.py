@@ -83,10 +83,7 @@ class Sam3Segmenter:
         self.config = cfg
         self.device = device
         self._dtype = torch.bfloat16
-        # Maquinaria oficial de SAM2 (código de Meta, intacto). El modelo SAM2 queda inerte tras el swap.
-        self._amg = load_sam(cfg._to_load_sam_dict(), device=device)
-        # Predictor interactivo de SAM3 del MODELO DE IMAGEN (misma puerta que el point predictor,
-        # sin cargar el modelo de vídeo). Hay que enchufarle el backbone, como en la vía de tracker.
+        # Predictor interactivo del MODELO DE IMAGEN de SAM3 (misma puerta que el point predictor).
         if sam3_path not in sys.path:
             sys.path.append(sam3_path)
         import os
@@ -96,8 +93,33 @@ class Sam3Segmenter:
         model = build_sam3_image_model(bpe_path=bpe, enable_inst_interactivity=True)
         predictor = model.inst_interactive_predictor
         predictor.model.backbone = model.backbone
-        self._amg.predictor = predictor  # swap: mismo AMG, máscaras de SAM3
+        self._amg = self._build_amg(predictor, cfg)
         self._warmup()
+
+    @staticmethod
+    def _build_amg(predictor, cfg: SamConfig):
+        """Maquinaria oficial del AMG de SAM2 SIN cargar SAM2: se construye sin __init__ (que exige
+        un modelo) y se le ponen solo los atributos que generate() usa + el predictor de SAM3."""
+        from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+        from sam2.utils.amg import build_all_layer_point_grids
+        amg = SAM2AutomaticMaskGenerator.__new__(SAM2AutomaticMaskGenerator)
+        amg.predictor = predictor
+        amg.point_grids = build_all_layer_point_grids(cfg.points_per_side, cfg.crop_n_layers, 1)
+        amg.points_per_batch = 64
+        amg.pred_iou_thresh = cfg.pred_iou_thresh
+        amg.stability_score_thresh = cfg.stability_score_thresh
+        amg.stability_score_offset = 1.0
+        amg.mask_threshold = 0.0
+        amg.box_nms_thresh = 0.7
+        amg.crop_n_layers = cfg.crop_n_layers
+        amg.crop_nms_thresh = 0.7
+        amg.crop_overlap_ratio = 512 / 1500
+        amg.crop_n_points_downscale_factor = 1
+        amg.min_mask_region_area = cfg.min_mask_region_area
+        amg.output_mode = "binary_mask"
+        amg.multimask_output = True
+        amg.use_m2m = cfg.use_m2m
+        return amg
 
     def _warmup(self) -> None:
         dummy = np.random.rand(512, 512, 3).astype(np.uint8)

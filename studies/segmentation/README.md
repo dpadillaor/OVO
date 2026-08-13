@@ -99,7 +99,9 @@ results/{escena}/f{frame:04d}/
     intacta) con el predictor interactivo del **modelo de imagen** de SAM3 (misma puerta que
     el point predictor; backbone enchufado a mano). NO se reusa el AMG rescatado (sin verificar).
     Todas las lentes de frame funcionan con SAM3 (viz agnóstica). office0/f70: SAM2 23->19,
-    SAM3 30->23. Coste (`timing`): SAM3 ~1.4x total, encoder ~2x, VRAM ~2.4x que SAM2.
+    SAM3 30->23. Coste (`timing`): SAM3 ~1.4x total, encoder ~2x. VRAM SAM2 2.9GB / SAM3 6.0GB:
+    la diferencia son los PESOS (SAM3 ~4x más pesado, 4GB vs 1GB); las activaciones son
+    idénticas (~2GB). El AMG de SAM3 NO carga ningún SAM2 (se construye sin __init__).
 - **Fase 4**: figuras finales para el TFM (se curan aparte, a `tfm/figures/`).
 
 ## Notas
