@@ -1,4 +1,413 @@
-\chapter{Preliminaries: OVO}
+\chapter{The OVO System}
 \label{ch:preliminaries}
 
-% Introduce OVO and explain its limitations
+\begin{otherlanguage}{english}
+
+OVO~\parencite{berrielmartins2024ovo} is an online open-vocabulary 3D semantic mapping system, and
+the foundation on which this thesis is built. Any improvement to it first requires understanding what
+the system produces and how its components fit together; on that basis we can identify which elements
+bear on this work's object of study and reason about where it is worth intervening.
+
+This chapter walks through those fundamentals in order: the 3D representation it produces, the
+architecture with which it couples a SLAM backbone to semantic instance segmentation, the instance
+fusion at loop closure on which the later contributions act, and, to close, the limitations that open
+the rest of the thesis.
+
+\section{System overview}
+\label{sec:ovo_overview}
+
+OVO is a system that, from a stream of RGB-D keyframes with their poses, produces a \textbf{dense
+reconstruction} of the scene: a 3D point cloud in which each object is recovered as a distinct
+\emph{3D instance}, described by an open-vocabulary semantic vector. Unlike closed-vocabulary methods,
+the instance is not classified into a fixed set of categories: it is associated with a descriptor
+computed by a vision-language model (CLIP,~\cite{radford2021clip}), which projects images and text
+into a common space. The scene can thus be queried with natural language, by cosine similarity
+between the query text and the instance descriptors (Figure~\ref{fig:ovo_queries}).
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{ovo_queries}
+  \caption{Open-vocabulary queries on an OVO map: each natural-language query highlights its
+    matching instances. Adapted from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_queries}
+\end{figure}
+
+OVO builds this representation in an \emph{online}, incremental fashion: instead of reprocessing the
+whole scene, it integrates each new keyframe onto the existing map, which grows as the camera
+explores the environment (Figure~\ref{fig:ovo_semantic_map}).
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.6\textwidth]{ovo_semantic_map}
+  \caption{Output of OVO on a Replica sequence: an open-vocabulary semantic map built
+    incrementally as the camera explores the scene. Adapted from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_semantic_map}
+\end{figure}
+
+To sustain that pace, OVO adopts the parallel tracking and mapping principle~\parencite{klein2007ptam},
+common in visual SLAM: keep a fast thread following the camera and decouple the heavier work from it.
+OVO applies that same principle to separate two jobs it runs asynchronously:
+
+\begin{itemize}
+  \item \textbf{Geometric reconstruction.} Backprojects each keyframe's depth to 3D using the poses
+    $T_n$ estimated by the SLAM backbone, building the dense point cloud on which the semantics act.
+    Where the pose comes from, a real SLAM or a ground-truth reference, is immaterial to it: geometry
+    is merely the ground it works on.
+  \item \textbf{Semantic identification.} Combines three ingredients: the 2D masks that a segmenter
+    (SAM~2.1,~\cite{ravi2024sam2}) extracts from each keyframe, the reprojection of the cloud onto
+    the image plane, and an open-vocabulary descriptor (CLIP). By reprojecting the cloud under each
+    mask, an association mechanism decides whether to create a new instance or propagate an existing
+    one to those points (Section~\ref{sec:ovo_segment_mapper}). Each instance is further assigned
+    that descriptor, which encodes its semantics and allows it to be queried with natural language
+    (Section~\ref{sec:ovo_descriptors}).
+\end{itemize}
+
+Both write to a single map $\mathcal{M} = \{\mathcal{T}, \mathcal{P}, \mathcal{S}\}$: the keyframe
+poses $\mathcal{T}$, the dense point cloud $\mathcal{P}$, and the set of 3D instances $\mathcal{S}$.
+Each point $P = ([x\,y\,z]^\top, l_p)$ gathers the two contributions: the 3D coordinates fixed by
+geometry and a \textbf{discrete label} $l_p \in \{-1, 0, 1, \dots, q\}$ that points to its instance
+and is filled by the semantics ($l_p = -1$ while unassigned).
+
+\section{Geometric reconstruction}
+\label{sec:ovo_geometric}
+
+Of the map's three components (Section~\ref{sec:ovo_overview}), the poses $\mathcal{T}$ are estimated
+by the SLAM and the instances $\mathcal{S}$ are the semantic part's business
+(Section~\ref{sec:ovo_semantic}). Geometric reconstruction handles the third, the dense point cloud
+$\mathcal{P}$: it builds it from the poses, without estimating them, to raise and maintain the
+geometry on which the rest of the system acts. It does so in three operations:
+
+\begin{itemize}
+  \item \textbf{Building the cloud.} For each keyframe $k_n$, OVO adds the scene's 3D points to
+    $\mathcal{P}$. If the SLAM backbone already estimates a dense cloud, OVO concatenates those points
+    directly; otherwise it obtains them by backprojecting the keyframe's depth to 3D with the pose
+    $T_n$. In practice, a dense SLAM (Gaussian-SLAM) provides the cloud, whereas with a sparse SLAM
+    (ORB-SLAM2) or ground-truth poses OVO resorts to backprojection. Each point is born with
+    $l_p = -1$, that is, with no semantics assigned yet.
+  \item \textbf{Geometric coherence.} So that $\mathcal{P}$ does not grow unchecked when revisiting an
+    area, OVO does not add points where they already exist. It projects the existing ones onto the
+    keyframe and discards every pixel where an already-projected point falls in its neighborhood
+    \emph{and} matches the depth measured by the sensor, within a threshold; that agreement
+    distinguishes a re-seen surface from another hidden behind it. The remaining pixels, surface not
+    yet seen, do generate points.
+  \item \textbf{Correction at loop closure.} The SLAM accumulates drift, so the same object seen in
+    two passes may end up \textbf{duplicated} into two separate instances. On closing a loop, the
+    SLAM corrects the trajectory and OVO re-transforms the cloud, carrying each point's label $l_p$:
+    the geometry is corrected without losing the semantics, but the two duplicates now sit
+    \textbf{superimposed}. Undoing them is what the instance fusion mechanism attacks, triggered at
+    that moment (Section~\ref{sec:ovo_fusion_lc}).
+\end{itemize}
+
+\section{Semantic identification}
+\label{sec:ovo_semantic}
+
+On the cloud produced by geometric reconstruction, semantic identification assigns each point to an
+instance and describes each instance so it can be queried. Its three pieces are detailed below: how
+instances are associated and tracked frame to frame, how their descriptor is computed, and how they
+are fused when the SLAM closes a loop.
+
+\subsection{3D instance segmentation and tracking}
+\label{sec:ovo_segment_mapper}
+
+Geometric reconstruction delivers an unlabeled point cloud ($l_p = -1$). Populating it with
+instances, creating and tracking them as the camera advances, is the task of this first piece: here
+$\mathcal{S}$, the map's third component (Section~\ref{sec:ovo_overview}), is born.
+
+\paragraph{The instance.} A 3D instance is described by $S = (\mathbf{d}, \kappa)$: a semantic
+descriptor $\mathbf{d}$ and a list $\kappa$ of the keyframes from which it is best observed. The
+bridge between the cloud and the instances is the \emph{per-point} label $l_p$
+(Section~\ref{sec:ovo_overview}): it links each point with its instance, is the finest unit of the
+representation, and the variable on which the later contributions act.
+
+\paragraph{The association loop.} The 3D segment mapper (Algorithm~\ref{alg:segment_mapper}) is the
+mechanism responsible for creating and tracking instances. For each keyframe $k_n$ it decides which
+2D masks correspond to already-seen instances and which are new objects, through an
+\textbf{association by projection and voting}. SAM splits $k_n$ into masks $\tilde{\mathcal{S}}_n$;
+the map points visible under the pose $T_n$ are projected onto the image plane (discarding those
+occluded by depth), each carrying its label $l_p$. For each mask $s$ the \emph{mode} of those labels
+is taken, $z_l := \arg\max_{l_p} (\tilde{\mathcal{P}}_n \cap s)$, with its votes $v$. If
+$v \le \epsilon$ the mask is discarded for lack of evidence; if $z_l = -1$ it is a \textbf{new object}
+($S_{q+1}$ is created with an empty descriptor); and if $z_l$ is an existing instance, the mask
+\textbf{is that instance seen again} and $k_n$ is added to it as a view. Finally the winning label is
+propagated to the \emph{unassigned} points under the mask and to the mask itself, and
+$(k_n, \tilde{\mathcal{S}}_n)$ is queued in $\mathcal{Q}$ for the descriptor.
+
+\begin{algorithm}[h!]
+  \refstepcounter{algorithm}\label{alg:segment_mapper}%
+  \hrule height 0.8pt\vspace{3pt}
+  \noindent\textbf{Algorithm~\thealgorithm}\quad 3D Segment Mapper\par
+  \vspace{2pt}\hrule\vspace{3pt}
+  \newcommand{\fn}[1]{\textsc{#1}}
+  \newcommand{\I}[1]{\hspace*{#1.4em}}
+  \newcommand{\cm}[1]{\quad\textcolor{gray}{$\triangleright$ \textit{#1}}}
+  {\small
+  \begin{tabular}{@{}r@{\;\;}l@{}}
+     1: & \textbf{function} \fn{3d\_segment\_mapper}$(\mathcal{P}, \mathcal{S}, k_n, T_n)$ \\
+     2: & \I1$\tilde{\mathcal{S}}_n \gets \fn{segment\_keyframe}(k_n)$ \cm{2D masks (SAM)} \\
+     3: & \I1$\tilde{\mathcal{P}}_n \gets \fn{project\_point\_cloud}(\mathcal{P}, T_n)$ \cm{projected map points} \\
+     4: & \I1\textbf{for each} $(s, l_s) \in \tilde{\mathcal{S}}_n$ \textbf{do} \\
+     5: & \I2$\mathit{mode}, v \gets \fn{get\_label\_mode\_and\_votes}(\tilde{\mathcal{P}}_n, s, \epsilon)$ \\
+     6: & \I2\textbf{if} $v > \epsilon$ \textbf{then} \cm{enough evidence} \\
+     7: & \I3\textbf{if} $\mathit{mode} = -1$ \textbf{then} \cm{new object} \\
+     8: & \I4$S_{q+1} \gets \fn{new\_3d\_segment}(q{+}1, n, s)$;\ \ $\mathcal{S} \gets \mathcal{S} \cup \{S_{q+1}\}$;\ \ $l_s \gets q{+}1$ \\
+     9: & \I3\textbf{else} \cm{already-seen instance} \\
+    10: & \I4$\mathcal{S} \gets \fn{update\_3d\_segment}(S_{\mathit{mode}}, n, s)$;\ \ $l_s \gets z_l$ \\
+    11: & \I1$\tilde{\mathcal{S}}_n \gets \fn{merge\_and\_prune\_2d\_segments}(\tilde{\mathcal{S}}_n)$ \\
+    12: & \I1$\mathcal{P} \gets \fn{update\_pcd\_labels}(\mathcal{P}, \tilde{\mathcal{P}}_n, \tilde{\mathcal{S}}_n)$ \\
+    13: & \I1\textbf{return} $\mathcal{P}, \mathcal{S}, \tilde{\mathcal{S}}_n$ \\
+  \end{tabular}}
+  \vspace{-2pt}\hrule
+\end{algorithm}
+
+This loop is OVO's \textbf{temporal association}: it links 2D masks with 3D instances through
+projection and majority vote, without 2D tracking. Two properties prove decisive in the later
+analysis: the association is resolved over the \emph{per-point} label $l_p$, and it depends entirely
+on the projected geometry being correct (Chapter~\ref{ch:geometric_consistency}).
+
+\subsection{Instance descriptors}
+\label{sec:ovo_descriptors}
+
+The segment mapper creates and maintains the instances $\mathcal{S}$, but leaves them
+\emph{undescribed}: the descriptor $\mathbf{d}$ of $S = (\mathbf{d}, \kappa)$ remains pending. This
+piece does not create instances, it gives them semantics. That descriptor is a CLIP vector in the
+language-image space that allows the instance to be queried with free text. Computing it is OVO's
+most expensive step, so it does not happen at every keyframe: the pairs $(k_n, \tilde{\mathcal{S}}_n)$
+produced by the association wait in the queue $\mathcal{Q}$ (Section~\ref{sec:ovo_segment_mapper}) and
+are processed when resources are available. When a pair is taken from the queue, a descriptor is
+computed for each mask whose keyframe is still present in its instance's heap $\kappa$, and the
+instance descriptor is re-selected as the most representative of that heap: the view with the
+smallest aggregated distance to the rest. An instance's semantics are thus refined as $\kappa$
+accumulates better views, not at a fixed instant.
+
+The descriptor of each 2D mask is not a direct CLIP but the fusion of three: that of the full
+keyframe, that of the mask with the background removed, and that of the rectangular crop (bounding
+box) containing it. OVO combines them into one through a weighted average whose \emph{per-dimension}
+weights are predicted by a small network, rather than fixed by hand (Figure~\ref{fig:ovo_overview}):
+the three pass through a transformer encoder and an MLP that, after a softmax, yields the mixing
+weights, a network pretrained with a SigLIP loss~\parencite{zhai2023siglip}. Queries are resolved by
+cosine similarity between the encoded text and the instance descriptors (Figure~\ref{fig:ovo_queries}).
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{ovo_overview}
+  \caption{The OVO pipeline for obtaining a merged CLIP descriptor per instance. Adapted
+    from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_overview}
+\end{figure}
+
+\subsection{Instance fusion at loop closure}
+\label{sec:ovo_fusion_lc}
+
+We saw in geometric reconstruction (Section~\ref{sec:ovo_geometric}) that, after a loop closure, the
+duplicates that drift had separated end up superimposed on the same object. \emph{Instance fusion at
+loop closure} is the mechanism OVO launches at that moment to undo them
+(Figure~\ref{fig:ovo_loop_closure}), and the starting point of this thesis.
+
+Before comparing anything, OVO gets the map ready. It re-transforms the geometry with the corrected
+poses, as we already saw (Section~\ref{sec:ovo_geometric}): each keyframe's local cloud passes
+through $\mathcal{P}_n := T'_n T_n^{-1} \mathcal{P}_n$. Keyframes removed by the optimization are
+discarded along with their points, the queue $\mathcal{Q}$ of pending descriptors
+(Section~\ref{sec:ovo_descriptors}) is cleared, and instances whose points vanished entirely are
+pruned from $\mathcal{S}$. Only then, on the already-corrected map, does fusion begin.
+
+The fusion mechanism exists to reunite those superimposed duplicates: it goes over every remaining
+pair of instances and decides, pair by pair, whether they are the same object registered twice. Three
+conditions must hold to fuse a pair, and the implementation checks them in a cascade, from cheapest
+to most expensive, discarding the pair as soon as one fails:
+
+\begin{itemize}
+  \item \textbf{Centroid.} The centroids of the two clouds must be less than $150\,\text{cm}$ apart.
+    Purely geometric and cheap, it rules out most distant pairs at a stroke.
+  \item \textbf{Descriptor.} The cosine similarity between their CLIP descriptors must exceed $0.8$,
+    checking that they share semantics before paying for the most expensive criterion.
+  \item \textbf{Overlap.} It measures what fraction of the smaller instance's points fall within
+    $10\,\text{cm}$ of the other. It is not a single threshold: the pair passes if that fraction
+    exceeds $50\,\%$, or exceeds $20\,\%$ when the semantics are very strong (cosine $> 0.9$), which
+    rescues weaker overlaps. It is the most expensive criterion, because it traverses the points of
+    both clouds, and the only one that checks that the two truly occupy the same volume.
+\end{itemize}
+
+The three combine as a logical conjunction, with fixed thresholds common to the whole scene: a pair
+fuses only if it meets all three. Fusing $S_i, S_j$ then reduces to reassignment: their reference
+keyframe lists are merged, $\kappa_i := \kappa_i \cup \kappa_j$, and every point labeled $j$ moves to
+$i$ ($l_p := i$ for all $P$ with $l_p = j$). Instance $S_j$ disappears; its points and its views are
+absorbed by $S_i$, whose descriptor is re-selected over the enlarged set of views
+(Section~\ref{sec:ovo_descriptors}).
+
+This cascade is the only mechanism with which OVO joins instances, and it contemplates a single
+scenario: the duplicates a loop closure leaves superimposed. It is, moreover, the point around which
+the rest of the thesis is articulated. Two features of its design foreshadow this: the decision is
+\emph{a single binary answer} built from a conjunction of gates, and it is taken \emph{at the level
+of the whole instance}, fusing or not an entire pair. Chapter~\ref{ch:contest} examines what it
+implies that a mechanism of this shape has to arbitrate situations of very different natures.
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.72\textwidth]{ovo_loop_closure}
+  \caption{Instance fusion at loop closure: drift-induced duplicates (top) merged after the loop
+    closes (bottom). OVO-ORB-SLAM2, ScanNet. Adapted from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_loop_closure}
+\end{figure}
+
+\section{Analyzing the semantics for improvement}
+\label{sec:ovo_factors}
+
+Before pointing out what can be improved in OVO's semantic part, it is worth fixing how its quality
+is measured, because not everything is measured the same way. A semantic map can fail in two
+independent ways: getting an instance's geometry right but its label wrong, or labeling well an
+object that was poorly segmented (split in two, merged with its neighbor, incomplete). Each failure
+is captured by a different family of metrics:
+
+\begin{itemize}
+  \item \textbf{Class-aware} (mIoU, mAcc). They compare each point's label with the GT's. They
+    measure \emph{semantic} quality, which depends above all on the descriptor.
+  \item \textbf{Class-agnostic} (agnostic AP). They compare the instance segmentation with the GT's
+    \emph{without looking at the class}. They measure whether the object was recovered as a correct
+    instance.
+\end{itemize}
+
+Both families are defined in detail in Chapter~\ref{ch:benchmark}; here the distinction suffices,
+because it is the rule by which to classify everything that follows: each factor involved hits one of
+the two axes, or both.
+
+With that rule, and the system now presented in full, we can take the step of analyzing it piece by
+piece. The diagram (Figure~\ref{fig:ovo_architecture}), by separating responsibilities, isolates the
+factors that condition semantic quality. Some are \textbf{external inputs} that OVO consumes but does
+not govern; others, decisions of its \textbf{own design}. The next two subsections go through them in
+that order, each with its summary table: what each factor contributes, how it fails, and which
+quality axis it compromises.
+
+\begin{figure}[h!]
+  \centering
+  \makebox[\textwidth][c]{\includegraphics[width=1.18\textwidth]{ovo_architecture}}
+  \caption{OVO as an orchestrator of two trackings over a shared state.}
+  \label{fig:ovo_architecture}
+\end{figure}
+
+\subsection{What OVO depends on}
+\label{sec:ovo_external}
+
+These factors are inputs that OVO consumes but does not control; their quality caps what the semantic
+part can achieve (Table~\ref{tab:factors_external}).
+
+\begin{table}[h!]
+  \centering
+  \small
+  \setlength{\tabcolsep}{8pt}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{@{}l >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{5.9cm} l@{}}
+    \toprule
+    \textbf{Factor} & \textbf{Role} & \textbf{How it fails} & \textbf{Axis} \\
+    \midrule
+    Geometry & Cloud by reprojection & Drift: false reprojections, duplicates, masks propagated onto foreign instances & Agnostic \\
+    \cmidrule(l{0pt}r{0pt}){1-4}
+    \multirow{3}{*}{Segmenter}
+      & Tracking opportunities & Few or no masks: chances to create or track instances are lost & Agnostic \\
+      & Mask quality           & An erroneous mask at the wrong moment seeds an error that propagates & Agnostic \\
+      & Granularity            & Decides what an instance is; may not match the GT (splits or merges objects) & Agnostic \\
+    \cmidrule(l{0pt}r{0pt}){1-4}
+    \multirow{2}{*}{Descriptor}
+      & Instance semantics & Poorly discriminative: weak label & Aware \\
+      & Fusion arbiter     & Poorly discriminative: ambiguous fusions & Both \\
+    \bottomrule
+  \end{tabular}
+  \caption{External factors OVO consumes: their roles, how each fails, and which metric axis it hits.}
+  \label{tab:factors_external}
+\end{table}
+
+\textbf{Geometry} opens the chain. OVO does not reason over images but over the cloud it reprojects
+onto each keyframe's plane, so the whole association rests on that reprojection landing where it
+should. With ideal geometry (ground-truth poses) the problem stays clean and any observed failure is
+intrinsic to the semantics; with a real SLAM, drift shifts the points, the reprojections lie, and
+duplicates appear along with masks that propagate onto the wrong instances. That is why the geometric
+source is not an assembly detail: it decides whether we study OVO's own problems or the ones it
+inherits from tracking.
+
+And there is a nuance that aggravates this dependence. The only geometric correction OVO listens to
+is that of loop closure: when the SLAM closes a loop, it re-transforms the cloud and re-synchronizes
+it with the corrected trajectory. But the back-end refines the map continuously with local bundle
+adjustment, and OVO does not pick that up. Between loop closures, or if the loop never occurs, the
+cloud OVO maintains drifts little by little from the real map that the SLAM does update; and since the
+whole association relies on reprojections, that silent divergence translates into errors.
+
+The \textbf{segmenter} sets the granularity, since it decides what an instance is, and it intervenes
+in three ways. It marks the \emph{opportunities} to track: each mask is a chance to create or track
+an instance, and its absence a chance lost. It imposes a \emph{quality} ceiling: an erroneous mask at
+the wrong moment seeds an instance that is already born wrong. And its \emph{granularity} may not
+match the GT's, splitting one object into several instances or merging two into one.
+
+The \textbf{descriptor} plays two roles. It sets the class-aware quality, the semantic label of each
+instance; and it acts as the arbiter of fusion, where the less discriminative it is, the harder it
+becomes to tell two similar objects from two views of the same one.
+
+\subsection{What OVO decides}
+\label{sec:ovo_internal}
+\label{sec:fm_scope_limit}% scope limit del merge: lo referencia \ref{ch:contest}
+
+Against those inputs, these two factors are OVO's internal decisions, and therefore the ones the
+thesis can intervene on directly (Table~\ref{tab:factors_internal}).
+
+\begin{table}[h!]
+  \centering
+  \small
+  \setlength{\tabcolsep}{8pt}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{@{}l >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{5.9cm} l@{}}
+    \toprule
+    \textbf{Factor} & \textbf{Role} & \textbf{How it fails} & \textbf{Axis} \\
+    \midrule
+    Initial creation & Registering instances & Immutable decision: the initial error is not undone, it propagates & Agnostic \\
+    \cmidrule(l{0pt}r{0pt}){1-4}
+    Fusion & Correcting duplicates & Only joins overlapping ones; blind to splits and over-segmentation & Both \\
+    \bottomrule
+  \end{tabular}
+  \caption{OVO's own design decisions: their roles, how each fails, and which metric axis it hits.}
+  \label{tab:factors_internal}
+\end{table}
+
+\textbf{Initial creation} of instances is imperative and \textbf{immutable}: the association
+(Section~\ref{sec:ovo_segment_mapper}) registers the instance on its first sighting and there is no
+going back. A segmentation error at that moment is not corrected; it propagates to every subsequent
+keyframe through the propagation mechanism itself.
+
+\textbf{Fusion} is OVO's only corrective mechanism, and its reach is narrow: it acts only when two
+instances \emph{overlap} after a loop closure. That condition, overlap, leaves out whole classes of
+problems. An instance born poorly segmented does not overlap with anything that would fix it; a mask
+disputed by several instances over the sequence produces no overlap the fusion can arbitrate; and a
+granularity that does not match the GT's, an object split into pieces or two merged into one, is
+likewise not corrected, because there are no two superimposed clouds to join. In none of those cases
+does the overlap on which fusion depends exist, so OVO simply lacks a mechanism to address them: the
+failures, once seeded, have no one to repair them (Section~\ref{sec:ovo_limitations}).
+
+\section{Limitations}
+\label{sec:ovo_limitations}
+
+OVO's own authors point out three limitations of the system~\parencite{berrielmartins2024ovo}:
+generalization to large-scale outdoor scenes (with different class distributions, illumination, and
+larger tracking errors), a slight bias of the CLIP merging toward the classes seen in training, and
+that instance fusion at loop closure, though it effectively corrects odometric drift, \enquote{sometimes
+misses instances that should be fused}. The first two fall outside the scope of this work; it is the
+third that we take as a starting point and place in a broader frame: the fusion mechanism carries
+three structural limitations.
+
+\begin{itemize}
+  \item \textbf{A single binary decision for several distinct questions.} Accepting or rejecting a
+    pair depends, all at once, on whether the geometry is stale, whether the 2D segmentation came in
+    wrong, whether the descriptor is ambiguous, and whether the object is one or two. A single
+    threshold cannot arbitrate four independent questions.
+  \item \textbf{All-or-nothing granularity.} The decision is taken over the whole instance, but many
+    failures are \emph{partial} (part of an object right, part wrong). A partial failure can only be
+    corrected by a partial decision, at the point level.
+  \item \textbf{Geometry is assumed to remain valid.} Fusion decides over the points' current
+    positions, but local Bundle Adjustment keeps deforming the map underneath, without the semantic
+    layer noticing.
+\end{itemize}
+
+These three limitations organize the rest of the work. First one must be able to \emph{measure} a
+fusion decision (Chapter~\ref{ch:benchmark}); from there, each limitation is attacked on its own
+terrain: the granularity of the assignment (Chapters~\ref{ch:instance_tracking}
+and~\ref{ch:contest}), the geometric substrate underneath it
+(Chapter~\ref{ch:geometric_consistency}), and the fusion criterion itself
+(Chapter~\ref{ch:fusion}).
+
+\end{otherlanguage}

@@ -1,0 +1,404 @@
+\chapter{Contest: Point-Level Instance Arbitration}
+\label{ch:contest}
+
+% PRESUPUESTO: ~8 pp. El capítulo más largo: es la contribución estrella.
+% CONTRIBUCIÓN 4.
+%
+% ORDEN: este capítulo y el \ref{ch:geometric_consistency} son intercambiables.
+% NO escribir referencias de orden ("como vimos en el capítulo anterior").
+% NOTA: capítulo traducido al inglés (2026-07-29). Envuelto en otherlanguage{english}.
+
+\begin{otherlanguage}{english}
+
+\section{From instance to point}
+\label{sec:contest_granularity}
+
+As already seen, OVO separates two tasks: the \emph{geometric} reconstruction of the map, run by the
+SLAM, and a \emph{semantic} layer of assignment and classification mounted on top of that
+reconstruction. Each new keyframe contributes geometry, but the reconstruction does not accumulate
+everything it sees without criterion: to keep the map coherent, before adding points it checks which
+part of what it observed corresponds to already-reconstructed surface and discards it. Only regions
+seen for the first time generate new points; what is already reconstructed is not duplicated, it
+merely notes that it has been observed again. The result is a \emph{deduplicated} cloud: one point
+per physical surface, not one per observation.
+
+It is a sound design decision, for two reasons. It bounds the map's scale to the scene's area rather
+than to the trajectory's length: a wall seen a hundred times is still a wall, not a hundred layers of
+points. And it avoids stacking slightly misaligned reconstructions of the same surface, which would
+blur it. That geometric permanence is well earned: a surface's position is a \emph{fact} that does
+not change, and treating it as fixed is the right thing to do.
+
+On top of that reconstruction the semantic layer is mounted. Each point carries an owner, the
+instance it belongs to, and that owner is fixed by the first SAM mask that gathered enough votes to
+claim the point, whether by creating a new instance or by adjudicating it to one that already existed
+and under which it fell. The semantic layer thus inherits geometry's permanence: once assigned, the
+point keeps its owner for the whole life of the map. But the two permanences are not worth the same.
+A point's position is a measured fact; its owner is a hypothesis, that of a single mask at a single
+instant, never revisited.
+
+Hence the rigidity. However many keyframes later show that the correct owner is another, there is no
+lever to change it. Dedup makes it worse: the surface already exists, so the mask that would later
+claim it reprojects onto \emph{foreign} points and creates no points of its own to compete with. The
+dispute never surfaces as geometry; it stays buried in the moment of the first assignment.
+
+That is why the loop-closure fusion mechanism (\ref{sec:fm_scope_limit}) cannot reach these failures.
+That \emph{merge} joins two instances when their clouds overlap, and dedup prevents that overlap from
+existing: the misassigned points have no correct copy on top of them, they are the same points with
+the wrong owner. With no two clouds to compare, the merge has nothing to trigger on. Three
+situations, recurrent in practice, illustrate it (Figure~\ref{fig:contest_cases}).
+
+\begin{figure}[htbp]
+  \centering
+  % PLACEHOLDER: sustituir cada \fbox por \includegraphics de un screenshot de Rerun (PNG),
+  % cada uno un montaje Antes | Después sobre nube coloreada por instancia.
+  % Escena + IDs de instancia por fijar (candidato para reusar como figura de fallo del Ch1).
+  \newcommand{\caseph}[1]{\fbox{\parbox[c][2.2cm][c]{0.96\linewidth}{\centering\footnotesize\itshape #1}}}
+  \begin{subfigure}{\linewidth}
+    \centering\caseph{Before: contaminated chunk \quad$\vert$\quad After: chunk returned}
+    \caption{Birth under a foreign mask.}
+    \label{fig:contest_case_a}
+  \end{subfigure}\\[4pt]
+  \begin{subfigure}{\linewidth}
+    \centering\caseph{Before: revisit split into two instances \quad$\vert$\quad After: reunited}
+    \caption{Partial revisit.}
+    \label{fig:contest_case_b}
+  \end{subfigure}\\[4pt]
+  \begin{subfigure}{\linewidth}
+    \centering\caseph{Before: orphan fragment on the floor \quad$\vert$\quad After: reabsorbed}
+    \caption{Inconsistent segmenter granularity.}
+    \label{fig:contest_case_c}
+  \end{subfigure}
+  \caption{The three failure modes beyond the merge's reach (left), resolved by the contest (right).}
+  \label{fig:contest_cases}
+\end{figure}
+
+\paragraph{Case A: birth under a foreign mask.}
+An object enters the field of view and SAM segments it together with another that is not its own: a
+single mask covers both. The points of the two objects are born under the same instance. Later, when
+the object is seen unobstructed and SAM segments it well, the new instance is created correctly, but
+the chunk trapped in the first one already has an owner and no one returns it. The contamination is
+permanent (Figure~\ref{fig:contest_case_a}).
+
+\paragraph{Case B: the partial revisit.}
+An object is seen partially and leaves the scene before consolidating. On re-entering from another
+side, the view is better and it is assigned a new instance that grows healthy. Even if in some later
+keyframe SAM's masks segment well the chunk that had already been seen the first time, those points
+still belong to the old instance. The two should be one, but they do not overlap (they are the same
+surface seen at two moments, not two copies in the same place), so the merge does not consider them
+candidates and never joins them (Figure~\ref{fig:contest_case_b}).
+
+\paragraph{Case C: inconsistent segmenter granularity.}
+SAM does not segment with a stable granularity: sometimes it splits hairs and breaks a large surface
+(the floor is the typical case), other times it gives it whole. If the first sighting of an area
+over-splits it and the rest of the trajectory sees it complete, the initial fragment remains a tiny
+instance \emph{inside} the large one. It falls within it in every subsequent frame, but having an
+owner already it is not reabsorbed: the merge, again, sees no duplicates to join
+(Figure~\ref{fig:contest_case_c}).
+
+The three share a root, and it is not a poorly calibrated heuristic: they are failures \emph{outside
+the domain} of the existing mechanisms. Each one fulfills its responsibility, dedup the geometric
+coherence and loop-closure fusion the duplications from drift or revisit, but none \emph{refines} the
+assignments in light of what is observed afterward. That is the gap the contest fills, and it does
+not go through undoing dedup but through making a point's owner revisable by evidence instead of fixed
+by the first mask: the geometry stays frozen, the semantics stop being so. The refinement rests on
+two decisions.
+
+\begin{enumerate}
+  \item \textbf{Decision granularity.}
+  A partial failure is only fixed by a partial decision. If the unit of decision is the whole
+  instance, \enquote{this chunk belongs to B} cannot even be posed: either the whole instance moves
+  or none of it. By lowering the decision to the point, each point can change owner on its own, and
+  the classic \emph{merge} becomes the extreme case in which it turns out that all the points of an
+  instance migrate to another.
+
+  \item \textbf{Criterion to revoke.}
+  Precisely because the first decision may be wrong, revoking it lightly, on the evidence of a single
+  frame, reintroduces the same problem in reverse. The only reliable basis for moving a point's owner
+  is \emph{accumulated evidence}: observing across many keyframes which instance consistently claims
+  that point, and only then deciding. From blindly trusting each mask we move to trusting the history
+  of masks.
+\end{enumerate}
+
+\medskip
+\noindent\emph{Precondition.} All of this presupposes stable geometry and reliable tracking. Evidence
+accumulates by reprojecting masks onto the points, so if the map drifts or the tracking fails, that
+reprojection lands where it should not and generates disputes that answer to no real conflict: a
+point's history stops being comparable with itself and the reasoning breaks. But this is, again,
+someone else's responsibility. Keeping the geometry healthy beneath the points is the task of the
+geometric refresh and submaps (\ref{ch:geometric_consistency}); the contest takes that condition as
+solved and deals only with its own, arbitrating the dispute.
+
+\section{The contest mechanism}
+\label{sec:contest_mechanism}
+
+The contest is the mechanism that assumes the missing responsibility: it registers the conflicts
+between instances, accumulates the evidence of each, and, from that evidence, decides what to do. It
+is all organized around a pair of roles. When two instances dispute a point, the one that currently
+owns it is the \emph{defender} $D$ and the one claiming it is the \emph{challenger} $C$. The unit
+over which the mechanism reasons and decides is not a lone instance but the ordered pair $(D, C)$:
+all the machinery (the evidence it stores, the signals it computes, the decision it emits) is
+referred to that pair. Its output is a per-pair \emph{verdict}, $v(D, C) \in \{\textsc{merge},
+\textsc{split}, \textsc{no-action}\}$, that translates the accumulated evidence into a concrete
+action on the map or into its absence.
+
+The mechanism breaks down into three stages, each responsible for one thing and no more. The
+\emph{registry} (\ref{sec:contest_registry}) records the dispute point by point and aggregates it per
+pair, without deciding. The \emph{discriminator} (\ref{sec:contest_discriminator}) reads that
+evidence and emits the verdict, without touching the map. The \emph{actuator}
+(\ref{sec:contest_actuator}) executes the verdict on the map. Registry and discriminator are pure,
+and that purity is deliberate: the dispute is counted and judged separately from where it is applied,
+and only the last stage modifies anything (Figure~\ref{fig:contest_pipeline}).
+
+\begin{figure}[ht]
+  \centering
+  % PLACEHOLDER: diagrama del pipeline del mecanismo, a dibujar (TikZ o drawio -> PDF).
+  \fbox{\parbox[c][3.2cm][c]{0.9\linewidth}{\centering\footnotesize\itshape
+  Contest pipeline: tracking $\to$ registry (per-pair signals) $\to$ discriminator (verdict) $\to$
+  actuator (mutated map). Registry and discriminator pure; only the actuator touches the map.}}
+  \caption{The three stages of the contest and the data flow between them.}
+  \label{fig:contest_pipeline}
+\end{figure}
+
+\subsection{The registry}
+\label{sec:contest_registry}
+
+The registry is \emph{online}: it is built at the same time as the map, with no later pass. At each
+tracking step, each SAM mask is reprojected onto the visible points and resolves to an instance, the
+majority one among those already owned under the mask. Let $p$ be a point owned by $D = o(p)$; if it
+falls under a mask that resolves to $C \neq D$, there is a \emph{grab} of $p$ by $C$ against $D$
+(Figure~\ref{fig:contest_grab}). It is not applied: it is recorded, adding a grab to $C$'s count over
+that point.
+
+\begin{figure}[ht]
+  \centering
+  % PLACEHOLDER: diagrama esquemático del robo, a dibujar (TikZ o drawio -> PDF).
+  \fbox{\parbox[c][2cm][c]{0.85\linewidth}{\centering\footnotesize\itshape
+  Grab diagram: SAM mask reprojected onto the cloud; a point whose defender differs from the mask's
+  challenger; the grab is recorded.}}
+  \caption{The grab: the contest's atomic observation.}
+  \label{fig:contest_grab}
+\end{figure}
+
+The registry has two levels. The first is \emph{per point}: three counters indexed by each point's
+permanent id (Table~\ref{tab:contest_primary}), the base truth that drips step by step. Each point
+carries its count of grabs (per challenger), of claims, and of sightings, and nothing else is stored
+at this level; everything else is derived from here.
+
+\begin{table}[ht]
+  \centering
+  \small
+  \begin{threeparttable}
+  \renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}l l p{7.4cm}@{}}
+    \toprule
+    \textbf{Signal} & \textbf{Store} & \textbf{Steps counted} \\
+    \midrule
+    \textbf{\texttt{grabs}}     & $\texttt{point\_id}\mapsto\{C\!:\#\mathrm{KF}\tnote{*}\}$ &
+      The point, owned by $D$, fell under $C$'s mask (a grab) \\
+    \textbf{\texttt{claims}}    & $\texttt{point\_id}\mapsto\#\mathrm{KF}$ &
+      The point fell under any used mask ($C$ or $D$) \\
+    \textbf{\texttt{sightings}} & $\texttt{point\_id}\mapsto\#\mathrm{KF}$ &
+      The point reprojected into view, with or without a mask \\
+    \bottomrule
+  \end{tabular}
+  \begin{tablenotes}
+    \footnotesize\item[*]\itshape $\#\mathrm{KF}$: number of
+      keyframe steps.
+  \end{tablenotes}
+  \end{threeparttable}
+  \caption{Primary signals: per-point counters accumulated in the store.}
+  \label{tab:contest_primary}
+\end{table}
+
+The second level aggregates those counters \emph{per pair} $(D, C)$, the unit of the decision. But
+before aggregating, signal must be separated from noise, and that is the job of \textbf{firmness}: a
+point's grab counts as firm only if the challenger took it over enough steps (\emph{evidence}, a
+minimum number of grabs) and those grabs are a real fraction of the point's claims
+(\emph{commitment}, the grabs/claims ratio above a threshold). A glancing brush, or a flicker of a
+few steps, is not firm. A pair's number of firm points is \texttt{firm\_points}, and on that subset
+all the secondary signals are built (Table~\ref{tab:contest_secondary}). These live cached per
+defender: a grab only dirties its defender, whose signals are recomputed at the next refresh, without
+re-deriving the rest.
+
+\begin{table}[ht]
+  \centering
+  \small
+  \begin{threeparttable}
+  \renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}l p{11.6cm}@{}}
+    \toprule
+    \textbf{Signal} & \textbf{How it is computed} \\
+    \midrule
+    \textbf{\texttt{firm\_points}} & points of $D$ that $C$ steals firmly \\
+    \textbf{\texttt{total\_grabs}} & sum of all $C$'s grabs over $D$'s points (firm or not) \\
+    \textbf{\texttt{containment}}  & $\mathrm{firm\_points}\,/\,|D|\tnote{*}$ \\
+    \textbf{\texttt{confidence}}   & per-point $\mathrm{grabs}_C/\mathrm{claims}$, averaged over the disputed points \\
+    \textbf{\texttt{exclusivity}}  & firm points disputed only by $C$ $\,/\,\mathrm{firm\_points}$ \\
+    \bottomrule
+  \end{tabular}
+  \begin{tablenotes}
+    \footnotesize\item[*]\itshape $|D|$: number of points of instance $D$.
+  \end{tablenotes}
+  \end{threeparttable}
+  \caption{Secondary signals: per-pair $(D,C)$ aggregates over firm points.}
+  \label{tab:contest_secondary}
+\end{table}
+
+This is the whole contest registry: a per-point stream of grabs that drips at each step, three
+primary per-point counters, and a per-pair aggregate cached per defender. At no point has the map
+been touched or an assignment revoked; the registry is a faithful accounting of the dispute,
+deliberately separated from the decision. Turning that evidence into a verdict is the discriminator's
+job.
+
+\subsection{The discriminator}
+\label{sec:contest_discriminator}
+
+The discriminator takes a defender's pairs $(D, C)$, with their signals already computed, and emits
+the verdict. It is a pure function: it looks neither at the map nor at the descriptor, only at the
+evidence the registry accumulated. All of it is organized around a single quantity, the containment
+$\mathrm{containment}(D, C)$: what fraction of the defender the challenger firmly steals. Containment
+decides the \emph{shape} of the action, and confidence and exclusivity decide whether there is
+\emph{enough evidence} to execute it.
+
+Before reasoning anything, a mass filter discards noise: a pair with fewer than $\tau_{\text{mass}}$
+raw grabs ($\mathrm{total\_grabs} < 50$) is not a dispute, it is a brush, and is ignored. Over the
+pairs that survive, containment splits the decision into three bands.
+
+\begin{enumerate}
+  \item \textbf{High containment} ($\mathrm{containment} \geq 0.6$): the challenger takes almost the
+  whole defender, so the defender is a \emph{fragment} of it (cases A and C). The natural action is
+  \textsc{merge}, but only if there is a reliable owner: a confidence $\mathrm{confidence} \geq 0.5$
+  is required (on average, each point is stolen in the majority of its claims) and that all firm
+  challengers are, via fusion, a single instance. If several distinct objects contain it there is no
+  clear owner and \textsc{no-action} is emitted.
+
+  \item \textbf{Partial containment} ($0.4 \leq \mathrm{containment} < 0.6$): the challenger takes a
+  large part, but not so much that magnitude alone suffices. Here the threshold rises: \textsc{merge}
+  only if the chunk is \emph{clean}, that is with high confidence ($\mathrm{confidence} \geq 0.6$)
+  and exclusive ($\mathrm{exclusivity} \geq 0.8$, almost all its points are disputed by this
+  challenger and no one else), and again with a single root. The magnitude evidence is weaker, so it
+  is compensated by demanding more cleanliness in the other two signals.
+
+  \item \textbf{Low containment} ($\mathrm{containment} < 0.4$): the defender \emph{retains} most of
+  its points but cedes exclusive chunks to one or several neighbors. It is no one's fragment, it is
+  an object dragging pieces of others (case B). The action is \textsc{split}, and not one but as many
+  as needed: for each challenger with a chunk of high confidence ($\mathrm{confidence} \geq 0.6$) and
+  very exclusive ($\mathrm{exclusivity} \geq 0.9$) that chunk is detached toward it. If no challenger
+  qualifies, the pair is on the edge and \textsc{no-action} is emitted.
+\end{enumerate}
+
+The exclusivity threshold rises from $0.8$ in the partial \textsc{merge} to $0.9$ in the
+\textsc{split}, and not on a whim: a split cuts geometry in two and is more expensive to undo if
+unwarranted, so the chunk's boundary is required to be sharper before cutting. The floor
+$\mathrm{containment} = 0.4$ separating split from merge is empirical, fixed on the tuning set
+(\ref{sec:contest_results}).
+
+Seen as a whole, the classic \textsc{merge} reappears as the extreme of this scale: the case in which
+containment is total and the defender migrates whole. The discriminator merely extends that same idea
+to intermediate and low containments, where the decision stops being to move the whole instance and
+becomes to move exactly the points the evidence supports.
+
+\subsection{The actuator}
+\label{sec:contest_actuator}
+% Ejecuta el veredicto sobre el mapa: MERGE (union-find de instancias) y SPLIT (mueve los
+% split_points al challenger). Última etapa, la única que muta. Aquí se cuela el timing/coste
+% real (Real-time ya no es sección propia): coste por refresco, cuello de botella y rediseño
+% online. Doc: docs/contest_timing_analysis.html
+
+\section{Results}
+\label{sec:contest_results}
+
+The discriminator's thresholds are empirical, so all the numbers are reported on a set of scenes the
+tuning never saw. Replica's eight scenes are split into tuning (office0, office3, office4, room2),
+the only ones on which the thresholds are fixed, and held-out (office1, office2, room0, room1), which
+stay closed throughout the tuning and are opened only once, at the end. No threshold is touched by
+looking at the held-out; the $\mathrm{AP}$ that is defended is always the held-out's, so it measures
+generalization and not overfitting.
+
+% PRELIMINAR: números a recalcular antes de la entrega (placeholder para ver la maqueta).
+On Replica's clean trajectory, with no injected jumps, the contest raises the global
+$\mathrm{AP}_{\text{agnostic}}$ from $0.234$ to $0.249$ ($+0.015$, $+6.4\%$) over the raw map
+(\emph{baseline} with no fusion on simulated GT). The improvement appears in all eight scenes, and
+holds on the held-out: the mean gain is $+9.7\%$ on the tuning scenes and $+4.55\%$ on the held-out
+ones, positive in both cases (Table~\ref{tab:contest_ap_scenes}).
+
+\begin{table}[ht]
+  \centering
+  \small
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{@{}l r r r r@{}}
+    \toprule
+    \textbf{Scene} & \textbf{Baseline} & \textbf{Contest} & \textbf{$\Delta$ abs} &
+      \textbf{$\Delta$ \%} \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textbf{Tuning}} \\
+    office0 & 0.199 & 0.220 & $+0.021$ & $+10.6\%$ \\
+    office3 & 0.204 & 0.210 & $+0.006$ & $+2.9\%$  \\
+    office4 & 0.236 & 0.280 & $+0.044$ & $+18.6\%$ \\
+    room2   & 0.232 & 0.247 & $+0.015$ & $+6.5\%$  \\
+    \addlinespace[1pt]
+    \textbf{mean} & \textbf{0.218} & \textbf{0.239} & $\mathbf{+0.021}$ & $\mathbf{+9.7\%}$ \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textbf{Held-out}} \\
+    office1 & 0.170 & 0.175 & $+0.005$ & $+2.9\%$  \\
+    office2 & 0.210 & 0.225 & $+0.015$ & $+7.1\%$  \\
+    room0   & 0.269 & 0.287 & $+0.018$ & $+6.7\%$  \\
+    room1   & 0.344 & 0.349 & $+0.005$ & $+1.5\%$  \\
+    \addlinespace[1pt]
+    \textbf{mean} & \textbf{0.248} & \textbf{0.259} & $\mathbf{+0.011}$ & $\mathbf{+4.55\%}$ \\
+    \midrule
+    \textbf{All} & \textbf{0.234} & \textbf{0.249} & $\mathbf{+0.015}$ & $\mathbf{+6.4\%}$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{$\mathrm{AP}_{\text{agnostic}}$ per Replica scene, baseline vs.\ contest.}
+  \label{tab:contest_ap_scenes}
+\end{table}
+
+The \emph{class-aware} metrics (mIoU / mAcc) do not worsen: they move slightly upward (mIoU $+0.2$,
+mAcc $+0.3$ globally, Table~\ref{tab:contest_semantic}). This is consistent with the nature of the
+mechanism: the contest reorganizes point ownership among instances, it does not change the semantic
+label each one receives, so its effect lives in the granularity of the instances (what the agnostic
+$\mathrm{AP}$ measures) and leaves the per-class mIoU practically intact.
+
+\begin{table}[ht]
+  \centering
+  \small
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{@{}l r r r r r r@{}}
+    \toprule
+    & \multicolumn{3}{c}{\textbf{mIoU}} & \multicolumn{3}{c}{\textbf{mAcc}} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    \textbf{Scene} & Base & Contest & $\Delta$ & Base & Contest & $\Delta$ \\
+    \midrule
+    office0 & 25.4 & 25.9 & $+0.5$ & 33.9 & 34.3 & $+0.4$ \\
+    office1 & 16.2 & 16.1 & $-0.1$ & 31.7 & 31.7 & $+0.0$ \\
+    office2 & 24.6 & 25.9 & $+1.3$ & 32.4 & 34.0 & $+1.5$ \\
+    office3 & 25.8 & 25.9 & $+0.0$ & 32.3 & 32.3 & $+0.0$ \\
+    office4 & 43.1 & 42.7 & $-0.3$ & 55.4 & 55.8 & $+0.4$ \\
+    room0   & 33.2 & 33.6 & $+0.4$ & 39.9 & 40.3 & $+0.4$ \\
+    room1   & 38.6 & 40.2 & $+1.6$ & 53.8 & 56.1 & $+2.3$ \\
+    room2   & 26.6 & 26.6 & $+0.0$ & 35.1 & 35.1 & $+0.0$ \\
+    \midrule
+    \textbf{All} & \textbf{27.1} & \textbf{27.3} & $\mathbf{+0.2}$ & \textbf{40.2} & \textbf{40.5} & $\mathbf{+0.3}$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{Class-aware semantic metrics (\%) per Replica scene, baseline vs.\ contest.}
+  \label{tab:contest_semantic}
+\end{table}
+
+\end{otherlanguage}
+% Validación en AISLAMIENTO, sobre trayectoria sana y sin saltos: se atribuye la mejora
+% al mecanismo, no a su interacción con el ruido. COROLARIO, que hay que escribir: el
+% contest PRESUPONE geometría sana y tracking fiable -> el sustrato no es un preámbulo,
+% es una PRECONDICIÓN.
+%
+% ABLACIÓN 2x2 (el experimento estrella de la memoria), sobre saltos inyectados:
+%
+%                    | sin submapas            | con submapas
+%   .................+.........................+...........................
+%   sin contest      | baseline degradado      | ¿el submapa solo, ayuda?
+%   con contest      | contest sobre sustrato  | la propuesta completa
+%                    | roto -> debería ir mal  |
+%
+% La celda de abajo-izquierda es la que DEMUESTRA que el orden causal es real y no
+% retórica. Asegurar este experimento sí o sí.

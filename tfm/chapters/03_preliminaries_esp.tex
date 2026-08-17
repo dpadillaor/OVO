@@ -1,0 +1,438 @@
+\chapter{The OVO System}
+\label{ch:preliminaries}
+
+% PRESUPUESTO: ~5 pp
+% Capítulo de EXPOSICIÓN: explicar OVO a quien no lo conoce, inclinado hacia lo que
+% la tesis ataca, pero SIN juzgar todavía (eso es Ch5). Termina en limitaciones =
+% trampolín al resto de la tesis. El setup + baseline se han movido a Ch4 (Benchmark).
+
+OVO~\parencite{berrielmartins2024ovo} es un sistema de mapeo semántico 3D
+online de vocabulario abierto sobre el que se construye el conjunto
+de esta tesis. Cualquier mejora sobre él exige primero comprender qué produce el sistema y
+cómo se articulan sus componentes; sobre esa base es posible identificar qué elementos
+inciden en el objeto de estudio de este trabajo y razonar por dónde conviene intervenir.
+
+El capítulo recorre esos fundamentos en orden: la representación 3D que genera, la
+arquitectura con que acopla un backbone de SLAM a la segmentación semántica de instancias,
+el mecanismo de fusión de instancias en loop closure sobre el que actúan las contribuciones
+posteriores y, para cerrar, las limitaciones que abren el resto de la tesis.
+
+\section{System overview}
+\label{sec:ovo_overview}
+
+OVO es un sistema que, a partir de un flujo de keyframes RGB-D con sus poses, produce una
+\textbf{reconstrucción densa} de la escena: una nube de puntos 3D en la que cada objeto se
+recupera como una \emph{instancia 3D} distinta, descrita por un vector semántico de vocabulario
+abierto. A diferencia de los métodos de vocabulario cerrado, la instancia no se clasifica en un
+conjunto fijo de categorías: se le asocia un descriptor calculado con un modelo visión-lenguaje
+(CLIP,~\cite{radford2021clip}), que proyecta imágenes y texto a un mismo espacio. Así la escena
+puede consultarse con lenguaje natural, por similitud de coseno entre el texto de la consulta y
+los descriptores de las instancias (Figura~\ref{fig:ovo_queries}).
+
+% FIGURA: Fig. 3 del paper (queries open-vocab). images/ovo_queries.png
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{ovo_queries}
+  \caption{Open-vocabulary queries on an OVO map: each natural-language query highlights its
+    matching instances. Adapted from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_queries}
+\end{figure}
+
+OVO construye esa representación de forma \emph{online} e incremental: en lugar de reprocesar la
+escena entera, integra cada nuevo keyframe sobre el mapa existente, que crece a medida que la
+cámara recorre el entorno (Figura~\ref{fig:ovo_semantic_map}).
+
+% FIGURA: Fig. 1 del paper (mapa semántico creciendo). images/ovo_semantic_map.png
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.6\textwidth]{ovo_semantic_map}
+  \caption{Output of OVO on a Replica sequence: an open-vocabulary semantic map built
+    incrementally as the camera explores the scene. Adapted from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_semantic_map}
+\end{figure}
+
+Para sostener ese ritmo, OVO adopta el principio de parallel tracking and
+mapping~\parencite{klein2007ptam}, habitual en SLAM visual: mantener un hilo rápido siguiendo la
+cámara y desacoplar de él el trabajo más pesado. OVO aplica ese mismo principio para separar dos trabajos que
+ejecuta de forma asíncrona:
+
+\begin{itemize}
+  \item \textbf{Reconstrucción geométrica.} Retroproyecta a 3D la profundidad de cada keyframe
+    usando las poses $T_n$ que estima el backbone de SLAM, levantando la nube de puntos densa sobre
+    la que actúa la semántica. De dónde venga la pose, un SLAM real o una referencia ground-truth,
+    le es indiferente: la geometría es solo el terreno sobre el que trabaja.
+  \item \textbf{Identificación semántica.} Combina tres ingredientes: las máscaras 2D que un
+    segmentador (SAM~2.1,~\cite{ravi2024sam2}) extrae de cada keyframe, la reproyección de la nube
+    al plano de imagen y un descriptor de vocabulario abierto (CLIP). Reproyectando la nube bajo
+    cada máscara, un mecanismo de asociación decide si crea una instancia nueva o propaga una ya
+    existente a esos puntos (Sección~\ref{sec:ovo_segment_mapper}). A cada instancia se le asigna
+    además ese descriptor, que codifica su semántica y permite consultarla con lenguaje natural
+    (Sección~\ref{sec:ovo_descriptors}).
+\end{itemize}
+
+Ambos escriben sobre un mismo mapa $\mathcal{M} = \{\mathcal{T}, \mathcal{P}, \mathcal{S}\}$: las
+poses de los keyframes $\mathcal{T}$, la nube de puntos densa $\mathcal{P}$ y el conjunto de
+instancias 3D $\mathcal{S}$. Cada punto $P = ([x\,y\,z]^\top, l_p)$ reúne las dos aportaciones: las
+coordenadas 3D que fija la geometría y una \textbf{etiqueta discreta} $l_p \in \{-1, 0, 1, \dots,
+q\}$ que apunta a su instancia y que rellena la semántica ($l_p = -1$ mientras está sin asignar).
+
+\section{Geometric reconstruction}
+\label{sec:ovo_geometric}
+
+De los tres componentes del mapa (Sección~\ref{sec:ovo_overview}), las poses $\mathcal{T}$ las
+estima el SLAM y las instancias $\mathcal{S}$ son cosa de la parte semántica
+(Sección~\ref{sec:ovo_semantic}). La reconstrucción geométrica se ocupa del tercero, la nube de
+puntos densa $\mathcal{P}$: la construye a partir de las poses, sin estimarlas él, para levantar y
+mantener la geometría sobre la que actúa el resto del sistema. Lo hace en tres operaciones:
+
+\begin{itemize}
+  \item \textbf{Construcción de la nube.} Por cada keyframe $k_n$, OVO añade a $\mathcal{P}$ los
+    puntos 3D de la escena. Si el backbone de SLAM ya estima una nube densa, OVO concatena esos
+    puntos directamente; si no, los obtiene retroproyectando a 3D la profundidad del keyframe con
+    la pose $T_n$. En la práctica, un SLAM denso (Gaussian-SLAM) aporta la nube, mientras que con
+    un SLAM sparse (ORB-SLAM2) o con poses ground-truth OVO recurre a la retroproyección. Cada
+    punto nace con $l_p = -1$, es decir, sin semántica asignada todavía.
+  \item \textbf{Coherencia geométrica.} Para que $\mathcal{P}$ no crezca sin control al revisitar
+    una zona, OVO no añade puntos donde ya los hay. Proyecta los existentes al keyframe y descarta
+    cada píxel donde un punto ya proyectado cae en su vecindad \emph{y} coincide en profundidad con
+    la que mide el sensor, dentro de un umbral; esa coincidencia distingue una superficie revista
+    de otra oculta detrás. Los píxeles restantes, superficie aún no vista, sí generan puntos.
+  \item \textbf{Corrección con el loop closure.} El SLAM acumula deriva, así que un mismo objeto
+    visto en dos pasadas puede quedar \textbf{duplicado} en dos instancias separadas. Al cerrar un
+    loop, el SLAM corrige la trayectoria y OVO re-transforma la nube arrastrando la etiqueta $l_p$
+    de cada punto: la geometría se corrige sin perder la semántica, pero los dos duplicados quedan
+    ahora \textbf{superpuestos}. Deshacerlos es lo que ataca el mecanismo de fusión de instancias,
+    disparado en ese instante (Sección~\ref{sec:ovo_fusion_lc}).
+\end{itemize}
+
+\section{Semantic identification}
+\label{sec:ovo_semantic}
+
+Sobre la nube que produce la reconstrucción geométrica, la identificación semántica asigna cada punto
+a una instancia y describe cada instancia para poder consultarla. Sus tres piezas se detallan a
+continuación: cómo se asocian y siguen las instancias frame a frame, cómo se calcula su descriptor
+y cómo se fusionan cuando el SLAM cierra un loop.
+
+\subsection{3D instance segmentation and tracking}
+\label{sec:ovo_segment_mapper}
+
+La reconstrucción geométrica entrega una nube de puntos sin etiquetar ($l_p = -1$). Poblarla de
+instancias, creándolas y siguiéndolas a medida que la cámara avanza, es la tarea de esta primera
+pieza: aquí nace $\mathcal{S}$, el tercer componente del mapa (Sección~\ref{sec:ovo_overview}).
+
+\paragraph{La instancia.} Una instancia 3D queda descrita por $S = (\mathbf{d}, \kappa)$: un
+descriptor semántico $\mathbf{d}$ y una lista $\kappa$ de los keyframes desde los que mejor se
+observa. El puente entre la nube y las instancias es la etiqueta \emph{por punto} $l_p$
+(Sección~\ref{sec:ovo_overview}): enlaza cada punto con su instancia, es la unidad más fina de la
+representación y la variable sobre la que actúan las contribuciones posteriores.
+
+\paragraph{El bucle de asociación.} El 3D segment mapper (Algoritmo~\ref{alg:segment_mapper}) es el
+mecanismo responsable de la creación y el tracking de instancias. Por cada keyframe $k_n$ decide qué
+máscaras 2D corresponden a instancias ya vistas y cuáles son objetos nuevos, mediante una
+\textbf{asociación por proyección y votación}. SAM trocea $k_n$ en máscaras
+$\tilde{\mathcal{S}}_n$; los puntos del mapa visibles bajo la pose $T_n$ se proyectan al plano de
+imagen (descartando ocluidos por profundidad), arrastrando cada uno su etiqueta $l_p$. Para cada
+máscara $s$ se toma la \emph{moda} de esas etiquetas, $z_l := \arg\max_{l_p}
+(\tilde{\mathcal{P}}_n \cap s)$, con sus votos $v$. Si $v \le \epsilon$ la máscara se descarta por
+falta de evidencia; si $z_l = -1$ es un \textbf{objeto nuevo} (se crea $S_{q+1}$ con descriptor
+vacío); y si $z_l$ es una instancia existente, la máscara \textbf{es esa instancia vista de nuevo}
+y se le añade $k_n$ como vista. Finalmente la etiqueta ganadora se propaga a los puntos
+\emph{sin asignar} bajo la máscara y a la propia máscara, y $(k_n, \tilde{\mathcal{S}}_n)$ se
+encola en $\mathcal{Q}$ para el descriptor.
+
+% ALGORITMO: Algorithm 1 del paper (3D Segment Mapper).
+\begin{algorithm}[h!]
+  \refstepcounter{algorithm}\label{alg:segment_mapper}%
+  \hrule height 0.8pt\vspace{3pt}
+  \noindent\textbf{Algorithm~\thealgorithm}\quad 3D Segment Mapper\par
+  \vspace{2pt}\hrule\vspace{3pt}
+  \newcommand{\fn}[1]{\textsc{#1}}
+  \newcommand{\I}[1]{\hspace*{#1.4em}}
+  \newcommand{\cm}[1]{\quad\textcolor{gray}{$\triangleright$ \textit{#1}}}
+  {\small
+  \begin{tabular}{@{}r@{\;\;}l@{}}
+     1: & \textbf{function} \fn{3d\_segment\_mapper}$(\mathcal{P}, \mathcal{S}, k_n, T_n)$ \\
+     2: & \I1$\tilde{\mathcal{S}}_n \gets \fn{segment\_keyframe}(k_n)$ \cm{2D masks (SAM)} \\
+     3: & \I1$\tilde{\mathcal{P}}_n \gets \fn{project\_point\_cloud}(\mathcal{P}, T_n)$ \cm{projected map points} \\
+     4: & \I1\textbf{for each} $(s, l_s) \in \tilde{\mathcal{S}}_n$ \textbf{do} \\
+     5: & \I2$\mathit{mode}, v \gets \fn{get\_label\_mode\_and\_votes}(\tilde{\mathcal{P}}_n, s, \epsilon)$ \\
+     6: & \I2\textbf{if} $v > \epsilon$ \textbf{then} \cm{enough evidence} \\
+     7: & \I3\textbf{if} $\mathit{mode} = -1$ \textbf{then} \cm{new object} \\
+     8: & \I4$S_{q+1} \gets \fn{new\_3d\_segment}(q{+}1, n, s)$;\ \ $\mathcal{S} \gets \mathcal{S} \cup \{S_{q+1}\}$;\ \ $l_s \gets q{+}1$ \\
+     9: & \I3\textbf{else} \cm{already-seen instance} \\
+    10: & \I4$\mathcal{S} \gets \fn{update\_3d\_segment}(S_{\mathit{mode}}, n, s)$;\ \ $l_s \gets z_l$ \\
+    11: & \I1$\tilde{\mathcal{S}}_n \gets \fn{merge\_and\_prune\_2d\_segments}(\tilde{\mathcal{S}}_n)$ \\
+    12: & \I1$\mathcal{P} \gets \fn{update\_pcd\_labels}(\mathcal{P}, \tilde{\mathcal{P}}_n, \tilde{\mathcal{S}}_n)$ \\
+    13: & \I1\textbf{return} $\mathcal{P}, \mathcal{S}, \tilde{\mathcal{S}}_n$ \\
+  \end{tabular}}
+  \vspace{-2pt}\hrule
+\end{algorithm}
+
+Este bucle es la \textbf{asociación temporal} de OVO: enlaza máscaras 2D con instancias 3D
+mediante proyección y voto mayoritario, sin seguimiento en 2D. Dos propiedades resultan
+determinantes en el análisis posterior: la asociación se resuelve sobre la etiqueta \emph{por
+punto} $l_p$, y depende por completo de que la geometría proyectada sea correcta
+(Capítulos~\ref{ch:failure_modes} y siguientes).
+
+\subsection{Instance descriptors}
+\label{sec:ovo_descriptors}
+
+El segment mapper crea y mantiene las instancias $\mathcal{S}$, pero las deja \emph{sin describir}:
+el descriptor $\mathbf{d}$ de $S = (\mathbf{d}, \kappa)$ queda pendiente. Esta pieza no crea
+instancias, les da semántica. Ese descriptor es un vector CLIP en el espacio lenguaje-imagen que
+permite consultar la instancia con texto libre. Calcularlo es el paso más costoso de OVO, así que no
+ocurre en cada keyframe: los pares $(k_n, \tilde{\mathcal{S}}_n)$ que produce la asociación esperan en la cola
+$\mathcal{Q}$ (Sección~\ref{sec:ovo_segment_mapper}) y se procesan cuando hay recursos. Al sacar un
+par de la cola, se calcula un descriptor por cada máscara cuyo keyframe siga vigente en el heap
+$\kappa$ de su instancia, y el descriptor de la instancia se re-selecciona como el más
+representativo de ese heap: la vista con menor distancia agregada al resto. La semántica de una
+instancia se refina así a medida que $\kappa$ acumula mejores vistas, no en un instante fijo.
+
+El descriptor de cada máscara 2D no es un CLIP directo, sino la fusión de tres: el del keyframe
+completo, el de la máscara con el fondo eliminado y el del recorte rectangular (bounding box) que la
+contiene. OVO los combina en uno mediante una media ponderada cuyos pesos \emph{por dimensión}
+predice una pequeña red, en lugar de fijarlos a mano (Figura~\ref{fig:ovo_overview}): los tres pasan
+por un encoder transformer y una MLP que, tras una softmax, entrega los pesos de la mezcla, una red
+preentrenada con una pérdida SigLIP~\parencite{zhai2023siglip}. Las consultas se resuelven por
+similitud coseno entre el texto codificado y los descriptores de las instancias
+(Figura~\ref{fig:ovo_queries}).
+
+% FIGURA: Fig. 2 del paper (pipeline del descriptor). images/ovo_overview.png
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{ovo_overview}
+  \caption{The OVO pipeline for obtaining a merged CLIP descriptor per instance. Adapted
+    from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_overview}
+\end{figure}
+
+\subsection{Instance fusion at loop closure}
+\label{sec:ovo_fusion_lc}
+
+Vimos en la reconstrucción geométrica (Sección~\ref{sec:ovo_geometric}) que, tras un loop closure,
+los duplicados que la deriva había separado quedan superpuestos sobre el mismo objeto. La
+\emph{fusión de instancias en loop closure} es el mecanismo que OVO lanza en ese instante para
+deshacerlos (Figura~\ref{fig:ovo_loop_closure}), y el punto de partida de esta tesis.
+
+Antes de comparar nada, OVO deja el mapa a punto. Re-transforma la geometría con las poses
+corregidas, como ya vimos (Sección~\ref{sec:ovo_geometric}): la nube local de cada keyframe pasa por
+$\mathcal{P}_n := T'_n T_n^{-1} \mathcal{P}_n$. Los keyframes que la optimización elimina se descartan
+con sus puntos, la cola $\mathcal{Q}$ de descriptores pendientes (Sección~\ref{sec:ovo_descriptors})
+se vacía y se podan de $\mathcal{S}$ las instancias cuyos puntos desaparecieron por completo. Solo
+entonces, sobre el mapa ya corregido, empieza la fusión.
+
+El mecanismo de fusión existe para reunir esos duplicados superpuestos: recorre todos los pares de
+instancias que quedan y decide, par a par, si son el mismo objeto registrado dos veces. Tres
+condiciones han de cumplirse para fundir un par, y la implementación las comprueba en cascada, de la
+más barata a la más cara, descartando el par en cuanto una falla:
+
+\begin{itemize}
+  \item \textbf{Centroide.} Los centroides de las dos nubes deben distar menos de $150\,\text{cm}$.
+    Puramente geométrica y barata, elimina de un plumazo la mayoría de pares lejanos.
+  \item \textbf{Descriptor.} La similitud coseno entre sus descriptores CLIP debe pasar de $0.8$,
+    comprobando que comparten semántica antes de pagar el criterio más costoso.
+  \item \textbf{Solapamiento.} Mide qué fracción de los puntos de la instancia más pequeña cae a
+    menos de $10\,\text{cm}$ de la otra. No es un umbral único: el par pasa si esa fracción supera el
+    $50\,\%$, o si supera el $20\,\%$ cuando la semántica es muy fuerte (coseno $> 0.9$), que rescata
+    solapes más débiles. Es el criterio más caro, porque recorre los puntos de ambas nubes, y el
+    único que comprueba que las dos ocupan de verdad el mismo volumen.
+\end{itemize}
+
+Las tres se combinan como una conjunción lógica, con umbrales fijos y comunes a toda la escena: un
+par se funde solo si las cumple las tres. Fundir $S_i, S_j$ se reduce entonces a reasignar: se unen
+sus listas de keyframes de referencia, $\kappa_i := \kappa_i \cup \kappa_j$, y todos los puntos
+etiquetados como $j$ pasan a $i$ ($l_p := i$ para todo $P$ con $l_p = j$). La instancia $S_j$
+desaparece; sus puntos y sus vistas quedan absorbidos por $S_i$, cuyo descriptor se re-selecciona
+sobre el conjunto de vistas ampliado (Sección~\ref{sec:ovo_descriptors}).
+
+Esta cascada es el único mecanismo con el que OVO une instancias, y solo contempla un escenario: el
+de los duplicados que un loop closure deja superpuestos. Es, además, el punto sobre el que se
+articula el resto de la tesis. Dos rasgos de su diseño lo anticipan: la
+decisión es \emph{una única respuesta binaria} construida por una conjunción de compuertas, y se
+toma \emph{a nivel de instancia completa}, fundiendo o no un par entero. El
+Capítulo~\ref{ch:failure_modes} examina qué implica que un mecanismo con esta forma tenga que
+arbitrar situaciones de naturaleza muy distinta.
+
+% FIGURA: Fig. 5 del paper. Antes/después de loop closure. images/ovo_loop_closure.png
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.72\textwidth]{ovo_loop_closure}
+  \caption{Instance fusion at loop closure: drift-induced duplicates (top) merged after the loop
+    closes (bottom). OVO-ORB-SLAM2, ScanNet. Adapted from~\cite{berrielmartins2024ovo}.}
+  \label{fig:ovo_loop_closure}
+\end{figure}
+
+% PÁRRAFO APARCADO (2026-07-29): redundante tras el itemize geométrico/semántico.
+% Aporta solo l_p (-1->relleno), el store y el diagrama. Reconciliar cuando se decida
+% qué hacer con la Figura de arquitectura.
+\iffalse
+La Figura~\ref{fig:ovo_architecture} presenta esta arquitectura desde el ángulo que adopta esta
+tesis: OVO como un \textbf{orquestador} de dos subsistemas que corren sobre el mismo flujo RGB-D
+y escriben un \emph{estado compartido}. El \textbf{geometric tracking} construye y mantiene
+coherente la nube de puntos densa, retroproyectando la profundidad con las poses del SLAM; el
+\textbf{semantic tracking} etiqueta esos puntos en instancias y les asigna un descriptor. El punto
+de contacto entre ambos es deliberadamente estrecho: cada punto de la nube lleva una etiqueta de
+instancia $l_p$ que la geometría deja \emph{vacía} ($l_p = -1$) al crear el punto, y que la
+semántica rellena después; el descriptor, en cambio, no vive en la nube sino en un \emph{store} de
+instancias, uno por objeto. Los modelos que OVO enchufa (el backbone de SLAM, SAM y el modelo de
+descriptor) quedan fuera de esa frontera, como entradas intercambiables.
+\fi
+
+\section{Analyzing the semantics for improvement}
+\label{sec:ovo_factors}
+
+Antes de señalar qué puede mejorarse en la parte semántica de OVO conviene fijar con qué se mide su
+calidad, porque no todo se mide igual. Un mapa semántico puede fallar de dos formas independientes:
+acertar la geometría de una instancia pero errar su etiqueta, o etiquetar bien un objeto que se
+segmentó mal (partido en dos, fundido con el vecino, incompleto). Cada fallo lo capta una familia de
+métricas distinta:
+
+\begin{itemize}
+  \item \textbf{Class-aware} (mIoU, mAcc). Comparan la etiqueta de cada punto con la del GT. Miden
+    la calidad \emph{semántica}, que depende sobre todo del descriptor.
+  \item \textbf{Class-agnostic} (AP agnóstica). Comparan la segmentación en instancias con la del GT
+    \emph{sin mirar la clase}. Miden si el objeto se recuperó como una instancia correcta.
+\end{itemize}
+
+Ambas familias se definen en detalle en el Capítulo~\ref{ch:benchmark}; aquí basta la distinción,
+porque es la regla con la que clasificar todo lo que sigue: cada factor que interviene golpea uno de
+los dos ejes, o ambos.
+
+Con esa regla, y el sistema ya presentado por completo, podemos dar el paso de analizarlo pieza a
+pieza. El diagrama (Figura~\ref{fig:ovo_architecture}), al separar responsabilidades, aísla los
+factores que condicionan la calidad semántica. Unos son \textbf{entradas externas} que OVO consume
+pero no gobierna; otros, decisiones de su \textbf{propio diseño}. Los dos apartados siguientes los
+recorren en ese orden, cada uno con su tabla-resumen: qué aporta cada factor, cómo falla y qué eje de
+calidad compromete.
+
+% FIGURA: arquitectura propia (dos trackings + estado compartido). images/ovo_architecture.pdf
+\begin{figure}[h!]
+  \centering
+  \makebox[\textwidth][c]{\includegraphics[width=1.18\textwidth]{ovo_architecture}}
+  \caption{OVO as an orchestrator of two trackings over a shared state.}
+  \label{fig:ovo_architecture}
+\end{figure}
+
+\subsection{What OVO depends on}
+\label{sec:ovo_external}
+
+Estos factores son entradas que OVO consume pero no controla; su calidad marca el techo de lo que la
+parte semántica puede lograr (Tabla~\ref{tab:factors_external}).
+
+\begin{table}[t]
+  \centering
+  \small
+  \setlength{\tabcolsep}{10pt}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{@{}l >{\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}p{6.3cm} l@{}}
+    \toprule
+    \textbf{Factor} & \textbf{Rol} & \textbf{Cómo falla} & \textbf{Eje} \\
+    \midrule
+    Geometría & Nube por reproyección & Deriva: reproyecciones falsas, duplicados, máscaras propagadas a instancias ajenas & Agnostic \\
+    \cmidrule(l{0pt}r{0pt}){1-4}
+    \multirow{3}{*}{Segmentador}
+      & Oportunidades de tracking & Pocas o ninguna máscara: se pierden ocasiones de crear o seguir instancias & Agnostic \\
+      & Calidad de la máscara     & Una máscara errónea en mal momento siembra un error que se propaga & Agnostic \\
+      & Granularidad              & Decide qué es una instancia; puede no coincidir con el GT (parte o funde objetos) & Agnostic \\
+    \cmidrule(l{0pt}r{0pt}){1-4}
+    \multirow{2}{*}{Descriptor}
+      & Semántica de la instancia & Poco discriminativo: etiqueta pobre & Aware \\
+      & Árbitro de la fusión      & Poco discriminativo: fusiones ambiguas & Both \\
+    \bottomrule
+  \end{tabular}
+  \caption{External factors OVO consumes: their roles, how each fails, and which metric axis it hits.}
+  \label{tab:factors_external}
+\end{table}
+
+La \textbf{geometría} abre la cadena. OVO no razona sobre imágenes, sino sobre la nube que
+reproyecta al plano de cada keyframe, de modo que toda la asociación descansa en que esa
+reproyección caiga donde debe. Con geometría ideal (poses ground-truth) el problema queda limpio y
+los fallos que se observen son intrínsecos a la semántica; con un SLAM real, la deriva desplaza los
+puntos, las reproyecciones mienten y aparecen duplicados y máscaras que se propagan a instancias que
+no son. Por eso la fuente geométrica no es un detalle de montaje: decide si estudiamos los problemas
+propios de OVO o los que le hereda el tracking.
+
+Y hay un matiz que agrava esa dependencia. La única corrección geométrica que OVO escucha es la del
+loop closure: cuando el SLAM cierra un loop, re-transforma la nube y vuelve a sincronizarla con la
+trayectoria corregida. Pero el back-end refina el mapa de forma continua con bundle adjustment local,
+y eso OVO no lo recoge. Entre cierres de loop, o si el loop nunca llega a producirse, la nube que
+mantiene OVO se aparta poco a poco del mapa real que el SLAM sí actualiza; y como toda la asociación
+se apoya en reproyecciones, esa divergencia silenciosa se traduce en errores.
+
+El \textbf{segmentador} fija la granularidad, porque es quien decide qué es una instancia, e
+interviene de tres maneras. Marca las \emph{oportunidades} de trackear: cada máscara es una ocasión
+de crear o seguir una instancia, y su ausencia una ocasión perdida. Impone un techo de
+\emph{calidad}: una máscara errónea en el momento equivocado siembra una instancia que ya nace mal. Y
+su \emph{granularidad} puede no coincidir con la del GT, partiendo un objeto en varias instancias o
+fundiendo dos en una.
+
+El \textbf{descriptor} juega dos papeles. Fija la calidad class-aware, la etiqueta semántica de cada
+instancia; y actúa como árbitro de la fusión, donde cuanto menos discriminativo sea, más difícil
+resulta distinguir dos objetos parecidos de dos vistas del mismo.
+
+\subsection{What OVO decides}
+\label{sec:ovo_internal}
+
+Frente a esas entradas, estos dos factores son decisiones internas de OVO, y por tanto los que la
+tesis puede intervenir directamente (Tabla~\ref{tab:factors_internal}).
+
+\begin{table}[h!]
+  \centering
+  \small
+  \setlength{\tabcolsep}{10pt}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{@{}l >{\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}p{6.3cm} l@{}}
+    \toprule
+    \textbf{Factor} & \textbf{Rol} & \textbf{Cómo falla} & \textbf{Eje} \\
+    \midrule
+    Creación inicial & Alta de instancias & Decisión inmutable: el error inicial no se deshace, se propaga & Agnostic \\
+    \cmidrule(l{0pt}r{0pt}){1-4}
+    Fusión & Corrección de duplicados & Solo une solapados; ciega a splits y a sobre-segmentación & Both \\
+    \bottomrule
+  \end{tabular}
+  \caption{OVO's own design decisions: their roles, how each fails, and which metric axis it hits.}
+  \label{tab:factors_internal}
+\end{table}
+
+La \textbf{creación inicial} de instancias es imperativa e \textbf{inmutable}: la asociación
+(Sección~\ref{sec:ovo_segment_mapper}) da de alta la instancia en su primer avistamiento y no hay
+vuelta atrás. Un error de segmentación en ese instante no se corrige; se propaga a cada keyframe
+siguiente por el propio mecanismo de propagación.
+
+La \textbf{fusión} es el único mecanismo correctivo de OVO, y su alcance es estrecho: solo actúa
+cuando dos instancias se \emph{solapan} tras un loop closure. Esa condición, el solapamiento, deja
+fuera clases enteras de problemas. Una instancia que nació mal segmentada no se solapa con nada que
+la arregle; una máscara que a lo largo de la secuencia se disputan varias instancias no produce un
+solapamiento que la fusión pueda arbitrar; y una granularidad que no casa con la del GT, un objeto
+partido en trozos o dos fundidos en uno, tampoco se corrige, porque no hay dos nubes superpuestas que
+unir. En ninguno de esos casos existe el overlap del que la fusión depende, de modo que OVO,
+sencillamente, carece de un mecanismo que los aborde: los fallos, una vez sembrados, no tienen quién
+los repare (Sección~\ref{sec:ovo_limitations}).
+
+\section{Limitations}
+\label{sec:ovo_limitations}
+
+Los propios autores de OVO señalan tres limitaciones del sistema~\parencite{berrielmartins2024ovo}:
+la generalización a escenas outdoor a gran escala (con distribuciones de clase, iluminación y errores
+de tracking distintos), un ligero sesgo del CLIP merging hacia las clases vistas en entrenamiento, y
+que la fusión de instancias en loop closure, aunque corrige eficazmente la deriva odométrica,
+\enquote{a veces no llega a fundir instancias que sí deberían fundirse}. Las dos primeras caen fuera
+del alcance de este trabajo; es la tercera la que tomamos como punto de partida y situamos en un
+marco más amplio: el mecanismo de fusión arrastra tres limitaciones estructurales.
+
+\begin{itemize}
+  \item \textbf{Una sola decisión binaria para varias preguntas distintas.} Aceptar o rechazar un
+    par depende, a la vez, de si la geometría está desactualizada, de si la segmentación 2D venía
+    mal, de si el descriptor es ambiguo y de si el objeto es uno o son dos. Un único umbral no
+    puede arbitrar cuatro preguntas independientes.
+  \item \textbf{Granularidad todo-o-nada.} La decisión se toma sobre la instancia completa, pero
+    muchos fallos son \emph{parciales} (parte de un objeto bien, parte mal). Un fallo parcial solo
+    se puede corregir con una decisión parcial, a nivel de punto.
+  \item \textbf{Se presupone que la geometría sigue siendo válida.} La fusión decide sobre las
+    posiciones actuales de los puntos, pero el Bundle Adjustment local
+    sigue deformando el mapa por debajo, sin que la capa semántica se entere.
+\end{itemize}
+
+Estas tres limitaciones organizan el resto del trabajo: primero hace falta poder \emph{medir} una
+decisión de fusión (Capítulo~\ref{ch:benchmark}); después, diagnosticar por qué falla
+(Capítulo~\ref{ch:failure_modes}); y a partir de ahí atacar cada limitación por separado.

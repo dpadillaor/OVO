@@ -1,6 +1,43 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-% Go from general to specific. Start talking about importance of robotics and narrow down to online 3d reconstruction and semantics
+% PRESUPUESTO: ~4 pp (incluida la figura de fallo)
+% De lo general a lo específico: robótica -> reconstrucción 3D online -> semántica.
 
-% Finally introduce the work developed in the TFM
+\section{Context}
+\label{sec:intro_context}
+% Mapeo semántico 3D open-vocabulary: qué es, para qué sirve (robótica, consulta por
+% lenguaje natural). Por qué el "online" importa y qué restricciones impone.
+
+\section{Motivation: three failure modes}
+\label{sec:intro_motivation}
+% Los tres modos de fallo de la propuesta oficial:
+%   (1) over-merge       -> instancias distintas de la misma clase, fusionadas
+%   (2) fragmentación    -> una instancia vista desde varios puntos de vista, partida
+%   (3) objeto compuesto -> partes de un objeto semánticamente unitario, separadas
+% FIGURA CLAVE (Rerun): sofá partido en cojines, o instancia contaminada tras drift.
+% Esta figura vende la tesis entera; conseguirla pronto.
+
+\section{Problem statement}
+\label{sec:intro_problem}
+% La tesis en una frase:
+%   la decisión de fusión es UNA respuesta binaria a VARIAS preguntas distintas
+%   (¿geometría desactualizada? ¿segmentación mala? ¿descriptor ambiguo? ¿uno o dos
+%   objetos?), y se toma sobre geometría que el SLAM ya movió por debajo.
+% Corolario: un solo umbral no puede arbitrar cuatro preguntas -> por eso cada
+% heurística nueva arregla un modo de fallo y rompe otro.
+
+\section{Contributions}
+\label{sec:intro_contributions}
+% 1. Framework/benchmark controlado de fusión bajo deformación del mapa -> \ref{ch:benchmark}
+% 2. Estudio del instance tracking: oportunidades, calidad de máscara, SAM3 -> \ref{ch:instance_tracking}
+% 3. Contest: arbitraje de instancias a nivel de punto           -> \ref{ch:contest}
+% 4. Consistencia geométrica: refresh por BA local + submapas    -> \ref{ch:geometric_consistency}
+% 5. Fusión revisitada: análisis del merge + mejoras del criterio -> \ref{ch:fusion}
+
+\section{Outline}
+\label{sec:intro_outline}
+% Estructura de la memoria. Explicitar que el orden es CAUSAL, no cronológico:
+%   no se puede afinar el criterio si la granularidad es incorrecta;
+%   no se puede fijar la granularidad si el sustrato geométrico miente;
+%   y no se puede saber nada de nada si no se puede medir una decisión.

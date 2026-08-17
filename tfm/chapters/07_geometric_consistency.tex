@@ -1,0 +1,58 @@
+\chapter{Maintaining Geometric Consistency under Map Optimization}
+\label{ch:geometric_consistency}
+
+% PRESUPUESTO: ~5 pp
+% Invariante que unifica el capítulo: el mapa semántico debe seguir siendo válido cuando
+% el SLAM optimiza la geometría por debajo.
+%   - deformación pequeña y continua -> BA local  -> refresh geométrico
+%   - deformación grande y abrupta   -> drift     -> submapas
+% El contest (\ref{ch:contest}) PRESUPONE este sustrato sano: aquí se paga esa precondición.
+% La ablación 2×2 (abajo) demuestra que el orden causal sustrato -> contest es real.
+
+\section{The map moves underneath}
+\label{sec:geo_problem}
+% La nube densa de OVO ignora el BA local: solo se relee en cambios grandes de mapa.
+% Ruido geométrico continuo por debajo de todas las decisiones semánticas.
+% Aquí aterriza el hallazgo del viejo diagnóstico: al simular drift (traslación/rotación)
+% para provocar duplicados, OVO EMPEORA -> instancias ya presentes se reproyectan donde no
+% toca, generan asignaciones malas, y esas asignaciones se propagan el resto de la vida del
+% mapa. El contest no puede arreglarlo (presupone tracking sano) -> por eso este capítulo.
+
+\section{Local-BA geometry refresh}
+\label{sec:geo_refresh}
+% Diseño (trigger por mnMapChange), coste, y por qué NO se re-fusiona la semántica.
+% Implementado: commit 52a84aa. Doc: docs/localba_geometry_refresh_design_2026-07-12.md
+
+\section{Why the refresh is not enough}
+\label{sec:geo_limits}
+% Deriva grande: el refresh no la absorbe, y el contest tampoco puede (necesita tracking
+% sano). Hace falta otra cosa.
+
+\section{Submapping under detected drift}
+\label{sec:geo_submaps}
+% PENDIENTE DE IMPLEMENTAR.
+% Señales de detección del drift; criterio de apertura de un submapa nuevo.
+% LA CLAVE: al llegar el loop closure, el submapa se SUPERPONE con lo ya visto, y el
+% contest (\ref{ch:contest}) lo resuelve. El mecanismo nuevo absorbe el problema del viejo.
+
+\section{Results}
+\label{sec:geo_results}
+
+\subsection{Synthetic benchmark}
+\label{sec:geo_results_synth}
+% Sobre SimulatedSLAM (\ref{sec:bench_simslam}): saltos inyectados -> refresh + submapas.
+
+\subsection{The 2$\times$2 ablation: substrate $\times$ contest}
+\label{sec:geo_ablation}
+% EL EXPERIMENTO ESTRELLA. Sobre saltos inyectados:
+%                    | sin submapas          | con submapas
+%   sin contest      | baseline degradado    | ¿el submapa solo ayuda?
+%   con contest      | contest sobre sustrato | la propuesta completa
+%                    | roto -> debe ir mal    |
+% La celda abajo-izquierda DEMUESTRA que el orden causal (sustrato antes que contest) es
+% real y no retórica. Asegurar este experimento sí o sí.
+
+\subsection{ORB-SLAM2 and ScanNet}
+\label{sec:geo_results_real}
+% Datos reales, tracking geométrico malo (ScanNet): es la motivación natural del refresh
+% por BA local como corrección geométrica. Demuestra que sobrevive al ruido real.

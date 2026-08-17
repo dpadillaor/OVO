@@ -25,17 +25,29 @@
 % --- Math ---
 \usepackage{amsmath,amsthm,amssymb,mathrsfs}
 
+% --- Algorithms (paquete-libre: float define un flotante "Algoritmo") ---
+\usepackage{float}
+\newfloat{algorithm}{t}{loa}
+\floatname{algorithm}{Algoritmo}
+
 % --- Floats, figures, tables ---
 \usepackage{graphicx}
+\usepackage{pifont}  % \ding{192}.. círculos numerados para callouts de figuras
 \graphicspath{{figures/}{images/}}
 \usepackage{subcaption}
 \usepackage{wrapfig}
 \usepackage{rotating}
+\usepackage{array}
 \usepackage{multirow}
 \usepackage{booktabs}
+\usepackage[flushleft]{threeparttable}
 \usepackage{adjustbox}
 \usepackage{placeins,flafter}
 \usepackage[final]{pdfpages}
+% Tighten the (generous) EINA default spacing around floats
+\setlength{\textfloatsep}{12pt plus 3pt minus 2pt}
+\setlength{\floatsep}{10pt plus 2pt minus 2pt}
+\setlength{\intextsep}{10pt plus 2pt minus 2pt}
 
 % --- Drawing ---
 \usepackage{tikz}
@@ -96,10 +108,15 @@
 \mainmatter
 \include{chapters/01_introduction}
 \include{chapters/02_related_work}
-\include{chapters/03_preliminaries}
-\include{chapters/04_loop_closure_fusion}
-\include{chapters/05_experiments}
-\include{chapters/06_conclusion}
+\include{chapters/03_preliminaries}      % The OVO System
+\include{chapters/04_benchmark}          % Experimental Framework
+\include{chapters/05_instance_tracking}  % Instance Tracking, from Masks to Evidence (máscaras + SAM3)
+% Contest (contribución estrella) inmediatamente después del estudio de máscaras: el
+% capítulo 05 cierra entregándole el testigo ("hay que bajar al punto, por evidencia").
+\include{chapters/06_contest}
+\include{chapters/07_geometric_consistency}  % sustrato geométrico (BA refresh + submapas)
+\include{chapters/08_fusion}             % Instance Fusion: Analysis and Improvements
+\include{chapters/09_conclusion}
 
 \printbibliography
 

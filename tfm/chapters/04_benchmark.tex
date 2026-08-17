@@ -1,0 +1,134 @@
+\chapter{Experimental Framework}
+\label{ch:benchmark}
+
+Antes de presentar las mejoras propuestas sobre OVO, conviene describir el marco de trabajo
+sobre el que se fundamentan: los datasets y las métricas con los que se evalúa el sistema, y
+las herramientas creadas y utilizadas para medir sus resultados, observar su comportamiento y
+provocar sus fallos de forma controlada y reproducible.
+
+Todo este aparato responde a una exigencia de atribución: poder afirmar que una mejora se
+debe a un cambio concreto y no al azar. Se presenta en tres piezas, cada una respondiendo a
+una pregunta: con qué se juzga (Sección~\ref{sec:bench_setup}), cómo se provoca el fallo de
+forma repetible (Sección~\ref{sec:bench_simslam}) y desde qué punto se parte
+(Sección~\ref{sec:bench_baseline}).
+
+\section{Dataset and metrics}
+\label{sec:bench_setup}
+
+La evaluación principal se realiza sobre Replica~\parencite{straub2019replica}, un conjunto
+de escenas de interior reconstruidas con geometría densa y anotación semántica por punto.
+Se usa el subconjunto habitual en la literatura de OVO: ocho escenas (office-0 a office-4 y
+room-0 a room-2) y 51 clases. Su anotación densa por punto y sus
+trayectorias limpias, sin el ruido de captura de un dataset real, permiten aislar el comportamiento
+semántico del ruido geométrico.
+
+
+% TODO: añadir cita de ScanNet a refs.bib (dai2017scannet) y ponerla aquí.
+Junto a Replica se emplean también dos escenas de ScanNet, no como \emph{baseline} de
+métricas reproducible sino como banco de prueba en condiciones más realistas: permiten
+evaluar OVO con ORB-SLAM2 sobre tracking real, con el ruido de captura y la deriva que la
+trayectoria limpia de Replica no tiene (Capítulos~\ref{ch:geometric_consistency}
+y~\ref{ch:fusion}).
+
+La calidad del mapa se mide en las dos familias de métricas que el
+Capítulo~\ref{ch:preliminaries} anticipa, cada una atada a un eje distinto de fallo:
+
+\begin{itemize}
+  \item \textbf{Class-aware} (mIoU, mAcc). Comparan la etiqueta de cada punto con la del GT y
+    miden la calidad \emph{semántica}. Se reportan por tertiles de frecuencia de clase
+    (Head, Common, Tail), siguiendo la práctica de OpenNeRF: promediar sobre las 51 clases
+    dejaría que las pocas clases muy frecuentes taparan el comportamiento en la cola larga,
+    donde vive la mayor parte del vocabulario.
+  \item \textbf{Class-agnostic} (AP de instancia, con sus variantes AP, AP$_{50}$, AP$_{25}$).
+    Comparan la segmentación en instancias con la del GT \emph{sin mirar la clase}, y miden
+    si el objeto se recuperó como una instancia correcta.
+\end{itemize}
+
+La parte semántica se resuelve con el segmentador SAM~2.1-l~\parencite{ravi2024sam2} y el
+descriptor SigLIP ViT-SO400M~\parencite{zhai2023siglip}. Todo se ejecuta sobre una única GPU
+NVIDIA RTX 4090 (24\,GB).
+
+Para observar el sistema por dentro se ha construido, como parte de este trabajo, un visor
+basado en Rerun. La visualización previa, en Open3D, mostraba la nube y permitía consultas por
+lenguaje, pero no recorrer la construcción keyframe a keyframe ni rebobinarla. Rerun registra
+el mapa sobre una línea temporal, con paneles 2D por keyframe (RGB, máscaras de SAM y
+reproyecciones sobre la imagen), lo que permite avanzar y retroceder y rastrear una mala
+segmentación hasta su \emph{origen temporal} (Figura~\ref{fig:rerun_tracking}). Aunque la evaluación
+cuantitativa de los resultados recae en las métricas, es esta inspección visual, que presenta
+de forma simultánea instancias, máscaras y trayectoria frame a frame, la que permite localizar
+los fallos y su causa y, a partir de ahí, plantear mejoras.
+
+\begin{figure}[H]
+  \centering
+  % PLACEHOLDER: sustituir por \includegraphics de una captura del visor Rerun (PNG, modo stream).
+  \fbox{\parbox[c][3cm][c]{0.8\linewidth}{\centering\footnotesize\itshape
+  Captura de Rerun: nube por instancia, paneles 2D por keyframe (RGB, máscaras de SAM,
+  reproyecciones) y el origen temporal de una mala asignación.}}
+  \caption{El visor Rerun, con el que se observa la construcción del mapa keyframe a keyframe.}
+  \label{fig:rerun_tracking}
+\end{figure}
+
+\section{SimulatedSLAM: a backend with controlled perturbation}
+\label{sec:bench_simslam}
+
+Varias de las contribuciones de este trabajo estudian cómo afectan a la fusión de instancias
+las imperfecciones de la geometría y la corrección brusca que introduce un loop closure.
+Reproducirlas con un SLAM real es difícil, porque hay que esperar a que ocurran y no se
+repiten igual entre ejecuciones. Por eso se añade un tercer backend, junto
+al SLAM vanilla y a ORB-SLAM2~\parencite{murartal2017orbslam2}: SimulatedSLAM, que reconstruye la nube igual que
+OVO-mapping a partir de la trayectoria \emph{ground truth}, pero con la capacidad de inyectar
+saltos de pose de forma controlada.
+
+Con la inyección apagada entrega las poses GT sin tocarlas y reproduce, por tanto, las cifras
+de OVO-mapping. La Sección~\ref{sec:bench_baseline} lo confirma, y esa igualdad valida el
+banco: si el sustrato limpio equivale a OVO-mapping, cualquier degradación posterior es
+atribuible a la perturbación inyectada y no al backend de simulación.
+
+Con la inyección encendida, SimulatedSLAM introduce en un keyframe elegido un salto brusco de
+pose. El salto es una transformación rígida
+$J = \left[\begin{smallmatrix} R & t \\ 0 & 1\end{smallmatrix}\right]$, con rotación $R$ y
+traslación $t$, que se aplica a todas las poses a partir de ese instante: la pose estimada del
+keyframe $n$ (la que el SLAM reporta y con la que se colocan sus puntos) deja de coincidir con
+su pose real $T^{\mathrm{gt}}_n$ y pasa a ser $T^{\mathrm{est}}_n = J\,T^{\mathrm{gt}}_n$. Del
+salto se eligen el keyframe de
+disparo y sus magnitudes: cuánto traslada y cuántos grados gira. Lo que fija la semilla es la
+orientación, la dirección de la traslación y el eje alrededor del cual gira, de modo que el
+salto es aleatorio en orientación pero perfectamente reproducible. Según qué componente esté activa, el salto es
+\emph{traslacional} ($R=I$), \emph{rotacional} ($t=0$) o \emph{mixto} (ambos). Al producirse el
+salto, las instancias presentes en ese frame se reconstruyen desplazadas a otra zona del
+espacio, generando duplicados por construcción. Con ellos se reproduce el error geométrico de
+un SLAM real: al cerrarse el loop closure, esos duplicados se corrigen y quedan superpuestos
+sobre su instancia original. Al final de la secuencia, SimulatedSLAM simula ese  loop closure devolviendo el mapa a su
+\emph{ground truth}: fija cada keyframe a su pose real $T^{\mathrm{gt}}_n$ y arrastra
+rígidamente sus puntos con la transformación de corrección $C_n$,
+\begin{equation}
+  \label{eq:oracle_correction}
+  C_n = T^{\mathrm{gt}}_n\,(T^{\mathrm{est}}_n)^{-1}, \qquad p' = C_n\,p \quad \forall\, p \in \mathcal{P}_n,
+\end{equation}
+que lleva cada punto $p$ del keyframe (el conjunto $\mathcal{P}_n$, en coordenadas homogéneas) a
+su posición corregida $p'$. Así se ajusta a la vez trayectoria y nube. En los keyframes
+posteriores al salto $C_n = J^{-1}$: deshace exactamente el salto inyectado, y deja intactos los
+anteriores. Es una corrección perfecta, instantánea y única, al contrario que la de un
+SLAM real. El protocolo que la explota para puntuar la fusión se detalla en el
+Capítulo~\ref{ch:fusion}.
+
+\section{Baseline: reproducing OVO}
+\label{sec:bench_baseline}
+
+Para comprobar que los experimentos parten de un buen punto, se ejecuta OVO sobre el entorno
+de pruebas con el objetivo de reproducir las cifras del artículo original y fijar el
+\emph{baseline} de referencia. Se ejecuta también SimulatedSLAM, con la inyección apagada,
+para verificar que reconstruye correctamente y reproduce ese mismo baseline. La
+Tabla~\ref{tab:baseline_vs_paper} recoge ambas comprobaciones.
+
+\input{figures/tab_baseline_vs_paper}
+
+La reproducción recupera las cifras del artículo dentro de un par de puntos, con la clase
+Common algo por encima (el artículo no reporta AP de instancia, de ahí los guiones); la fila
+OVO-ORB-SLAM2 es la media de cuatro ejecuciones, dado que ORB-SLAM es no determinista, con una
+dispersión de unos dos puntos en mIoU y AP. La fila OVO-Simulated, la relevante para este
+trabajo, coincide casi exactamente con OVO-mapping (All $27.1$ frente a $27.6$ mIoU); la
+pequeña diferencia proviene de que SimulatedSLAM selecciona sus keyframes por distancia y
+rotación, y reconstruye por tanto a partir de menos frames que OVO-mapping, no de un error
+introducido por la simulación. Esa coincidencia lo valida como el \emph{baseline} de ruido
+cero, la fila contra la que se mide todo lo que sigue.
