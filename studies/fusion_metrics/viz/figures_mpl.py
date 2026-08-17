@@ -83,6 +83,57 @@ def pr_trajectory(scenes: list[SceneFusionData], title: str | None = None):
     return pr_trajectory_series([(s.scene, s.by_criterion) for s in scenes], title=title)
 
 
+def pr_trajectory_pooled(pooled_by_criterion: list[dict],
+                         scene_series: list[tuple[str, list[dict]]],
+                         title: str | None = None, pooled_label: str = "pooled"):
+    """Experiment-level P-R: faint per-scene polylines (spread) under one bold
+    micro-average line (``pooled_by_criterion``, derived from pooled counts).
+
+    Macro-averaging P-R points across scenes is meaningless when volumes differ,
+    so the summary line comes from POOLED COUNTS, not an average of the curves.
+    """
+    fig, ax = plt.subplots(figsize=(5.2, 4.4))
+
+    # faint per-scene context, no markers/labels, low zorder
+    for label, by_criterion in scene_series:
+        xs, ys, _ = _pr_trajectory(by_criterion)
+        if xs:
+            ax.plot(xs, ys, "-", color="0.6", lw=1.0, alpha=0.35, zorder=1)
+
+    # bold pooled micro-average line, markers per gate
+    xs, ys, gate_names = _pr_trajectory(pooled_by_criterion)
+    if xs:
+        ax.plot(xs, ys, "-", color="#000000", lw=2.2, zorder=3)
+        for j, (x, y) in enumerate(zip(xs, ys)):
+            ax.plot(x, y, MARKERS[j % len(MARKERS)], color="#000000", ms=6,
+                    mfc="white", mew=1.4, zorder=4)
+        ax.annotate(pooled_label, (xs[-1], ys[-1]), fontsize=8, color="#000000",
+                    xytext=(4, 4), textcoords="offset points")
+
+    ax.set_xlabel("recall (good merges still alive / total)", fontsize=9)
+    ax.set_ylabel("precision (good / alive)", fontsize=9)
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_ylim(-0.02, 1.02)
+    ax.tick_params(labelsize=8)
+    ax.grid(True, lw=0.4, alpha=0.4)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    if title:
+        ax.set_title(title, fontsize=10)
+
+    handles = [Line2D([], [], color="0.6", lw=1.0, alpha=0.6, label="per scene"),
+               Line2D([], [], color="#000000", lw=2.2, label=pooled_label)]
+    handles += [Line2D([], [], marker=MARKERS[j % len(MARKERS)], color="0.3",
+                       mfc="white", mew=1.4, ls="", ms=6, label=n)
+                for j, n in enumerate(gate_names)]
+    ax.legend(handles=handles, fontsize=7, title_fontsize=8, loc="lower left",
+              framealpha=0.9)
+
+    fig.tight_layout()
+    return fig
+
+
 _EPOCH_ORDER = {"predrift_predrift": 0, "predrift_postdrift": 1, "postdrift_postdrift": 2}
 
 
@@ -107,6 +158,14 @@ def _save(fig, out: str | pathlib.Path) -> pathlib.Path:
 def save_pr_trajectory(scenes: list[SceneFusionData], out: str | pathlib.Path,
                        title: str | None = None) -> pathlib.Path:
     return _save(pr_trajectory(scenes, title=title), out)
+
+
+def save_pr_trajectory_pooled(pooled_by_criterion: list[dict],
+                              scene_series: list[tuple[str, list[dict]]],
+                              out: str | pathlib.Path, title: str | None = None,
+                              pooled_label: str = "pooled") -> pathlib.Path:
+    return _save(pr_trajectory_pooled(pooled_by_criterion, scene_series,
+                                      title=title, pooled_label=pooled_label), out)
 
 
 def save_pr_trajectory_by_epoch(scene: SceneFusionData, out: str | pathlib.Path,
@@ -335,9 +394,34 @@ def _load_timings(exp_path: str | pathlib.Path, scene: str, chain: list[str]):
     return load_criterion_timings(pathlib.Path(exp_path), scene, criteria=chain or None)
 
 
+def pool_timings(exp_path: str | pathlib.Path, scenes: list[SceneFusionData]):
+    """Micro-average cost: per criterion, sum pairs (count) and seconds (time_s)
+    across scenes. Totals are additive; the per-pair unit cost falls out of
+    pooled_time / pooled_count (CriterionTiming.mean_s), never an average of
+    per-scene means. Returns list[CriterionTiming] in chain order."""
+    from ..core.timing.reader import load_criterion_timings, CriterionTiming  # lazy
+    chain = [g["criterion"] for g in scenes[0].by_criterion] if scenes else []
+    acc: dict[str, list] = {}
+    order: list[str] = []
+    for s in scenes:
+        for t in load_criterion_timings(pathlib.Path(exp_path), s.scene, criteria=chain or None):
+            if t.name not in acc:
+                acc[t.name] = [0, 0.0]
+                order.append(t.name)
+            acc[t.name][0] += t.count
+            acc[t.name][1] += t.time_s
+    return [CriterionTiming(name=n, count=acc[n][0], time_s=acc[n][1]) for n in order]
+
+
 _COST_VIEWS = {"decomp": cost_scatter, "unit-total": cost_unit_vs_total,
                "attribution": cost_attribution, "total-pairs": cost_total_vs_pairs}
 _LOG_VIEWS = {"unit-total", "total-pairs"}
+
+
+def _render_cost(timings, view: str, log: bool, title: str):
+    builder = _COST_VIEWS[view]
+    kwargs = {"log": log} if view in _LOG_VIEWS else {}
+    return builder(timings, title=title, **kwargs)
 
 
 def save_cost_scatter(scene_data: SceneFusionData, exp_path: str | pathlib.Path,
@@ -345,7 +429,12 @@ def save_cost_scatter(scene_data: SceneFusionData, exp_path: str | pathlib.Path,
                       log: bool = True) -> pathlib.Path:
     chain = [g["criterion"] for g in scene_data.by_criterion]
     timings = _load_timings(exp_path, scene_data.scene, chain)
-    builder = _COST_VIEWS[view]
-    kwargs = {"log": log} if view in _LOG_VIEWS else {}
-    fig = builder(timings, title=f"{scene_data.scene} · gate cost ({view})", **kwargs)
-    return _save(fig, out)
+    return _save(_render_cost(timings, view, log, f"{scene_data.scene} · gate cost ({view})"), out)
+
+
+def save_cost_scatter_pooled(exp_path: str | pathlib.Path, scenes: list[SceneFusionData],
+                             out: str | pathlib.Path, view: str = "decomp",
+                             log: bool = True) -> pathlib.Path:
+    timings = pool_timings(exp_path, scenes)
+    title = f"pooled · gate cost ({view}) ({len(scenes)} scenes)"
+    return _save(_render_cost(timings, view, log, title), out)

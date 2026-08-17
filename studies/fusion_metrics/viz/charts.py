@@ -254,10 +254,10 @@ def _donut_trace(counts: dict, hole_title: str) -> go.Pie:
     )
 
 
-def confusion_donut(data: SceneFusionData, title: str = "Confusion split") -> go.Figure:
-    """Donut of the global confusion split (TP/FP/FN/TN), cascade colours + percentages."""
-    total = sum(data.counts.get(k, 0) for k, _, _ in _QUADRANTS)
-    fig = go.Figure(_donut_trace(data.counts, f"{total:,}<br>pairs"))
+def confusion_donut_from_counts(counts: dict, title: str = "Confusion split") -> go.Figure:
+    """Donut of a confusion split (TP/FP/FN/TN) given raw counts, cascade colours."""
+    total = sum(counts.get(k, 0) for k, _, _ in _QUADRANTS)
+    fig = go.Figure(_donut_trace(counts, f"{total:,}<br>pairs"))
     fig.update_layout(
         title=dict(text=f"<b>{title}</b>", x=0.5, xanchor="center", font=dict(size=15)),
         width=460, height=440, margin=dict(t=70, b=60, l=20, r=20),
@@ -266,6 +266,11 @@ def confusion_donut(data: SceneFusionData, title: str = "Confusion split") -> go
         paper_bgcolor="white",
     )
     return fig
+
+
+def confusion_donut(data: SceneFusionData, title: str = "Confusion split") -> go.Figure:
+    """Donut of the global confusion split (TP/FP/FN/TN), cascade colours + percentages."""
+    return confusion_donut_from_counts(data.counts, title)
 
 
 def confusion_donut_by_epoch(by_epoch: dict[str, dict]) -> go.Figure:

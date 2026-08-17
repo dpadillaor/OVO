@@ -44,7 +44,7 @@ def load_experiments(exps: list[str], labels: list[str] | None = None) -> dict[s
         label = labels[i] if labels else ep.name
         scenes_data = {}
         for s in SCENES:
-            f = ep / s / "fusion" / "fusion_eval_summary.json"
+            f = ep / s / "fusion" / "fusion_LC" / "fusion_eval_summary.json"
             if f.exists():
                 scenes_data[s] = json.loads(f.read_text())
         data[label] = {"path": ep, "scenes": scenes_data}

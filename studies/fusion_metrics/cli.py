@@ -71,12 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--gt_root", default=str(DEFAULT_GT_ROOT),
                         help="Dir holding instance ground-truth {scene}.txt")
     p_eval.add_argument("--out_dir", default=None,
-                        help="Where to write outputs (default: {scene}/fusion/)")
+                        help="Where to write outputs (default: {scene}/fusion/fusion_LC/)")
     p_eval.set_defaults(func=cmd_eval)
 
     p_report = sub.add_parser("report", help="Per-criterion timing + verdict counts (run eval first)")
     p_report.add_argument("--exp_path", required=True,
-                          help="Run dir with {scene}/logger/ and {scene}/fusion/fusion_eval_summary.json")
+                          help="Run dir with {scene}/logger/ and {scene}/fusion/fusion_LC/fusion_eval_summary.json")
     p_report.add_argument("--scene", required=True, help="Scene name, e.g. office0")
     p_report.set_defaults(func=cmd_report)
 

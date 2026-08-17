@@ -68,13 +68,13 @@ def discover_scenes(exp_path: str | pathlib.Path) -> list[str]:
         raise FileNotFoundError(f"Experiment directory not found: {p}")
     scenes = []
     for entry in sorted(p.iterdir()):
-        if entry.is_dir() and (entry / "fusion" / "fusion_eval_summary.json").exists():
+        if entry.is_dir() and (entry / "fusion" / "fusion_LC" / "fusion_eval_summary.json").exists():
             scenes.append(entry.name)
     return scenes
 
 
 def load_scene(exp_path: str | pathlib.Path, scene: str) -> SceneFusionData:
-    base = pathlib.Path(exp_path) / scene / "fusion"
+    base = pathlib.Path(exp_path) / scene / "fusion" / "fusion_LC"
 
     summary_path = base / "fusion_eval_summary.json"
     stats_path = base / "fusion_instance_stats.csv"
@@ -127,6 +127,76 @@ def pool_verdicts(scenes: list[SceneFusionData]) -> dict:
                     / (pooled["precision"] + pooled["recall"])
                     if (pooled["precision"] + pooled["recall"]) > 0 else 0.0)
     return pooled
+
+
+_CASCADE_KEYS = ("eval", "pass", "reject", "TP", "FP", "FN", "TN")
+
+
+def _pool_criterion_lists(lists: list[list[dict]]) -> list[dict]:
+    """Micro-average a set of by_criterion cascades: sum each gate's counts,
+    aligned by cascade position. A list whose gate name diverges from the first
+    non-empty list's is skipped for that gate."""
+    lists = [bc for bc in lists if bc]
+    if not lists:
+        return []
+    template = lists[0]
+    pooled = []
+    for i, g in enumerate(template):
+        agg = {"criterion": g["criterion"], **{k: 0 for k in _CASCADE_KEYS}}
+        for bc in lists:
+            if i < len(bc) and bc[i].get("criterion") == g["criterion"]:
+                for k in _CASCADE_KEYS:
+                    agg[k] += bc[i].get(k, 0)
+        # Rates are recomputed from the pooled counts (micro-average), never summed.
+        tp, fp, fn = agg["TP"], agg["FP"], agg["FN"]
+        agg["precision"] = round(tp / (tp + fp), 4) if tp + fp else None
+        agg["recall"] = round(tp / (tp + fn), 4) if tp + fn else None
+        p, r = agg["precision"], agg["recall"]
+        agg["f1"] = round(2 * p * r / (p + r), 4) if p and r else None
+        pooled.append(agg)
+    return pooled
+
+
+def pool_by_criterion(scenes: list[SceneFusionData]) -> list[dict]:
+    """Micro-average cascade over scenes (all runs share the chain), shaped for
+    gate_sankey."""
+    return _pool_criterion_lists([s.by_criterion for s in scenes])
+
+
+def pool_by_criterion_by_epoch(scenes: list[SceneFusionData]) -> dict[str, list[dict]]:
+    """Per drift epoch, the micro-average cascade pooled across scenes.
+    Returns {epoch: by_criterion}; only epochs present in some scene appear."""
+    epochs = []
+    for s in scenes:
+        for ep in s.by_epoch:
+            if ep not in epochs:
+                epochs.append(ep)
+    out = {}
+    for ep in epochs:
+        pooled = _pool_criterion_lists(
+            [s.by_epoch[ep].get("by_criterion", []) for s in scenes if ep in s.by_epoch])
+        if pooled:
+            out[ep] = pooled
+    return out
+
+
+def pool_counts_by_epoch(scenes: list[SceneFusionData]) -> dict[str, dict]:
+    """Per drift epoch, the confusion counts (TP/FP/FN/TN) summed across scenes.
+    Shaped as {epoch: {"counts": {...}}} to feed confusion_donut_by_epoch."""
+    epochs = []
+    for s in scenes:
+        for ep in s.by_epoch:
+            if ep not in epochs:
+                epochs.append(ep)
+    out = {}
+    for ep in epochs:
+        agg = {"TP": 0, "FP": 0, "FN": 0, "TN": 0}
+        for s in scenes:
+            c = s.by_epoch.get(ep, {}).get("counts", {})
+            for k in agg:
+                agg[k] += c.get(k, 0)
+        out[ep] = {"counts": agg}
+    return out
 
 
 def pool_instance_stats(scenes: list[SceneFusionData]) -> pd.DataFrame:

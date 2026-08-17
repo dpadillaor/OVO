@@ -7,7 +7,7 @@ import pathlib
 
 def load_verdicts(exp_path: pathlib.Path, scene: str) -> dict:
     """The whole ``verdicts`` block from fusion_eval_summary.json. Empty dict if absent."""
-    path = pathlib.Path(exp_path) / scene / "fusion" / "fusion_eval_summary.json"
+    path = pathlib.Path(exp_path) / scene / "fusion" / "fusion_LC" / "fusion_eval_summary.json"
     if not path.is_file():
         return {}
     return json.loads(path.read_text()).get("verdicts", {})

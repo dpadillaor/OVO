@@ -2,7 +2,7 @@
 
 Reads ``{exp_path}/{scene}/fusion_decisions.csv`` (the machine's calls) and the
 matching pre-fusion checkpoint (the instances as fusion saw them), scores every
-pair as TP/FP/FN/TN, and writes three artifacts to ``{exp_path}/{scene}/fusion/``:
+pair as TP/FP/FN/TN, and writes three artifacts to ``{exp_path}/{scene}/fusion/fusion_LC/``:
 ``fusion_decisions_eval.csv`` (rows + verdict), ``fusion_eval_summary.json``
 (counts, rates, by-group breakdown) and ``fusion_instance_stats.csv``.
 
@@ -162,7 +162,7 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
     scene_dir = exp_path / scene
     csv_path = fusion_decisions_csv(scene_dir)
     ckpt_path = pathlib.Path(ckpt) if ckpt else _resolve_ckpt(exp_path, scene)
-    out_dir = pathlib.Path(out_dir) if out_dir else scene_dir / "fusion"
+    out_dir = pathlib.Path(out_dir) if out_dir else scene_dir / "fusion" / "fusion_LC"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows, frame_id = load_fusion_decisions(csv_path)

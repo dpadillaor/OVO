@@ -12,11 +12,15 @@ import argparse
 import pathlib
 import sys
 
-from .loader import OUTPUT_ROOT, load_scene, load_experiment, load_experiments
+from .loader import (OUTPUT_ROOT, load_scene, load_experiment, load_experiments,
+                     pool_by_criterion, pool_by_criterion_by_epoch, pool_verdicts,
+                     pool_counts_by_epoch)
 from .dashboards import scene_dashboard, experiment_summary, compare_dashboard
-from .charts import gate_sankey, confusion_donut, confusion_donut_by_epoch
+from .charts import (gate_sankey, confusion_donut, confusion_donut_by_epoch,
+                     confusion_donut_from_counts)
 from .figures_mpl import (save_pr_trajectory, save_pr_trajectory_by_epoch,
-                          save_pr_trajectory_epochs_separate, save_cost_scatter)
+                          save_pr_trajectory_epochs_separate, save_cost_scatter,
+                          save_pr_trajectory_pooled, save_cost_scatter_pooled)
 
 _EPOCH_ORDER = {"predrift_predrift": 0, "predrift_postdrift": 1, "postdrift_postdrift": 2}
 
@@ -63,71 +67,148 @@ def _write_fig(fig, out: pathlib.Path) -> None:
 
 def cmd_sankey(args: argparse.Namespace) -> None:
     exp_path = _resolve_exp_path(args.exp)
+
+    # No --scene: experiment-level pooled cascade (micro-average over all scenes).
+    if not args.scene:
+        scenes = load_experiment(exp_path)
+        figures = exp_path / "fusion_LC" / "figures"
+
+        if args.by_epoch:
+            pooled = pool_by_criterion_by_epoch(scenes)
+            epochs = sorted(pooled.items(), key=lambda kv: _EPOCH_ORDER.get(kv[0], 9))
+            if not epochs:
+                print(f"No by_epoch data to pool for {args.exp}", file=sys.stderr)
+                return
+            ext = pathlib.Path(args.out).suffix if args.out else ".pdf"
+            for ep, bc in epochs:
+                fig = gate_sankey(bc, title=f"Fusion gate cascade · pooled · {ep} "
+                                            f"({len(scenes)} scenes)")
+                _write_fig(fig, figures / f"fusion_gate_cascade_pooled_{ep}{ext}")
+            return
+
+        by_criterion = pool_by_criterion(scenes)
+        if not by_criterion:
+            print(f"No by_criterion data to pool for {args.exp}", file=sys.stderr)
+            return
+        fig = gate_sankey(by_criterion,
+                          title=f"Fusion gate cascade · pooled ({len(scenes)} scenes)")
+        _write_fig(fig, pathlib.Path(args.out or figures / "fusion_gate_cascade_pooled.pdf"))
+        return
+
     data = load_scene(exp_path, args.scene)
-    figures = exp_path / args.scene / "fusion" / "figures"
+    figures = exp_path / args.scene / "fusion" / "fusion_LC" / "figures"
 
     if args.by_epoch:
         epochs = sorted(data.by_epoch.items(), key=lambda kv: _EPOCH_ORDER.get(kv[0], 9))
         if not epochs:
             print(f"No by_epoch data for {args.exp}/{args.scene}", file=sys.stderr)
             return
-        ext = pathlib.Path(args.out).suffix if args.out else ".svg"
+        ext = pathlib.Path(args.out).suffix if args.out else ".pdf"
         for ep, d in epochs:
             fig = gate_sankey(d.get("by_criterion", []), title=f"Fusion gate cascade · {ep}")
             _write_fig(fig, figures / f"fusion_gate_cascade_{ep}{ext}")
         return
 
     fig = gate_sankey(data.by_criterion)
-    _write_fig(fig, pathlib.Path(args.out or figures / "fusion_gate_cascade.svg"))
+    _write_fig(fig, pathlib.Path(args.out or figures / "fusion_gate_cascade.pdf"))
 
 
 def cmd_confusion(args: argparse.Namespace) -> None:
     exp_path = _resolve_exp_path(args.exp)
+
+    # No --scene: experiment-level pooled donut (micro-average over all scenes).
+    if not args.scene:
+        scenes = load_experiment(exp_path)
+        figures = exp_path / "fusion_LC" / "figures"
+        n = len(scenes)
+        if args.by_epoch:
+            fig = confusion_donut_by_epoch(pool_counts_by_epoch(scenes))
+            out = pathlib.Path(args.out or figures / "fusion_confusion_donut_pooled_by_epoch.pdf")
+        else:
+            fig = confusion_donut_from_counts(
+                pool_verdicts(scenes), title=f"Confusion split · pooled ({n} scenes)")
+            out = pathlib.Path(args.out or figures / "fusion_confusion_donut_pooled.pdf")
+        _write_fig(fig, out)
+        return
+
     data = load_scene(exp_path, args.scene)
-    figures = exp_path / args.scene / "fusion" / "figures"
+    figures = exp_path / args.scene / "fusion" / "fusion_LC" / "figures"
     if args.by_epoch:
         fig = confusion_donut_by_epoch(data.by_epoch)
-        out = pathlib.Path(args.out or figures / "fusion_confusion_donut_by_epoch.svg")
+        out = pathlib.Path(args.out or figures / "fusion_confusion_donut_by_epoch.pdf")
     else:
         fig = confusion_donut(data)
-        out = pathlib.Path(args.out or figures / "fusion_confusion_donut.svg")
+        out = pathlib.Path(args.out or figures / "fusion_confusion_donut.pdf")
     _write_fig(fig, out)
 
 
 def cmd_cost(args: argparse.Namespace) -> None:
     exp_path = _resolve_exp_path(args.exp)
-    data = load_scene(exp_path, args.scene)
     default_name = {"decomp": "gate_cost_scatter", "unit-total": "gate_cost_unit_total",
                     "attribution": "gate_cost_attribution",
                     "total-pairs": "gate_cost_total_pairs"}[args.view]
-    out = args.out or str(exp_path / args.scene / "fusion" / "figures" / f"{default_name}.svg")
     if args.scale == "auto":
         log = args.view != "total-pairs"  # total-pairs reads better linear; rest log
     else:
         log = args.scale == "log"
+
+    # No --scene: experiment-level pooled cost (additive totals, micro-average unit cost).
+    if not args.scene:
+        scenes = load_experiment(exp_path)
+        out = args.out or str(exp_path / "fusion_LC" / "figures" / f"{default_name}_pooled.pdf")
+        saved = save_cost_scatter_pooled(exp_path, scenes, out, view=args.view, log=log)
+        print(f"Saved: {saved}")
+        return
+
+    data = load_scene(exp_path, args.scene)
+    out = args.out or str(exp_path / args.scene / "fusion" / "fusion_LC" / "figures" / f"{default_name}.pdf")
     saved = save_cost_scatter(data, exp_path, out, view=args.view, log=log)
     print(f"Saved: {saved}")
 
 
 def cmd_trajectory(args: argparse.Namespace) -> None:
     exp_path = _resolve_exp_path(args.exp)
-    if args.by_epoch:
-        if not args.scene:
-            print("--by-epoch requires --scene", file=sys.stderr)
-            sys.exit(1)
+    ext = pathlib.Path(args.out).suffix if args.out else ".pdf"
+
+    # scene-level
+    if args.scene:
         data = load_scene(exp_path, args.scene)
-        figures = exp_path / args.scene / "fusion" / "figures"
-        ext = pathlib.Path(args.out).suffix if args.out else ".svg"
-        # combined (all epochs, one plane) + one separate figure per epoch
-        combined = save_pr_trajectory_by_epoch(data, args.out or figures / f"pr_trajectory_by_epoch{ext}")
-        separates = save_pr_trajectory_epochs_separate(data, figures, ext=ext)
-        for p in (combined, *separates):
-            print(f"Saved: {p}")
+        figures = exp_path / args.scene / "fusion" / "fusion_LC" / "figures"
+        if args.by_epoch:
+            # combined (all epochs, one plane) + one separate figure per epoch
+            combined = save_pr_trajectory_by_epoch(data, args.out or figures / f"pr_trajectory_by_epoch{ext}")
+            separates = save_pr_trajectory_epochs_separate(data, figures, ext=ext)
+            for p in (combined, *separates):
+                print(f"Saved: {p}")
+        else:
+            saved = save_pr_trajectory([data], args.out or figures / f"pr_trajectory{ext}")
+            print(f"Saved: {saved}")
         return
-    else:
-        scenes = load_experiment(exp_path)
-        out = args.out or str(exp_path / "_viz" / "pr_trajectory.svg")
-        saved = save_pr_trajectory(scenes, out)
+
+    # experiment-level: bold pooled micro-average line + faint per-scene context.
+    scenes = load_experiment(exp_path)
+    figures = exp_path / "fusion_LC" / "figures"
+    n = len(scenes)
+    if args.by_epoch:
+        pooled = pool_by_criterion_by_epoch(scenes)
+        epochs = sorted(pooled.items(), key=lambda kv: _EPOCH_ORDER.get(kv[0], 9))
+        if not epochs:
+            print(f"No by_epoch data to pool for {args.exp}", file=sys.stderr)
+            return
+        for ep, pooled_bc in epochs:
+            scene_series = [(s.scene, s.by_epoch[ep].get("by_criterion", []))
+                            for s in scenes if ep in s.by_epoch]
+            saved = save_pr_trajectory_pooled(
+                pooled_bc, scene_series, figures / f"pr_trajectory_pooled_{ep}{ext}",
+                title=f"P-R · pooled · {ep} ({n} scenes)", pooled_label=ep)
+            print(f"Saved: {saved}")
+        return
+
+    pooled_bc = pool_by_criterion(scenes)
+    scene_series = [(s.scene, s.by_criterion) for s in scenes]
+    saved = save_pr_trajectory_pooled(
+        pooled_bc, scene_series, args.out or figures / f"pr_trajectory_pooled{ext}",
+        title=f"P-R trajectory · pooled ({n} scenes)")
     print(f"Saved: {saved}")
 
 
@@ -164,16 +245,16 @@ def main() -> None:
     p_scene.add_argument("--mode", default="objects", choices=["objects", "all"],
                          help="AP evaluation mode (default: objects)")
 
-    p_sankey = sub.add_parser("sankey", help="Single-scene gate cascade Sankey")
+    p_sankey = sub.add_parser("sankey", help="Gate cascade Sankey (scene, or pooled over the experiment if --scene omitted)")
     p_sankey.add_argument("--exp", required=True, help="Experiment ID or path")
-    p_sankey.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
+    p_sankey.add_argument("--scene", help="Scene name (e.g. office0). Omit for experiment-level pooled cascade.")
     p_sankey.add_argument("--out", help="Output path (.svg/.pdf/.png/.html)")
     p_sankey.add_argument("--by-epoch", action="store_true",
                           help="One Sankey per drift epoch (separate files)")
 
-    p_cost = sub.add_parser("cost", help="Gate cost decomposition (volume × unit time)")
+    p_cost = sub.add_parser("cost", help="Gate cost decomposition (scene, or pooled over the experiment if --scene omitted)")
     p_cost.add_argument("--exp", required=True, help="Experiment ID or path")
-    p_cost.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
+    p_cost.add_argument("--scene", help="Scene name (e.g. office0). Omit for experiment-level pooled cost.")
     p_cost.add_argument("--out", help="Output path (.svg/.pdf/.png)")
     p_cost.add_argument("--view", default="decomp",
                         choices=["decomp", "unit-total", "attribution", "total-pairs"],
@@ -182,9 +263,9 @@ def main() -> None:
     p_cost.add_argument("--scale", default="auto", choices=["auto", "log", "linear"],
                         help="axis scale for scatter views (auto: total-pairs linear, rest log)")
 
-    p_conf = sub.add_parser("confusion", help="Confusion-split donut (TP/FP/FN/TN)")
+    p_conf = sub.add_parser("confusion", help="Confusion-split donut (scene, or pooled over the experiment if --scene omitted)")
     p_conf.add_argument("--exp", required=True, help="Experiment ID or path")
-    p_conf.add_argument("--scene", required=True, help="Scene name (e.g. office0)")
+    p_conf.add_argument("--scene", help="Scene name (e.g. office0). Omit for experiment-level pooled donut.")
     p_conf.add_argument("--out", help="Output path (.svg/.pdf/.png/.html)")
     p_conf.add_argument("--by-epoch", action="store_true",
                         help="Small-multiples: one donut per drift epoch")
