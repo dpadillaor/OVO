@@ -1,36 +1,5 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/session_start.py"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/pre_compact_flush.py"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 .claude/hooks/session_end_flush.py",
-            "async": true
-          }
-        ]
-      }
-    ],
     "WorktreeCreate": [
       {
         "hooks": [
