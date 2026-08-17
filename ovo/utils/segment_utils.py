@@ -314,6 +314,11 @@ def build_sam3_image_amg(config: Dict[str, Any], device: str = "cuda"):
     bpe = os.path.join(os.path.dirname(sam3.__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
     model = build_sam3_image_model(bpe_path=bpe, enable_inst_interactivity=True)
     model.to(device)
+    # build_sam3_image_model enables global CUDA autocast as a side effect and never restores it,
+    # which would leak bfloat16 into every downstream op (CLIP descriptors, classification, ...).
+    # The AMG uses its own context-managed autocast, so force the global state back off.
+    if torch.is_autocast_enabled():
+        torch.set_autocast_enabled("cuda", False)
     predictor = model.inst_interactive_predictor
     predictor.model.backbone = model.backbone
     amg = build_amg_from_predictor(
