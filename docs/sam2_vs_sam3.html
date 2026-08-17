@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAM 2 vs SAM 3 — Informe Técnico Comparativo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161d;
+    --surface2: #1a1e28;
+    --border: #252a38;
+    --border2: #2e3448;
+    --text: #e2e6f0;
+    --muted: #7a8299;
+    --dim: #4a5068;
+    --sam2: #3d7fff;
+    --sam2-dim: #1a3a7a;
+    --sam2-bg: #0d1a33;
+    --sam3: #00c896;
+    --sam3-dim: #006b50;
+    --sam3-bg: #001f17;
+    --accent: #f0b840;
+    --accent-dim: #7a5c10;
+    --accent-bg: #1f1700;
+    --red: #ff5c5c;
+    --red-bg: #1f0a0a;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --serif: 'IBM Plex Serif', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.75;
+    font-weight: 400;
+  }
+
+  /* HEADER */
+  .hero {
+    border-bottom: 1px solid var(--border);
+    padding: 64px 48px 48px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .hero-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--sam3);
+    margin-bottom: 20px;
+  }
+
+  .hero h1 {
+    font-family: var(--serif);
+    font-size: 48px;
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+
+  .hero h1 span { color: var(--sam3); }
+
+  .hero-sub {
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 680px;
+    line-height: 1.65;
+  }
+
+  .hero-meta {
+    margin-top: 32px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .meta-chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    background: var(--surface);
+  }
+
+  /* LAYOUT */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 48px 96px;
+  }
+
+  /* SECTION */
+  .section {
+    margin-top: 72px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  .section h2 {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .section h3 {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 32px 0 12px;
+  }
+
+  .section h4 {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 24px 0 10px;
+  }
+
+  p {
+    color: var(--muted);
+    margin-bottom: 14px;
+    line-height: 1.8;
+  }
+
+  p strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* MODEL BADGES */
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  .badge-sam2 { background: var(--sam2-bg); color: var(--sam2); border: 1px solid var(--sam2-dim); }
+  .badge-sam3 { background: var(--sam3-bg); color: var(--sam3); border: 1px solid var(--sam3-dim); }
+  .badge-new { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-dim); }
+  .badge-inherited { background: #1a1000; color: #a07020; border: 1px solid #5a3800; }
+
+  /* OVERVIEW GRID */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .model-card {
+    padding: 32px;
+    background: var(--surface);
+  }
+
+  .model-card.sam2 { border-top: 3px solid var(--sam2); }
+  .model-card.sam3 { border-top: 3px solid var(--sam3); }
+
+  .model-card h3 {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    margin-top: 0;
+  }
+  .model-card.sam2 h3 { color: var(--sam2); }
+  .model-card.sam3 h3 { color: var(--sam3); }
+
+  .model-tagline {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-label { color: var(--dim); font-family: var(--mono); font-size: 11px; }
+  .stat-value { color: var(--text); font-weight: 500; }
+
+  /* TABLES */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 20px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    background: var(--surface);
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); }
+
+  td.yes { color: var(--sam3); }
+  td.no { color: var(--red); }
+  td.partial { color: var(--accent); }
+  td strong { color: var(--text); font-weight: 500; }
+
+  /* CODE BLOCKS */
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    color: #8899bb;
+    margin: 16px 0;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .code-block .kw { color: var(--sam3); }
+  .code-block .arrow { color: var(--accent); }
+  .code-block .comment { color: var(--dim); font-style: italic; }
+  .code-block .new { color: var(--accent); }
+  .code-block .inherited { color: #a07020; }
+  .code-block .sam2c { color: var(--sam2); }
+  .code-block .sam3c { color: var(--sam3); }
+
+  /* PIPELINE BOXES */
+  .pipeline {
+    margin: 20px 0;
+  }
+
+  .pipeline-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 4px 4px 0 0;
+    border: 1px solid var(--border);
+    border-bottom: none;
+  }
+
+  .pipeline-title.sam2 { background: var(--sam2-bg); color: var(--sam2); border-color: var(--sam2-dim); }
+  .pipeline-title.sam3 { background: var(--sam3-bg); color: var(--sam3); border-color: var(--sam3-dim); }
+
+  .pipeline-body {
+    border: 1px solid var(--border);
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+  }
+
+  .pipeline-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .pipeline-step:last-child { border-bottom: none; }
+
+  .step-icon {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .step-icon.s2 { background: var(--sam2-bg); color: var(--sam2); }
+  .step-icon.s3 { background: var(--sam3-bg); color: var(--sam3); }
+  .step-icon.new { background: var(--accent-bg); color: var(--accent); }
+  .step-icon.inh { background: #1a1000; color: #a07020; }
+
+  .step-content strong { color: var(--text); display: block; font-weight: 500; font-size: 13px; }
+  .step-content span { color: var(--muted); font-size: 12px; }
+
+  /* COMPONENT CARDS */
+  .component-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .component-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .component-card.new-component { border-color: var(--accent-dim); }
+  .component-card.inherited-component { border-color: var(--sam2-dim); }
+
+  .component-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .component-params {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+
+  .component-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+
+  /* CALLOUT */
+  .callout {
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 13px;
+    line-height: 1.7;
+    border-left: 3px solid;
+  }
+
+  .callout.info { background: var(--sam2-bg); border-color: var(--sam2); color: #8ab0e0; }
+  .callout.success { background: var(--sam3-bg); border-color: var(--sam3); color: #60d4a8; }
+  .callout.warning { background: var(--accent-bg); border-color: var(--accent); color: #c09030; }
+  .callout.danger { background: var(--red-bg); border-color: var(--red); color: #cc6060; }
+
+  .callout strong { display: block; margin-bottom: 4px; font-weight: 600; }
+  .callout.info strong { color: var(--sam2); }
+  .callout.success strong { color: var(--sam3); }
+  .callout.warning strong { color: var(--accent); }
+  .callout.danger strong { color: var(--red); }
+
+  /* COMPARISON BLOCK */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+
+  .comparison-side {
+    background: var(--surface);
+    padding: 24px;
+  }
+
+  .comparison-side h4 {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    margin-top: 0;
+  }
+
+  .comparison-side.s2 h4 { color: var(--sam2); }
+  .comparison-side.s3 h4 { color: var(--sam3); }
+
+  .comparison-side ul {
+    list-style: none;
+    font-size: 13px;
+  }
+
+  .comparison-side ul li {
+    color: var(--muted);
+    padding: 5px 0;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    line-height: 1.55;
+  }
+
+  .comparison-side ul li::before {
+    content: '→';
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .comparison-side.s2 ul li::before { color: var(--sam2-dim); }
+  .comparison-side.s3 ul li::before { color: var(--sam3-dim); }
+
+  /* MODEL SIZE TABLE */
+  .size-table { margin: 16px 0; }
+
+  .size-row {
+    display: grid;
+    grid-template-columns: 120px 100px 100px 120px;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .size-row.header {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    background: var(--surface);
+  }
+
+  .size-row div {
+    padding: 10px 16px;
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+  }
+
+  .size-row div:last-child { border-right: none; }
+  .size-row.header div { color: var(--dim); }
+  .size-row.highlight div { color: var(--text); background: var(--surface2); }
+
+  /* PAPER REFS */
+  .papers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .paper-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 20px;
+  }
+
+  .paper-title {
+    font-family: var(--serif);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .paper-authors {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+
+  .paper-relevance {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  /* FINDING BLOCK */
+  .finding {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+
+  .finding-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .finding p {
+    color: var(--muted);
+    margin: 0;
+    font-size: 13px;
+  }
+
+  /* FOOTER */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 48px;
+    max-width: 1100px;
+    margin: 0 auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* MOBILE */
+  @media (max-width: 768px) {
+    .hero, .container, .footer { padding-left: 24px; padding-right: 24px; }
+    .hero h1 { font-size: 32px; }
+    .overview-grid, .comparison, .papers-grid { grid-template-columns: 1fr; }
+    .size-row { grid-template-columns: 100px 80px 80px 100px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-label">Informe técnico comparativo · 2025</div>
+  <h1>SAM 2 vs <span>SAM 3</span><br>Arquitectura, diferencias y casos de uso</h1>
+  <p class="hero-sub">Análisis técnico detallado basado en los papers oficiales de Meta FAIR — SAM 2 (Ravi et al., 2024), Perception Encoder (Bolya et al., 2025) y SAM 3 (Carion et al., 2025) — cubriendo arquitectura, pipelines, rendimiento y comparativas de casos de uso concretos.</p>
+  <div class="hero-meta">
+    <span class="meta-chip">SAM 2 · arXiv:2408.00714</span>
+    <span class="meta-chip">PE · arXiv:2504.13181</span>
+    <span class="meta-chip">SAM 3 · arXiv:2511.16719v2</span>
+    <span class="meta-chip">Meta Superintelligence Labs</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- 1. VISIÓN GENERAL -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>Visión general</h2>
+    </div>
+
+    <div class="overview-grid">
+      <div class="model-card sam2">
+        <h3>SAM 2</h3>
+        <p class="model-tagline">"Segmenta lo que yo señalo"</p>
+        <div class="stat-row"><span class="stat-label">Publicado por</span><span class="stat-value">Meta FAIR, 2024</span></div>
+        <div class="stat-row"><span class="stat-label">Parámetros (Large)</span><span class="stat-value">224M</span></div>
+        <div class="stat-row"><span class="stat-label">Tamaño en disco</span><span class="stat-value">~898 MB</span></div>
+        <div class="stat-row"><span class="stat-label">VRAM requerida</span><span class="stat-value">~12 GB (Large)</span></div>
+        <div class="stat-row"><span class="stat-label">Tipo de prompt</span><span class="stat-value">Punto, caja, máscara</span></div>
+        <div class="stat-row"><span class="stat-label">Entiende texto</span><span class="stat-value" style="color:var(--red)">No</span></div>
+        <div class="stat-row"><span class="stat-label">Detecta objetos solo</span><span class="stat-value" style="color:var(--red)">No</span></div>
+        <div class="stat-row"><span class="stat-label">Detecta ausencia</span><span class="stat-value" style="color:var(--red)">No</span></div>
+        <div class="stat-row"><span class="stat-label">Variantes</span><span class="stat-value">Tiny, Small, Base+, Large</span></div>
+      </div>
+      <div class="model-card sam3">
+        <h3>SAM 3</h3>
+        <p class="model-tagline">"Segmenta todo lo que coincida con este concepto"</p>
+        <div class="stat-row"><span class="stat-label">Publicado por</span><span class="stat-value">Meta Superintelligence Labs, 2025</span></div>
+        <div class="stat-row"><span class="stat-label">Parámetros</span><span class="stat-value">~848M</span></div>
+        <div class="stat-row"><span class="stat-label">Tamaño en disco</span><span class="stat-value">~3.44 GB</span></div>
+        <div class="stat-row"><span class="stat-label">VRAM requerida</span><span class="stat-value">~24 GB</span></div>
+        <div class="stat-row"><span class="stat-label">Tipo de prompt</span><span class="stat-value">Texto, ejemplares, punto, caja</span></div>
+        <div class="stat-row"><span class="stat-label">Entiende texto</span><span class="stat-value" style="color:var(--sam3)">Sí</span></div>
+        <div class="stat-row"><span class="stat-label">Detecta objetos solo</span><span class="stat-value" style="color:var(--sam3)">Sí (DETR)</span></div>
+        <div class="stat-row"><span class="stat-label">Detecta ausencia</span><span class="stat-value" style="color:var(--sam3)">Sí (presence head)</span></div>
+        <div class="stat-row"><span class="stat-label">Variantes</span><span class="stat-value">Un único modelo publicado</span></div>
+      </div>
+    </div>
+
+    <div class="callout warning" style="margin-top:20px">
+      <strong>Contexto importante</strong>
+      SAM 3 es ~4× más grande que SAM 2 Large y requiere el doble de VRAM. Este coste adicional está justificado únicamente cuando se usan las capacidades nuevas — texto, detección automática, tracking robusto. Para prompts de punto en imagen estática, SAM 2 Large es más eficiente.
+    </div>
+  </div>
+
+  <!-- 2. TAMAÑOS DE MODELO -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>Variantes y tamaños de modelo</h2>
+    </div>
+
+    <h3>SAM 2 — cuatro variantes <span class="badge badge-sam2">SAM 2</span></h3>
+    <p>SAM 2 ofrece cuatro variantes con diferente balance velocidad/calidad. El 89% de los parámetros del modelo Large (200M de 224M) están en el image encoder Hiera — el decoder, prompt encoder y memoria son prácticamente anecdóticos en términos de parámetros.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Variante</th>
+            <th>Parámetros</th>
+            <th>Disco</th>
+            <th>VRAM aprox.</th>
+            <th>Caso de uso</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Tiny</td>
+            <td>38M</td>
+            <td>~156 MB</td>
+            <td>~4 GB</td>
+            <td>Edge, tiempo real estricto</td>
+          </tr>
+          <tr>
+            <td>Small</td>
+            <td>46M</td>
+            <td>~184 MB</td>
+            <td>~5 GB</td>
+            <td>GPU consumer, vídeo near real-time</td>
+          </tr>
+          <tr>
+            <td>Base+</td>
+            <td>80.8M</td>
+            <td>~323 MB</td>
+            <td>~8 GB</td>
+            <td>Balance calidad/velocidad</td>
+          </tr>
+          <tr style="background:var(--surface2)">
+            <td><strong>Large</strong></td>
+            <td><strong>224M</strong></td>
+            <td><strong>~898 MB</strong></td>
+            <td><strong>~12 GB</strong></td>
+            <td><strong>Máxima calidad, referencia</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Distribución de parámetros en SAM 2 Large</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Componente</th><th>Parámetros</th><th>% del total</th><th>Ejecuta</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Hiera (image encoder)</strong></td><td>~200M</td><td>~89%</td><td>1 vez por imagen</td></tr>
+          <tr><td>Mask decoder</td><td>~16M</td><td>~7%</td><td>Por cada prompt</td></tr>
+          <tr><td>Prompt encoder</td><td>~4M</td><td>~2%</td><td>Por cada prompt</td></tr>
+          <tr><td>Memory encoder</td><td>~4M</td><td>~2%</td><td>Solo en vídeo</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Por qué esto importa</div>
+      <p>El 89% del coste computacional está en el encoder, que se ejecuta una sola vez y se cachea. Cambiar el punto o la caja solo re-ejecuta el decoder (~7% del modelo). En una RTX 4090, la primera inferencia cuesta ~25ms, pero cada prompt adicional sobre la misma imagen cuesta solo ~4-5ms. Esta asimetría es la decisión de diseño más importante de SAM 2.</p>
+    </div>
+
+    <h3>SAM 3 — distribución de parámetros <span class="badge badge-sam3">SAM 3</span></h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Componente</th><th>Parámetros aprox.</th><th>Nota</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>PE Vision encoder</strong></td><td>~450M</td><td>Backbone compartido detector + tracker</td></tr>
+          <tr><td><strong>PE Text encoder</strong></td><td>~300M</td><td>Nuevo, no existía en SAM 2</td></tr>
+          <tr><td>Detector DETR + heads</td><td>~60M</td><td>Fusion encoder + decoder + mask head</td></tr>
+          <tr><td>Tracker (heredado SAM 2)</td><td>~38M</td><td>Memory attention, decoder, memory encoder</td></tr>
+          <tr style="background:var(--surface2)"><td><strong>Total</strong></td><td><strong>~848M</strong></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3. ARQUITECTURA SAM 2 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>Arquitectura SAM 2 en detalle</h2>
+    </div>
+
+    <p>SAM 2 extiende SAM 1 al dominio vídeo añadiendo un módulo de memoria. La arquitectura es deliberadamente modular: un encoder pesado que se cachea, y decoders ligeros que se re-ejecutan con cada prompt.</p>
+
+    <h3>Componentes</h3>
+
+    <div class="component-grid">
+      <div class="component-card">
+        <div class="component-name"><span class="badge badge-sam2">ENCODER</span> Hiera</div>
+        <div class="component-params">~200M params · ViT jerárquico · MAE pretraining</div>
+        <div class="component-desc">Vision transformer jerárquico inspirado en Swin pero más limpio. Procesa la imagen progresivamente en etapas — de local a global — produciendo feature maps multiescala. Preentrenado con MAE (Masked Autoencoders): aprende reconstruyendo partes ocultadas de la imagen, sin necesitar etiquetas. Cadena de papers: ViT → Swin → Hiera.</div>
+      </div>
+      <div class="component-card">
+        <div class="component-name"><span class="badge badge-sam2">ENCODER</span> Prompt encoder</div>
+        <div class="component-params">~4M params · Solo geometría</div>
+        <div class="component-desc">Convierte puntos, cajas y máscaras en embeddings. Muy ligero — las coordenadas son información simple. No entiende semántica, solo posición en el espacio de la imagen. Un punto se convierte en un embedding de posición; una caja en dos embeddings (esquinas).</div>
+      </div>
+      <div class="component-card">
+        <div class="component-name"><span class="badge badge-sam2">DECODER</span> Mask decoder</div>
+        <div class="component-params">~16M params · 2 bloques transformer</div>
+        <div class="component-desc">Cruza features de imagen con embeddings del prompt mediante cross-attention y self-attention. El upscaling final (de los features comprimidos de Hiera a resolución original) es el paso más costoso dentro del decoder, no el cross-attention. Produce múltiples máscaras candidatas con scores de confianza.</div>
+      </div>
+      <div class="component-card">
+        <div class="component-name"><span class="badge badge-sam2">MEMORIA</span> Memory bank + encoder</div>
+        <div class="component-params">~4M params · Solo activo en vídeo · Cola FIFO</div>
+        <div class="component-desc">El memory encoder fusiona la máscara predicha con los features del frame actual y los guarda en una cola FIFO. El memory attention (módulo separado) refina los features del frame nuevo usando el banco histórico mediante cross-attention. Permite trackear sin que el usuario vuelva a señalar.</div>
+      </div>
+    </div>
+
+    <h3>Pipeline imagen estática</h3>
+    <div class="pipeline">
+      <div class="pipeline-title sam2">SAM 2 · Imagen estática</div>
+      <div class="pipeline-body">
+        <div class="pipeline-step">
+          <span class="step-icon s2">1</span>
+          <div class="step-content"><strong>Image encoder (Hiera)</strong><span>Imagen → features visuales multiescala. Se ejecuta una sola vez. Resultado cacheado. ~25ms en RTX 4090.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon s2">2</span>
+          <div class="step-content"><strong>Prompt encoder</strong><span>Tu punto (x,y) → embedding geométrico. &lt;1ms. Se re-ejecuta con cada cambio de prompt.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon s2">3</span>
+          <div class="step-content"><strong>Mask decoder</strong><span>Cross-attention entre features de imagen y embedding del prompt. Upscaling a resolución original. ~4ms. Produce máscara final.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Pipeline vídeo</h3>
+    <div class="pipeline">
+      <div class="pipeline-title sam2">SAM 2 · Vídeo (tracking)</div>
+      <div class="pipeline-body">
+        <div class="pipeline-step">
+          <span class="step-icon s2">F1</span>
+          <div class="step-content"><strong>Frame 1 — inicialización</strong><span>Usuario señala el objeto. Hiera → features. Mask decoder → máscara inicial. Memory encoder guarda "así luce el objeto" en el banco.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon s2">Ft</span>
+          <div class="step-content"><strong>Frames siguientes — propagación automática</strong><span>Hiera procesa el frame nuevo → features brutos. Memory attention refina esos features con el contexto histórico (cross-attention contra el banco). Mask decoder produce nueva máscara sin input del usuario. Memory encoder actualiza el banco.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon s2">⚠</span>
+          <div class="step-content"><strong>Limitación: sin detección de ausencia</strong><span>Si el objeto desaparece, SAM 2 sigue propagando algo — se aferra a zonas visualmente similares o genera máscaras degeneradas. No hay mecanismo para declarar "el objeto ha desaparecido".</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Limitaciones conocidas de SAM 2</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Limitación</th><th>Causa técnica</th><th>Consecuencia práctica</th></tr></thead>
+        <tbody>
+          <tr><td class="no">No entiende texto</td><td>Hiera no tiene alineamiento con lenguaje; prompt encoder solo acepta geometría</td><td>Imposible pedir "segmenta todos los perros"</td></tr>
+          <tr><td class="no">Fuerza máscara siempre</td><td>No hay presence head ni mecanismo de ausencia</td><td>Si el objeto desaparece, genera máscaras erróneas</td></tr>
+          <tr><td class="no">No redescubre objetos</td><td>El tracker solo propaga, no detecta</td><td>Si un objeto reaparece, no se detecta automáticamente</td></tr>
+          <tr><td class="no">Memory bank escala mal</td><td>VRAM ∝ objetos × frames_guardados × tokens_imagen</td><td>Con 10+ objetos, VRAM se convierte en cuello de botella</td></tr>
+          <tr><td class="no">No detecta nuevas instancias</td><td>Solo trackea lo que el usuario señaló en el frame inicial</td><td>Nuevos objetos del mismo tipo que aparecen mid-vídeo se pierden</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4. ARQUITECTURA SAM 3 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2>Arquitectura SAM 3 en detalle</h2>
+    </div>
+
+    <p>SAM 3 generaliza SAM 2 añadiendo comprensión semántica mediante un backbone visión-lenguaje alineado (PE), un detector DETR condicionado por texto, y un presence head que desacopla reconocimiento de localización. El tracker de SAM 2 se hereda prácticamente sin cambios.</p>
+
+    <div class="callout success">
+      <strong>Hallazgo del paper SAM 3 (Carion et al., 2025)</strong>
+      "Our model consists of a detector and a tracker that share a vision encoder (Bolya et al., 2025). The detector is a DETR-based model conditioned on text, geometry, and image exemplars. The tracker inherits the SAM 2 transformer encoder-decoder architecture."
+    </div>
+
+    <h3>Componentes nuevos</h3>
+
+    <div class="component-grid">
+      <div class="component-card new-component">
+        <div class="component-name"><span class="badge badge-new">NUEVO</span> Perception Encoder (PE)</div>
+        <div class="component-params">~450M params (vision) + ~300M params (text) · Contrastive pretraining en 5.4B pares imagen-texto</div>
+        <div class="component-desc">Reemplaza a Hiera. ViT jerárquico con 2D RoPE en cada capa de atención y attention pooling para el embedding global. La diferencia clave no es arquitectónica sino de preentrenamiento: en lugar de MAE (reconstrucción de imagen), se entrena con contrastive loss imagen-texto — el mismo objetivo que CLIP. Esto alinea el espacio visual con el espacio textual, haciendo posibles los prompts de texto. Backbone compartido entre detector y tracker: se ejecuta una sola vez por frame.</div>
+      </div>
+      <div class="component-card new-component">
+        <div class="component-name"><span class="badge badge-new">NUEVO</span> Fusion encoder</div>
+        <div class="component-params">Parte del detector · Cross-attention imagen ↔ prompt</div>
+        <div class="component-desc">Recibe los unconditioned tokens (imagen procesada por PE, sin saber qué buscar) y los prompt tokens (texto, ejemplares visuales, o geometría). Mediante cross-attention, los unconditioned tokens se "tiñen" del concepto buscado — los features de imagen ya salen pre-sesgados hacia el concepto. En SAM 2, este condicionamiento pasaba dentro del mask decoder al final; aquí pasa antes, en un módulo dedicado.</div>
+      </div>
+      <div class="component-card new-component">
+        <div class="component-name"><span class="badge badge-new">NUEVO</span> Detector DETR</div>
+        <div class="component-params">200 object queries · Mask head estilo MaskFormer · Semantic head</div>
+        <div class="component-desc">Sigue el paradigma DETR (End-to-End Object Detection with Transformers, Carion et al. 2020). 200 object queries aprendidas pregunta a los conditioned tokens si hay un objeto coincidente. Cada query produce: bounding box + máscara de instancia (MaskFormer) + score binario. La mayoría predicen "no hay objeto". Incluye además una cabeza de segmentación semántica binaria a nivel de píxel.</div>
+      </div>
+      <div class="component-card new-component">
+        <div class="component-name"><span class="badge badge-new">NUEVO</span> Presence head</div>
+        <div class="component-params">Token global aprendido · Desacopla reconocimiento y localización</div>
+        <div class="component-desc">La pieza conceptualmente más novedosa. En DETR clásico, cada query intenta resolver simultáneamente "¿qué es?" y "¿dónde está?" — lo que genera conflicto cuando el objeto no está presente. SAM 3 introduce un token global separado que solo resuelve "¿está este concepto en la imagen/frame?". Cada query solo resuelve localización condicionada en que el concepto esté presente. Score final = presence_score × query_score. Paper: "We decouple the recognition and localization steps by introducing a learned global presence token."</div>
+      </div>
+    </div>
+
+    <h3>Componentes heredados de SAM 2</h3>
+
+    <div class="component-grid">
+      <div class="component-card inherited-component">
+        <div class="component-name"><span class="badge badge-inherited">HEREDADO</span> Tracker</div>
+        <div class="component-params">Motor de SAM 2 · Memory attention + memory bank + mask decoder</div>
+        <div class="component-desc">Heredado prácticamente sin cambios de SAM 2. Comparte el PE backbone con el detector (economía clave — la imagen no se recodifica). Se entrena después del detector con el backbone congelado. Soporta vídeo y refinamiento interactivo con prompts visuales.</div>
+      </div>
+      <div class="component-card inherited-component">
+        <div class="component-name"><span class="badge badge-inherited">HEREDADO</span> Prompt encoder + Mask decoder</div>
+        <div class="component-params">Para modo PVS (puntos/cajas) · Compatible con SAM 1/2</div>
+        <div class="component-desc">Cuando se usan puntos o cajas como prompt (modo PVS — el modo clásico de SAM 1/2), el flujo sigue por el tracker heredado. El prompt encoder convierte la geometría en tokens, el mask decoder genera la máscara. Equivalente funcional a SAM 2 Large con un backbone más potente.</div>
+      </div>
+    </div>
+
+    <h3>Pipeline SAM 3 — imagen con texto</h3>
+    <div class="pipeline">
+      <div class="pipeline-title sam3">SAM 3 · Imagen con prompt de texto ("yellow school bus")</div>
+      <div class="pipeline-body">
+        <div class="pipeline-step">
+          <span class="step-icon s3">1</span>
+          <div class="step-content"><strong>PE Vision encoder</strong><span>Imagen → unconditioned tokens. Se ejecuta una vez, se cachea. Features visuales alineados con lenguaje pero aún no condicionados por el prompt.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon s3">2</span>
+          <div class="step-content"><strong>PE Text encoder</strong><span>"yellow school bus" → prompt tokens. Embeddings textuales en el mismo espacio que los visuales. Máximo 32 tokens — solo noun phrases simples.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon new">NEW</span>
+          <div class="step-content"><strong>Fusion encoder</strong><span>Cross-attention: unconditioned tokens (Query) ↔ prompt tokens (Key, Value). Los features de imagen se re-orientan hacia el concepto buscado → conditioned tokens.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon new">NEW</span>
+          <div class="step-content"><strong>Presence head</strong><span>Token global pregunta: "¿hay un autobús amarillo en esta imagen?" Si no → todas las queries se suprimen. Si sí → las queries pasan al detector.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon new">NEW</span>
+          <div class="step-content"><strong>DETR decoder (200 queries)</strong><span>Cada query cross-atiende los conditioned tokens. Las que encuentran coincidencia producen bounding box + máscara. Score final = presence_score × query_score.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Pipeline SAM 3 — vídeo con texto</h3>
+    <div class="pipeline">
+      <div class="pipeline-title sam3">SAM 3 · Vídeo con prompt de texto (tracking de concepto)</div>
+      <div class="pipeline-body">
+        <div class="pipeline-step">
+          <span class="step-icon s3">Ft</span>
+          <div class="step-content"><strong>PE backbone (compartido) — una sola ejecución por frame</strong><span>Los unconditioned tokens alimentan tanto al detector como al tracker. Economía clave: no se recodifica la imagen para cada tarea.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon new">DET</span>
+          <div class="step-content"><strong>Detector → objetos nuevos O_t</strong><span>Fusion encoder + presence head + DETR queries. Encuentra todas las instancias del concepto en el frame actual. Opera de forma identity-agnostic — no sabe cuáles son objetos ya trackeados.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon inh">TRK</span>
+          <div class="step-content"><strong>Tracker → masklets propagados M̂_t</strong><span>Motor de SAM 2. Propaga las máscaras del frame anterior usando memory attention contra el banco. Opera de forma identity-aware — mantiene la identidad de cada objeto.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon s3">⊕</span>
+          <div class="step-content"><strong>Matching + Merging → máscaras finales M_t</strong><span>IoU-based matching entre O_t y M̂_t. Objetos nuevos no matcheados → nuevos masklets. Masklets sin detección consistente → masklet detection score baja → suppression si persiste.</span></div>
+        </div>
+        <div class="pipeline-step">
+          <span class="step-icon inh">MEM</span>
+          <div class="step-content"><strong>Memory encoder → actualiza banco</strong><span>Guarda referencias de los objetos confirmados para el siguiente frame. SAM 3 solo retiene frames donde el objeto está confidently present.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Hallazgos del paper PE relevantes para SAM 3</h3>
+
+    <div class="finding">
+      <div class="finding-label">Hallazgo principal — Bolya et al. (2025)</div>
+      <p>"Contrastive vision-language training alone can produce strong, general embeddings for all downstream tasks. There is only one caveat: these embeddings are hidden within the intermediate layers of the network." El PE Core produce features útiles para clasificación, lenguaje Y tareas espaciales en sus capas intermedias, aunque las capas finales son pobres para tareas espaciales. Por eso SAM 3 usa PE con alignment tuning espacial.</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Hallazgo sobre global tokens — Bolya et al. (2025)</div>
+      <p>A partir de la capa 33 del PE, varios tokens del fondo de la imagen se convierten en "global tokens" — reciben atención de todos los demás tokens. Esto es útil para semántica global pero perjudica las tareas que requieren correspondencia espacial local (como tracking zero-shot). PE Spatial resuelve esto alineando las capas anteriores a la aparición de global tokens.</p>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Hallazgo sobre SAM 2.1 como teacher — Bolya et al. (2025)</div>
+      <p>Para el alignment espacial de PE, en lugar de usar los features de SAM 2.1 como teacher (que tiene el mismo problema de global tokens), se usan las mask predictions de SAM 2.1 — consultando SAM 2.1 con 1024 puntos en grid 32×32 y concatenando los logits en un tensor H×W×1024. Esto produce features localmente coherentes sin los artefactos de los global tokens.</p>
+    </div>
+
+    <h3>Entrenamiento en 4 etapas (confirmado por el paper SAM 3)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Etapa</th><th>Qué se entrena</th><th>Qué se congela</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1 — PE pretraining</strong></td><td>Vision encoder + text encoder (contrastive)</td><td>—</td></tr>
+          <tr><td><strong>2 — Detector pretraining</strong></td><td>Fusion encoder + DETR decoder + heads</td><td>PE backbone</td></tr>
+          <tr><td><strong>3 — Detector fine-tuning</strong></td><td>Todo el detector con datos HQ</td><td>PE backbone</td></tr>
+          <tr><td><strong>4 — Tracker training</strong></td><td>Tracker (memoria, decoder) al estilo SAM 2</td><td>PE backbone</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 5. DIFERENCIAS ENTRE HIERA Y PE -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <h2>Hiera vs Perception Encoder — la diferencia real</h2>
+    </div>
+
+    <p>La pregunta clave: si ambos son ViT jerárquicos, ¿qué cambia realmente? La respuesta no está en la arquitectura sino en el preentrenamiento y en lo que el encoder aprende a representar.</p>
+
+    <div class="comparison">
+      <div class="comparison-side s2">
+        <h4>Hiera (SAM 2)</h4>
+        <ul>
+          <li>ViT jerárquico, inspirado en Swin pero más simple</li>
+          <li>Preentrenado con MAE — aprende reconstruyendo partes ocultadas de la imagen</li>
+          <li>Aprende features puramente visuales: bordes, texturas, formas, posición</li>
+          <li>No tiene alineamiento con lenguaje — no "sabe" qué es un perro</li>
+          <li>Produce features en un espacio solo visual</li>
+          <li>No usa RoPE — posición relativa no extrapolable</li>
+        </ul>
+      </div>
+      <div class="comparison-side s3">
+        <h4>Perception Encoder (SAM 3)</h4>
+        <ul>
+          <li>ViT jerárquico, arquitectura base similar a Hiera</li>
+          <li>Preentrenado con contrastive loss imagen-texto en 5.4B pares — aprende qué imagen corresponde a qué texto</li>
+          <li>Aprende features visuales alineados con conceptos de lenguaje</li>
+          <li>"Sabe" que ciertos patrones visuales corresponden a la palabra "perro"</li>
+          <li>Produce features en un espacio compartido visual-textual</li>
+          <li>2D RoPE en cada capa de atención — mejor extrapolación a distintas resoluciones</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <strong>La analogía más precisa</strong>
+      Hiera aprendió mirando imágenes solo y reconstruyéndolas — como un artista que estudia composición sin saber los nombres de lo que dibuja. PE aprendió mirando millones de fotos con sus descripciones al lado — como alguien que aprende vocabulario asociando imágenes con palabras. Misma capacidad visual, pero solo el segundo puede responder "¿qué es esto?" en términos lingüísticos.
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Característica</th><th>Hiera (SAM 2)</th><th>PE (SAM 3)</th></tr></thead>
+        <tbody>
+          <tr><td>Arquitectura base</td><td>ViT jerárquico</td><td>ViT jerárquico</td></tr>
+          <tr><td>Preentrenamiento</td><td>MAE — reconstrucción de imagen</td><td>Contrastive imagen-texto (CLIP-style)</td></tr>
+          <tr><td>Espacio de embeddings</td><td class="no">Solo visual</td><td class="yes">Visual + textual alineados</td></tr>
+          <tr><td>Positional encoding</td><td>Absoluto</td><td>2D RoPE + absoluto</td></tr>
+          <tr><td>Alineado con lenguaje</td><td class="no">No</td><td class="yes">Sí</td></tr>
+          <tr><td>Text encoder asociado</td><td class="no">No existe</td><td class="yes">~300M params, causal, 32 tokens</td></tr>
+          <tr><td>Capas intermedias ricas</td><td class="partial">Solo visual</td><td class="yes">Visual + semántico + espacial</td></tr>
+          <tr><td>Parámetros (Large/G)</td><td>~200M</td><td>~450M (vision) + ~300M (text)</td></tr>
+          <tr><td>Ejecuta por frame</td><td class="yes">Sí, una vez</td><td class="yes">Sí, una vez (compartido detector+tracker)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 6. ANÁLISIS: PROMPTS DE PUNTO -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <h2>Análisis comparativo: Prompts de punto</h2>
+    </div>
+
+    <p>El caso de uso original de SAM — el usuario señala un punto en la imagen y el modelo segmenta el objeto en esa posición. Aquí las diferencias entre SAM 2 y SAM 3 son más sutiles que en tracking.</p>
+
+    <h3>Pipeline SAM 2 con punto</h3>
+    <div class="code-block"><span class="comment">// Usuario hace clic en (x=312, y=248)</span>
+
+<span class="sam2c">Imagen</span>     → Hiera         → features visuales <span class="comment">(siempre los mismos, sin importar el prompt)</span>
+<span class="sam2c">Punto(x,y)</span> → Prompt encoder → embedding geométrico
+
+                   Mask decoder
+                   ↓ cross-attention(features_imagen, embedding_punto)
+                   ↓ self-attention(tokens_de_salida)
+                   ↓ upscaling
+                   → Máscara final</div>
+
+    <h3>Pipeline SAM 3 con punto</h3>
+    <div class="code-block"><span class="comment">// Usuario hace clic en (x=312, y=248)</span>
+
+<span class="sam3c">Imagen</span>     → PE (set_image) → features cacheados <span class="comment">(sam2_backbone_out en el state)</span>
+<span class="sam3c">Punto(x,y)</span> → prompt encoder → embedding geométrico
+
+                   <span class="inherited">inst_interactive_predictor.predict (motor SAM 2)</span>
+                   ↓ mask decoder: cross-attention(features_imagen, embedding_punto)
+                   ↓ self-attention(tokens_de_salida) + upscaling
+                   → 3 máscaras (multimask) + scores + logits
+
+<span class="comment">// Fusion encoder / Presence head / DETR queries → NO se activan (son del camino de texto/concepto)</span></div>
+
+    <div class="callout info">
+      <strong>Diferencia clave en el pipeline (corregido tras leer el código)</strong>
+      Con un prompt de PUNTO, SAM 3 NO usa el fusion encoder. <code>predict_inst</code> coge los features
+      que el PE cacheó en <code>set_image</code> y los mete directamente en el predictor interactivo heredado
+      de SAM 2 (prompt encoder + mask decoder). El fusion encoder, la presence head y las DETR queries solo
+      se ejecutan en el camino de TEXTO/concepto (vía <code>set_text_prompt</code> + detector). Por tanto, para
+      puntos, SAM 3 es funcionalmente SAM 2 con un backbone (PE) más pesado: mismo mecanismo, no uno "más
+      explícito". El condicionamiento por el punto pasa, como en SAM 2, dentro del mask decoder al final.
+    </div>
+
+    <h3>Comparativa de rendimiento con punto (RTX 4090)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Operación</th><th>SAM 2 Large</th><th>SAM 3</th><th>Diferencia</th></tr></thead>
+        <tbody>
+          <tr><td>Encode imagen (1ª vez)</td><td>~25ms</td><td>~50ms</td><td>SAM 3 ~2× más lento</td></tr>
+          <tr><td>Prompt adicional misma imagen</td><td>~4-5ms</td><td>~4-5ms</td><td>Equivalente</td></tr>
+          <tr><td>VRAM requerida</td><td>~12 GB</td><td>~24 GB</td><td>SAM 3 ~2× más VRAM</td></tr>
+          <tr><td>Calidad de máscara</td><td>Alta</td><td>Igual o ligeramente mejor</td><td>PE más rico semánticamente</td></tr>
+          <tr><td>Detector DETR activo</td><td class="no">No existe</td><td class="no">No se activa</td><td>—</td></tr>
+          <tr><td>Presence head activa</td><td class="no">No existe</td><td class="no">No se activa</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Ventajas e inconvenientes por modelo</h3>
+    <div class="comparison">
+      <div class="comparison-side s2">
+        <h4>SAM 2 Large — prompts de punto</h4>
+        <ul>
+          <li>Primer encode ~25ms — más rápido que SAM 3</li>
+          <li>Solo necesita ~12 GB VRAM — cabe en GPU consumer</li>
+          <li>4 variantes de tamaño disponibles (Tiny → Large)</li>
+          <li>Pipeline más directo — menos overhead</li>
+          <li>No arrastra peso del text encoder ni del detector</li>
+          <li>Óptimo si el único uso es señalar puntos</li>
+        </ul>
+      </div>
+      <div class="comparison-side s3">
+        <h4>SAM 3 — prompts de punto</h4>
+        <ul>
+          <li>Primer encode ~50ms — más lento (PE más pesado)</li>
+          <li>Requiere ~24 GB VRAM aunque no uses texto</li>
+          <li>Un único modelo publicado — sin variante ligera</li>
+          <li>El PE más rico puede producir máscaras ligeramente mejores en objetos complejos</li>
+          <li>Permite mezclar puntos con texto en el mismo pipeline</li>
+          <li>Arrastra todo el peso del text encoder y detector aunque no los uses</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout warning">
+      <strong>Conclusión para prompts de punto</strong>
+      Si el único caso de uso es señalar puntos o cajas en imágenes estáticas, SAM 2 Large es la elección más eficiente — misma calidad práctica, la mitad de VRAM, y el doble de velocidad en el primer encode. SAM 3 solo añade valor real cuando también se usan prompts de texto, ejemplares visuales, o tracking robusto en vídeo.
+    </div>
+  </div>
+
+  <!-- 7. ANÁLISIS: TRACKING -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <h2>Análisis comparativo: Tracking de instancias en vídeo</h2>
+    </div>
+
+    <p>El tracking es donde las diferencias entre SAM 2 y SAM 3 son más significativas. El mecanismo de memoria de SAM 2 es poderoso pero tiene limitaciones fundamentales que SAM 3 resuelve con su arquitectura dual detector+tracker.</p>
+
+    <h3>Cómo funciona el tracking en SAM 2</h3>
+    <p><strong>Principio:</strong> El modelo memoriza cómo lucían los features visuales del objeto en frames anteriores y los usa para refinar los features del frame nuevo, sesgándolos hacia el objeto trackeado.</p>
+
+    <div class="code-block"><span class="comment">// Frame 1: usuario señala el objeto</span>
+Frame_1 → Hiera → features
+        → Prompt encoder(punto)
+        → Mask decoder → máscara inicial
+        → Memory encoder → guarda("así luce el objeto")
+
+<span class="comment">// Frames siguientes: propagación automática</span>
+Frame_t → Hiera → features brutos (genéricos, sin sesgo)
+        → Memory attention ← memory bank (frames anteriores)
+           <span class="comment">// cross-attention: frame_actual consulta el historial</span>
+           <span class="comment">// resultado: features refinados, sesgados hacia el objeto</span>
+        → Mask decoder → nueva máscara
+        → Memory encoder → actualiza banco (cola FIFO)</div>
+
+    <div class="finding">
+      <div class="finding-label">Cómo sabe SAM 2 dónde está el objeto en el frame nuevo</div>
+      <p>El memory attention no "busca" el objeto activamente. Lo que hace es mezclar los features brutos del frame nuevo con el recuerdo de frames anteriores mediante cross-attention. El resultado son features que vienen "pre-sesgados" hacia el objeto — como si alguien le susurrara al decoder "en los frames anteriores el perro estaba aquí y lucía así". El decoder entonces lo localiza con ese contexto adicional. No hay detección — hay refinamiento de features.</p>
+    </div>
+
+    <h3>Cómo funciona el tracking en SAM 3</h3>
+    <p><strong>Principio:</strong> Detector y tracker operan en paralelo sobre cada frame. El detector encuentra objetos nuevos del concepto; el tracker propaga los ya conocidos. Un sistema de matching combina ambas fuentes y gestiona las discrepancias.</p>
+
+    <div class="code-block"><span class="comment">// Frame t — ambos módulos operan sobre el mismo PE output</span>
+Frame_t → <span class="sam3c">PE backbone</span> (una sola ejecución, compartida)
+                 ↓
+    ┌────────────┴────────────┐
+    ↓                         ↓
+<span class="new">Detector</span>                  <span class="inherited">Tracker</span>
+  Fusion encoder(texto)       Memory attention ← banco
+  → Presence head             → Mask decoder
+  → DETR queries              → Masklets M̂_t (estimaciones)
+  → Detecciones O_t
+    └────────────┬────────────┘
+                 ↓
+          <span class="sam3c">Matching (IoU-based)</span>
+          O_t ↔ M̂_t
+          ↓
+   · Match → confirma masklet existente
+   · Sin match en O_t → nuevo masklet
+   · Sin match en M̂_t → detection score baja
+   · Score bajo sostenido → masklet suprimido
+                 ↓
+          Máscaras finales M_t → Memory encoder → banco</div>
+
+    <h3>Detección de desaparición — el problema que SAM 2 no resolvía</h3>
+
+    <div class="comparison">
+      <div class="comparison-side s2">
+        <h4>SAM 2 — objeto desaparece</h4>
+        <ul>
+          <li>No tiene mecanismo de ausencia</li>
+          <li>El memory attention sigue refinando features hacia el objeto aunque no esté</li>
+          <li>El decoder produce una máscara sí o sí</li>
+          <li>Resultado: máscaras degeneradas, saltos a zonas visualmente similares</li>
+          <li>No hay forma de declarar "el objeto ha desaparecido"</li>
+          <li>Si reaparece, el tracker puede retomarlo pero de forma no garantizada</li>
+        </ul>
+      </div>
+      <div class="comparison-side s3">
+        <h4>SAM 3 — objeto desaparece</h4>
+        <ul>
+          <li>Presence head dice "no está" → detector no genera detecciones O_t</li>
+          <li>El tracker sigue propagando M̂_t (el objeto podría estar ocluido)</li>
+          <li>Sin detecciones que confirmen → masklet detection score baja</li>
+          <li>Si persiste varios frames → masklet suprimido explícitamente</li>
+          <li>Si reaparece → detector lo redescubre, nuevo masklet spawneado</li>
+          <li>Re-prompting periódico con detecciones de alta confianza para mantener banco fresco</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Nuevas instancias mid-vídeo</h3>
+    <div class="callout success">
+      <strong>Capacidad exclusiva de SAM 3</strong>
+      Si el vídeo comienza sin ningún pingüino y uno aparece en el frame 50, SAM 3 lo detecta automáticamente (el detector opera en cada frame) y crea un nuevo masklet. SAM 2 solo puede trackear objetos señalados en el frame inicial — los que aparecen después se pierden.
+    </div>
+
+    <h3>Escalabilidad con múltiples objetos</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Escenario</th><th>SAM 2 Large</th><th>SAM 3</th></tr></thead>
+        <tbody>
+          <tr><td>1-5 objetos simultáneos</td><td class="yes">Óptimo, near real-time</td><td class="yes">Near real-time en H200</td></tr>
+          <tr><td>5-10 objetos</td><td class="partial">Funcional, VRAM empieza a crecer</td><td class="partial">Funcional, latencia escala</td></tr>
+          <tr><td>10-40 objetos</td><td class="no">Memory bank problemático (&gt;24 GB)</td><td class="partial">Latencia aumenta con objetos</td></tr>
+          <tr><td>100+ objetos</td><td class="no">No viable</td><td class="partial">30ms en H200 según paper</td></tr>
+          <tr><td>VRAM con 40 objetos (estim.)</td><td class="no">&gt;24 GB (solo memoria)</td><td class="no">&gt;30 GB</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Por qué SAM 2 escala mal con muchos objetos</div>
+      <p>El memory bank de SAM 2 crece como: objetos × frames_guardados × tamaño_features. Con 40 objetos y 8 frames guardados por objeto, el banco puede ocupar ~16 GB solo de VRAM, que se suma a los ~12 GB del modelo. El problema no es el cómputo (el cross-attention es relativamente barato) sino la memoria. En SAM 3, el detector corre 40 veces menos operaciones que en SAM 2 porque DETR procesa todos los objetos en paralelo en una sola pasada.</p>
+    </div>
+
+    <h3>Comparativa completa de tracking</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Aspecto</th><th>SAM 2</th><th>SAM 3</th></tr></thead>
+        <tbody>
+          <tr><td>Inicialización</td><td>Usuario señala cada objeto manualmente</td><td>Texto: "pingüino" — detección automática en primer frame</td></tr>
+          <tr><td>Prompt</td><td class="no">Solo geometría (punto/caja)</td><td class="yes">Texto, ejemplar visual, o punto/caja</td></tr>
+          <tr><td>Detecta desaparición</td><td class="no">No — sigue propagando</td><td class="yes">Sí — presence head + detection score</td></tr>
+          <tr><td>Suprime masklets inactivos</td><td class="no">No</td><td class="yes">Sí — threshold de detection score</td></tr>
+          <tr><td>Redescubre objetos</td><td class="no">No garantizado</td><td class="yes">Sí — detector opera en cada frame</td></tr>
+          <tr><td>Nuevas instancias mid-vídeo</td><td class="no">No</td><td class="yes">Sí — detector las encuentra automáticamente</td></tr>
+          <tr><td>Refinamiento interactivo</td><td class="yes">Sí (punto/caja sobre instancia)</td><td class="yes">Sí + ejemplares positivos/negativos</td></tr>
+          <tr><td>Máximo objetos recomendado</td><td class="partial">~10 (limitado por VRAM del banco)</td><td class="partial">~5 near real-time, más con mayor latencia</td></tr>
+          <tr><td>Diseño del tracker</td><td class="yes">Propio, optimizado</td><td class="inherited">Heredado de SAM 2</td></tr>
+          <tr><td>VRAM base</td><td>~12 GB</td><td>~24 GB</td></tr>
+          <tr><td>Velocidad (H200, 5 objetos)</td><td class="yes">Near real-time</td><td class="yes">Near real-time</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 8. CUÁNDO USAR CADA UNO -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">08</span>
+      <h2>Guía de decisión: cuándo usar cada modelo</h2>
+    </div>
+
+    <div class="comparison">
+      <div class="comparison-side s2">
+        <h4>Usa SAM 2 cuando</h4>
+        <ul>
+          <li>Tu caso de uso es señalar puntos o cajas — el flujo clásico SAM 1/2</li>
+          <li>Tienes restricción de VRAM (&lt;16 GB)</li>
+          <li>Necesitas variantes ligeras (Tiny/Small para tiempo real)</li>
+          <li>Trackeas menos de 10 objetos simultáneos</li>
+          <li>No necesitas detección por concepto de texto</li>
+          <li>Quieres el encode inicial más rápido (~25ms vs ~50ms)</li>
+          <li>Trabajas con imágenes estáticas solamente</li>
+          <li>El pipeline de producción ya está en SAM 2</li>
+        </ul>
+      </div>
+      <div class="comparison-side s3">
+        <h4>Usa SAM 3 cuando</h4>
+        <ul>
+          <li>Necesitas encontrar todos los objetos de un concepto sin señalar manualmente</li>
+          <li>Usas prompts de texto ("todos los coches rojos en la escena")</li>
+          <li>Necesitas tracking robusto con detección de desaparición y reaparición</li>
+          <li>Trabajas con vídeos donde aparecen nuevas instancias a lo largo del tiempo</li>
+          <li>Tienes suficiente VRAM (~24 GB+)</li>
+          <li>Combinas detección + segmentación + tracking en un solo modelo unificado</li>
+          <li>Quieres usar ejemplares visuales (bounding box de referencia) como prompt</li>
+          <li>Necesitas mezclar prompts de texto y punto en el mismo pipeline</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. PAPERS Y REFERENCIAS -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">09</span>
+      <h2>Papers de referencia</h2>
+    </div>
+
+    <h3>Para entender SAM 2</h3>
+    <div class="papers-grid">
+      <div class="paper-card">
+        <div class="paper-title">Attention is All You Need</div>
+        <div class="paper-authors">Vaswani et al. · NeurIPS 2017</div>
+        <div class="paper-relevance">El transformer original. Nacido para texto. Todo lo demás viene de aquí — incluyendo el mask decoder de SAM 2.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">An Image is Worth 16x16 Words</div>
+        <div class="paper-authors">Dosovitskiy et al. · ICLR 2021 · arXiv:2010.11929</div>
+        <div class="paper-relevance">ViT original. El momento en que los transformers se aplicaron a imágenes dividiendo la imagen en patches como tokens. Padre directo de Hiera.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">Swin Transformer</div>
+        <div class="paper-authors">Liu et al. · ICCV 2021</div>
+        <div class="paper-relevance">Primer ViT jerárquico serio. Introduce ventanas locales de atención que se expanden progresivamente. Hiera bebe directamente de esta idea.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">Masked Autoencoders Are Scalable Vision Learners</div>
+        <div class="paper-authors">He et al. · CVPR 2022</div>
+        <div class="paper-relevance">MAE — el método de preentrenamiento de Hiera. Oculta patches y aprende a reconstruirlos. Da a Hiera features visuales ricos sin supervisión.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">Hiera: A Hierarchical Vision Transformer without the Bells-and-Whistles</div>
+        <div class="paper-authors">Ryali et al. · Meta FAIR 2023</div>
+        <div class="paper-relevance">El backbone de SAM 2. Argumenta que la jerarquía sola + MAE es suficiente, eliminando la complejidad de Swin.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">SAM 2: Segment Anything in Images and Videos</div>
+        <div class="paper-authors">Ravi et al. · Meta FAIR 2024 · arXiv:2408.00714</div>
+        <div class="paper-relevance">El paper principal. Define el pipeline completo, el módulo de memoria para vídeo, y el benchmark SA-V.</div>
+      </div>
+    </div>
+
+    <h3>Para entender SAM 3</h3>
+    <div class="papers-grid">
+      <div class="paper-card">
+        <div class="paper-title">Learning Transferable Visual Models From Natural Language Supervision (CLIP)</div>
+        <div class="paper-authors">Radford et al. · OpenAI 2021</div>
+        <div class="paper-relevance">El contrastive pretraining imagen-texto que inspiró el PE. Primer modelo en alinear espacio visual y textual a escala.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">End-to-End Object Detection with Transformers (DETR)</div>
+        <div class="paper-authors">Carion et al. · ECCV 2020</div>
+        <div class="paper-relevance">El detector que usa SAM 3. Object queries aprendidas que eliminan la necesidad de NMS y anchors. Nicolas Carion es también lead author de SAM 3.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">Per-Pixel Classification is Not All You Need for Semantic Segmentation (MaskFormer)</div>
+        <div class="paper-authors">Cheng et al. · NeurIPS 2021</div>
+        <div class="paper-relevance">La mask head que usa el detector de SAM 3 para producir máscaras de instancia a partir de las predicciones de las object queries.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">Perception Encoder: The best visual embeddings are not at the output of the network</div>
+        <div class="paper-authors">Bolya et al. · Meta FAIR 2025 · arXiv:2504.13181</div>
+        <div class="paper-relevance">El backbone de SAM 3. Hallazgo principal: contrastive training solo produce features generales para todas las tareas — pero escondidos en capas intermedias. PE core + alignment tuning spatial/language.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">SAM 3: Segment Anything with Concepts</div>
+        <div class="paper-authors">Carion, Gustafson, Hu et al. · Meta Superintelligence Labs 2025 · arXiv:2511.16719v2</div>
+        <div class="paper-relevance">El paper principal. Define PCS (Promptable Concept Segmentation), el detector DETR con presence head, el data engine con 4M noun phrases, y el benchmark SA-Co.</div>
+      </div>
+      <div class="paper-card">
+        <div class="paper-title">Moutakanni et al. — Vision Transformers Need Registers</div>
+        <div class="paper-authors">Darcet et al. · ICLR 2024</div>
+        <div class="paper-relevance">Documenta el fenómeno de "global tokens" en ViTs grandes — tokens de fondo que acaparan atención global a partir de cierta capa. Directamente relevante para entender por qué PE Spatial usa layers intermedias y no la última capa.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>SAM 2 vs SAM 3 · Informe técnico comparativo</span>
+  <span>Basado en arXiv:2408.00714 · arXiv:2504.13181 · arXiv:2511.16719v2</span>
+</div>
+
+</body>
+</html>
