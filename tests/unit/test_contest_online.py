@@ -292,5 +292,40 @@ class TestCrossReport(unittest.TestCase):
         self._assert_equal(coord, batch, store, pt, ow2)
 
 
+class TestManagerOnlineDrive(unittest.TestCase):
+    """report() con agg_mode='online' alimenta el discriminador desde el online y debe dar
+    los MISMOS veredictos que el batch (batch desconectado)."""
+
+    def _populate(self, mgr, grabs, claims):
+        for p, grabbers in grabs.items():
+            for g, c in grabbers.items():
+                mgr.store._grabs[p][g] = c
+                mgr.store._by_grabber[g].add(p)
+        for p, c in claims.items():
+            mgr.store._claims[p] = c
+
+    def _verdict_keys(self, verdicts):
+        return sorted((v.decision.name, v.defender, v.challenger) for v in verdicts)
+
+    def test_online_drive_equals_batch(self):
+        from ovo.entities.contest.manager import ContestManager
+        grabs = {5: {2: 8}, 6: {2: 3, 3: 6}, 7: {1: 5}, 8: {1: 7, 3: 2}}
+        claims = {5: 10, 6: 10, 7: 10, 8: 10}
+        pt = torch.tensor([5, 6, 7, 8, 100, 101, 200, 201], dtype=torch.long)
+        ow = torch.tensor([1, 1, 2, 2, 1, 1, 2, 2], dtype=torch.long)
+        cfg = {"min_grabs": 1, "firm_tau": 0.30, "min_mass": 1}
+
+        m_batch = ContestManager({"contest": dict(cfg)})
+        self._populate(m_batch, grabs, claims)
+        v_batch = m_batch.report(pt, ow)
+
+        m_online = ContestManager({"contest": dict(cfg, agg_mode="online")})
+        self._populate(m_online, grabs, claims)
+        m_online.note_assignment(torch.tensor([1, 2], dtype=torch.long))  # marca los defenders sucios
+        v_online = m_online.report(pt, ow)
+
+        self.assertEqual(self._verdict_keys(v_batch), self._verdict_keys(v_online))
+
+
 if __name__ == "__main__":
     unittest.main()

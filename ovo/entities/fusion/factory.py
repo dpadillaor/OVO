@@ -14,10 +14,10 @@ from .strategy import FusionStrategy
 
 
 _DEFAULT_CHAINS: Dict[str, List[str]] = {
-    "clip":  ["cooccurrence", "centroid", "cos_sim", "overlap"],
-    "dino":  ["cooccurrence", "centroid", "cos_sim", "overlap"],
-    "pe":    ["cooccurrence", "centroid", "cos_sim", "overlap"],
-    "sam3":  ["cooccurrence", "centroid", "cos_sim", "overlap"],
+    "clip":  ["centroid", "cos_sim", "overlap_old"],
+    "dino":  ["centroid", "cos_sim", "overlap_old"],
+    "pe":    ["centroid", "cos_sim", "overlap_old"],
+    "sam3":  ["centroid", "cos_sim", "overlap_old"],
 }
 
 _FEATURE_ATTRS: Dict[str, str] = {

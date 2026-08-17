@@ -494,6 +494,33 @@ class OVOSemMap():
         self.logger.log_ovo_stats({"t_loop_closure_refusion": round(t_lc, 3)})
         return t_lc
 
+    def _run_final_contest_pass(self, frame_id: int, mpqueue) -> None:
+        """Pasada final: corre SOLO el contest sobre el store completo de la escena (sin fusión
+        clásica ni el resto de update_map). Con todos los frames procesados la evidencia es
+        máxima; se dispara aunque el último frame no actualizara el mapa. Reenvía un frame
+        corregido a Rerun si el stream está activo."""
+        map_data = self.slam_backbone.get_map()
+        point_obs = self.slam_backbone.get_point_observations()
+
+        updated_points_ins_ids, verdicts = self.ovo.run_contest_pass(map_data, point_obs)
+
+        if updated_points_ins_ids is not None:
+            self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+            self._send_stream_frame(frame_id, mpqueue)
+
+        if self.stream and self.rerun_mode in ("stream", "tracking"):
+            c2w = self.slam_backbone.get_c2w(frame_id)
+            if c2w is not None:
+                n_merged = sum(1 for v in verdicts if v.decision.name == "MERGE_CONTAINMENT")
+                _queue_put_dropping(mpqueue, {
+                    "type": "update_map",
+                    "frame_id": frame_id,
+                    "c2w": c2w.cpu().numpy().astype(np.float32),
+                    "n_fused": n_merged,
+                    "decisions": [],
+                })
+        print("Final contest pass done.")
+
     def _save_pre_fusion_checkpoint(self, frame_id: int) -> None:
         """Snapshot geometric + semantic state just before fusion runs.
 
@@ -676,7 +703,12 @@ class OVOSemMap():
                             gc.collect()
                     
                 self.ovo.complete_semantic_info()
-                
+
+                # Pasada final del contest sobre el store completo de la escena (solo si el
+                # contest está en marcha). Consolida con toda la evidencia acumulada.
+                if self.config["semantic"].get("contest_fusion", "off") != "off":
+                    self._run_final_contest_pass(frame_id, mpqueue)
+
                 torch.cuda.synchronize()
                 t_end = time.time()
                 fps = len(self.dataset)/self.segment_every/(t_end-t_start)

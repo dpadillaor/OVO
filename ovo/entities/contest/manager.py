@@ -45,9 +45,11 @@ class ContestManager:
         # ovo.py los lee tras report() y los mergea en contest_times.
         self.last_timings: Dict[str, float] = {}
 
-        # ---- R1: agregador online en modo SOMBRA ----
-        # agg_mode: batch (default, cero cambio) | online_shadow. El online calcula en paralelo y se
-        # compara con el batch (oráculo) en cada report; el batch sigue decidiendo/actuando.
+        # ---- agregador online ----
+        # agg_mode:
+        #   batch          (default): el batch (aggregator.pairs) alimenta el discriminador.
+        #   online_shadow: batch decide; el online calcula en paralelo y se compara (oráculo R1).
+        #   online:        el online ALIMENTA el discriminador; el batch queda desconectado.
         self.agg_mode: str = cfg.get("agg_mode", "batch")
         self._tol = FeatureTolerance(atol=cfg.get("atol", 1e-6))
         self._coordinator: OnlineContestCoordinator | None = None
@@ -124,10 +126,16 @@ class ContestManager:
         t["prune"] = round(time.time() - t0, 4)
 
         t0 = time.time()
-        pairs = self.aggregator.pairs(self.store, point_ids, points_ins_ids, point_obs)
-        by_defender: Dict[int, list] = {}
-        for f in pairs:
-            by_defender.setdefault(f.defender, []).append(f)
+        if self.agg_mode == "online":
+            # online DRIVE: recomputa los defenders sucios y lee el cache vivo; el discriminador
+            # come de aquí, no del batch. El batch queda desconectado.
+            self._coordinator.refresh(point_ids, points_ins_ids, point_obs)
+            by_defender: Dict[int, list] = {d: list(fs) for d, fs in self._coordinator.all_features().items()}
+        else:
+            pairs = self.aggregator.pairs(self.store, point_ids, points_ins_ids, point_obs)
+            by_defender = {}
+            for f in pairs:
+                by_defender.setdefault(f.defender, []).append(f)
         t["aggregate"] = round(time.time() - t0, 4)
 
         t0 = time.time()
@@ -136,8 +144,8 @@ class ContestManager:
             verdicts.extend(self.discriminator.classify(defender, fs, sim=sim))
         t["classify"] = round(time.time() - t0, 4)
 
-        # ---- R1 sombra: refrescar el online y comparar contra el batch (oráculo) ----
-        if self._coordinator is not None and self._validator is not None:
+        # ---- R1 sombra: el batch decide, el online calcula en paralelo y se compara (oráculo) ----
+        if self.agg_mode == "online_shadow" and self._coordinator is not None and self._validator is not None:
             stats = self._coordinator.refresh(point_ids, points_ins_ids, point_obs)
             rep = self._validator.compare(by_defender, self._coordinator.all_features(), self._tol, self._reports)
             self._record_shadow(rep, stats)
