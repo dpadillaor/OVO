@@ -22,7 +22,7 @@ from studies.segmentation.core.profiling import profile_frame
 from studies.segmentation.core.timing_stats import aggregate
 from studies.segmentation.viz import (
     pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity,
-    segmenter_compare, timing as viz_timing, scene_timing)
+    segmenter_compare, timing as viz_timing, scene_timing, prompt_grid)
 from ovo.utils.segment_utils import mask2segmap
 
 RESULTS = Path(__file__).resolve().parent / "results"
@@ -114,6 +114,63 @@ def run_compare(scene: str, frame: int, cfg: SamConfig, thr: dict, dataset_root:
     return out_dir / "final.png"
 
 
+def run_segmap(scene: str, frame: int, model: str, variant: str, cfg: SamConfig, thr: dict,
+               dataset_root: str, device: str, dim: float = 0.3, alpha: float = 0.3,
+               bg: str = "frame", raw: bool = False, style: str = "fill",
+               number: bool = False) -> Path:
+    """Segmap de un modelo, imagen sola -> segmap/{variant}.png.
+
+    raw=False: máscaras finales (tras el mask_nms de OVO). raw=True: crudas del AMG, sin poda OVO.
+    style: fill (relleno), contour (solo bordes, revela solapes), heat (nº de máscaras por píxel).
+    """
+    image, _ = _load_frame(dataset_root, scene, frame)
+    records = _make_segmenter(model, cfg, device).segment(image)
+    if raw:
+        _, binary_maps = mask2segmap(records, image, sort=True)
+    else:
+        binary_maps = _kept_segmap(records, thr, image)
+    out_dir = RESULTS / scene / f"f{frame:04d}" / "segmap"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{variant}.png"
+    if style in ("removed", "pairs"):
+        masks, scores = scores_from_records(records)
+        bd = evaluate(masks, scores, thr["iou_thr"], thr["score_thr"], thr["inner_thr"])
+        if style == "pairs":
+            pairs = []
+            for v in bd.removed:
+                killer = v.kills[0].killer_index if v.kills else None
+                kil = records[killer]["segmentation"] if killer is not None else None
+                pairs.append((records[v.index]["segmentation"], kil))
+            rgb = segmenter_compare.removed_pairs(image, pairs, dim)
+        else:
+            kept = np.stack([records[v.index]["segmentation"] for v in bd.kept]) if bd.kept else np.empty((0,) + image.shape[:2])
+            rem = np.stack([records[v.index]["segmentation"] for v in bd.removed]) if bd.removed else np.empty((0,) + image.shape[:2])
+            rgb = segmenter_compare.removed_overlay(image, kept, rem, dim)
+    elif style == "contour":
+        rgb = segmenter_compare.contours(image, binary_maps, dim)
+    elif style == "heat":
+        rgb = segmenter_compare.heat(image, binary_maps, dim)
+    else:
+        rgb = segmenter_compare.colored(image, binary_maps, dim, alpha, bg)
+    if number:
+        rgb = segmenter_compare.number_masks(rgb, binary_maps)
+    _save_rgb(rgb, out)
+    return out
+
+
+def run_prompts(scene: str, frame: int, model: str, cfg: SamConfig,
+                dataset_root: str, device: str, dim: float = 0.75) -> Path:
+    """Frame con toda la rejilla de puntos que el AMG pincha como prompts -> segmap/prompts.png."""
+    image, _ = _load_frame(dataset_root, scene, frame)
+    seg = _make_segmenter(model, cfg, device)
+    grid = np.concatenate(seg._amg.point_grids, axis=0)  # rejilla normalizada [0,1] (todas las capas)
+    out_dir = RESULTS / scene / f"f{frame:04d}" / "segmap"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "prompts.png"
+    prompt_grid.render(image, grid, str(out), dim=dim)
+    return out
+
+
 def _label(img_rgb: np.ndarray, text: str) -> np.ndarray:
     """Escribe una etiqueta arriba-izquierda sobre una imagen RGB."""
     out = img_rgb.copy()
@@ -149,29 +206,39 @@ def run_scene(scene: str, cfg: SamConfig, thr: dict, every: int, dataset_root: s
     out_dir = RESULTS / scene / "scene"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    series, blob = {}, {}
+    series, coverage, blob = {}, {}, {}
     for model in MODELS:
         seg = _make_segmenter(model, cfg, device)
-        profs = []
+        profs, covs = [], []
         for i, fidx in enumerate(frames):
             image, _ = _load_frame(dataset_root, scene, fidx)
             prof, records = profile_frame(seg, image, warmup=1 if i == 0 else 0)  # 1er frame = warmup
             profs.append(prof)
+            binary_maps = _kept_segmap(records, thr, image)  # máscaras finales (tras poda OVO)
+            covs.append(_coverage(binary_maps, image.shape[:2]))
             if save_frames:  # guardar el segmap coloreado (fuera de la medida, no contamina total_ms)
-                colored = segmenter_compare.colored(image, _kept_segmap(records, thr, image))
-                _save_rgb(colored, out_dir / "frames" / model / f"f{fidx:06d}.png")
-        series[model] = profs
+                _save_rgb(segmenter_compare.colored(image, binary_maps),
+                          out_dir / "frames" / model / f"f{fidx:06d}.png")
+        series[model], coverage[model] = profs, covs
         blob[model] = {"stats": asdict(aggregate(profs)),
-                       "per_frame": [{"frame": f, "total_ms": p.total_ms, "n_masks": p.n_masks}
-                                     for f, p in zip(frames, profs)]}
+                       "per_frame": [{"frame": f, "total_ms": p.total_ms, "n_masks": p.n_masks,
+                                      "coverage": c}
+                                     for f, p, c in zip(frames, profs, covs)]}
         _free(seg)
 
-    scene_timing.render(frames, series, str(out_dir / "timing_scene.png"),
-                        title=f"{scene}: coste por frame (cada {every}, n={len(frames)})")
+    scene_timing.render(frames, series, str(out_dir / "timing_scene.png"), coverage=coverage,
+                        title=f"{scene}: coste, máscaras y cobertura por frame (cada {every}, n={len(frames)})")
     (out_dir / "timing_scene.json").write_text(json.dumps(blob, indent=2))
     if save_frames:
         _join_frames(scene, frames, out_dir, dataset_root)
     return out_dir / "timing_scene.png"
+
+
+def _coverage(binary_maps: np.ndarray, shape: tuple[int, int]) -> float:
+    """Fracción de píxeles cubiertos por al menos una máscara final (unión / total)."""
+    if len(binary_maps) == 0:
+        return 0.0
+    return float(np.any(binary_maps.astype(bool), axis=0).sum()) / (shape[0] * shape[1])
 
 
 def _save_rgb(img_rgb: np.ndarray, path: Path) -> None:
@@ -203,7 +270,7 @@ def run_point(scene: str, frame: int, model: str, cfg: SamConfig, xy: tuple[int,
     models = list(MODELS) if model == "both" else [model]
     named = {}
     for m in models:
-        predictor = Sam3PointPredictor(device=device) if m == "sam3" else SamSegmenter(cfg, device=device)
+        predictor = _make_segmenter(m, cfg, device)  # sam3 -> Sam3Segmenter (predictor interactivo, da stability)
         named[m] = predictor.predict_point(image, xy)
         point_ambiguity.render(image, named[m], str(out_dir / f"{m}.png"))
     if len(named) > 1:
