@@ -20,7 +20,8 @@ class PointMasks:
     """Las 3 máscaras multimask que SAM devuelve al pinchar un punto, con sus scores."""
     point: tuple[int, int]
     masks: list[np.ndarray]   # 3 x (H, W) bool
-    scores: list[float]
+    scores: list[float]       # predicted_iou (la 'confianza')
+    stability: list[float]    # stability_score, el segundo umbral del AMG
 
 
 @dataclass(frozen=True)
@@ -98,28 +99,18 @@ class Sam3Segmenter:
 
     @staticmethod
     def _build_amg(predictor, cfg: SamConfig):
-        """Maquinaria oficial del AMG de SAM2 SIN cargar SAM2: se construye sin __init__ (que exige
-        un modelo) y se le ponen solo los atributos que generate() usa + el predictor de SAM3."""
-        from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-        from sam2.utils.amg import build_all_layer_point_grids
-        amg = SAM2AutomaticMaskGenerator.__new__(SAM2AutomaticMaskGenerator)
-        amg.predictor = predictor
-        amg.point_grids = build_all_layer_point_grids(cfg.points_per_side, cfg.crop_n_layers, 1)
-        amg.points_per_batch = 64
-        amg.pred_iou_thresh = cfg.pred_iou_thresh
-        amg.stability_score_thresh = cfg.stability_score_thresh
-        amg.stability_score_offset = 1.0
-        amg.mask_threshold = 0.0
-        amg.box_nms_thresh = 0.7
-        amg.crop_n_layers = cfg.crop_n_layers
-        amg.crop_nms_thresh = 0.7
-        amg.crop_overlap_ratio = 512 / 1500
-        amg.crop_n_points_downscale_factor = 1
-        amg.min_mask_region_area = cfg.min_mask_region_area
-        amg.output_mode = "binary_mask"
-        amg.multimask_output = True
-        amg.use_m2m = cfg.use_m2m
-        return amg
+        """Envuelve el predictor de SAM3 con el AMG. Delega en la fuente única de OVO para que el
+        estudio y el pipeline construyan exactamente el mismo AMG (mismas máscaras garantizadas)."""
+        from ovo.utils.segment_utils import build_amg_from_predictor
+        return build_amg_from_predictor(
+            predictor,
+            points_per_side=cfg.points_per_side,
+            crop_n_layers=cfg.crop_n_layers,
+            pred_iou_thresh=cfg.pred_iou_thresh,
+            stability_score_thresh=cfg.stability_score_thresh,
+            min_mask_region_area=cfg.min_mask_region_area,
+            use_m2m=cfg.use_m2m,
+        )
 
     def _warmup(self) -> None:
         dummy = np.random.rand(512, 512, 3).astype(np.uint8)
@@ -130,6 +121,10 @@ class Sam3Segmenter:
         """image (H,W,3) RGB uint8 -> máscaras crudas de SAM3 (mismo formato que SAM2)."""
         with torch.inference_mode(), torch.autocast(device_type=self.device, dtype=self._dtype):
             return self._amg.generate(image)
+
+    def predict_point(self, image: np.ndarray, xy: tuple[int, int]) -> PointMasks:
+        """Pincha un punto: reusa el predictor interactivo de SAM3 (iou + stability como el AMG)."""
+        return _predict_point(self._amg.predictor, image, xy, self.device, self._dtype)
 
 
 class Sam3PointPredictor:
@@ -168,15 +163,22 @@ class Sam3PointPredictor:
 
 def _predict_point(predictor, image: np.ndarray, xy: tuple[int, int],
                    device: str, dtype: torch.dtype) -> PointMasks:
-    """Corre un predictor interactivo (SAM2/SAM3) sobre un punto. Mismo contrato en ambos."""
+    """Corre un predictor interactivo (SAM2/SAM3) sobre un punto. Devuelve iou y stability como el AMG."""
+    from sam2.utils.amg import calculate_stability_score
     coords = np.array([[xy[0], xy[1]]], dtype=np.float32)
     labels = np.array([1], dtype=np.int32)
     with torch.inference_mode(), torch.autocast(device_type=device, dtype=dtype):
         predictor.set_image(image)
-        masks, scores, _ = predictor.predict(point_coords=coords, point_labels=labels, multimask_output=True)
-        predictor.reset_predictor()
+        logits, scores, _ = predictor.predict(point_coords=coords, point_labels=labels,
+                                              multimask_output=True, return_logits=True)
+        if hasattr(predictor, "reset_predictor"):
+            predictor.reset_predictor()
+    thr = float(getattr(predictor, "mask_threshold", 0.0))
+    lt = torch.as_tensor(np.asarray(logits), dtype=torch.float32)
+    stability = calculate_stability_score(lt, thr, 1.0).numpy().ravel()
     return PointMasks(
         point=(int(xy[0]), int(xy[1])),
-        masks=[np.asarray(m).astype(bool) for m in masks],
+        masks=[(np.asarray(m) > thr).astype(bool) for m in logits],
         scores=[float(s) for s in np.asarray(scores).ravel()],
+        stability=[float(s) for s in stability],
     )

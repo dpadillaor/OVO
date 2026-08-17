@@ -266,10 +266,76 @@ def box_xyxy_to_xywh(box_xyxy: torch.Tensor) -> torch.Tensor:
     return box_xywh
 
 
+def build_amg_from_predictor(predictor, *, points_per_side: int, crop_n_layers: int = 0,
+                             pred_iou_thresh: float = 0.8, stability_score_thresh: float = 0.95,
+                             min_mask_region_area: int = 0, use_m2m: bool = False,
+                             points_per_batch: int = 64):
+    """Wrap an interactive predictor (SAM2 or SAM3) with SAM2's AMG machinery, without loading SAM2.
+
+    Single source of truth: OVO and the segmentation study build their AMG through this function,
+    so the model-agnostic orchestration (point grid, pruning, batching) is identical and only the
+    underlying model changes.
+    """
+    from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+    from sam2.utils.amg import build_all_layer_point_grids
+    amg = SAM2AutomaticMaskGenerator.__new__(SAM2AutomaticMaskGenerator)
+    amg.predictor = predictor
+    amg.point_grids = build_all_layer_point_grids(points_per_side, crop_n_layers, 1)
+    amg.points_per_batch = points_per_batch
+    amg.pred_iou_thresh = pred_iou_thresh
+    amg.stability_score_thresh = stability_score_thresh
+    amg.stability_score_offset = 1.0
+    amg.mask_threshold = 0.0
+    amg.box_nms_thresh = 0.7
+    amg.crop_n_layers = crop_n_layers
+    amg.crop_nms_thresh = 0.7
+    amg.crop_overlap_ratio = 512 / 1500
+    amg.crop_n_points_downscale_factor = 1
+    amg.min_mask_region_area = min_mask_region_area
+    amg.output_mode = "binary_mask"
+    amg.multimask_output = True
+    amg.use_m2m = use_m2m
+    return amg
+
+
+def build_sam3_image_amg(config: Dict[str, Any], device: str = "cuda"):
+    """SAM3 AMG: build the SAM3 image model and wrap its interactive predictor.
+
+    Reuses `build_amg_from_predictor`, so it yields the same mask format as SAM2 and drops into OVO
+    without touching anything downstream. The sam3 import is lazy: SAM1/SAM2 backbones keep working
+    in environments where sam3 is not installed.
+    """
+    import sys
+    sam3_path = config.get("sam3_path", "thirdParty/sam3")
+    if sam3_path not in sys.path:
+        sys.path.append(sam3_path)
+    import sam3
+    from sam3 import build_sam3_image_model
+    bpe = os.path.join(os.path.dirname(sam3.__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
+    model = build_sam3_image_model(bpe_path=bpe, enable_inst_interactivity=True)
+    model.to(device)
+    predictor = model.inst_interactive_predictor
+    predictor.model.backbone = model.backbone
+    amg = build_amg_from_predictor(
+        predictor,
+        points_per_side=config.get("points_per_side", 32),
+        crop_n_layers=config.get("crop_n_layers", 0),
+        pred_iou_thresh=config.get("nms_iou_th", 0.8),
+        stability_score_thresh=config.get("stability_score_th", 0.95),
+        min_mask_region_area=config.get("min_mask_region_area", 0),
+        use_m2m=config.get("use_m2m", False),
+    )
+    amg._sam3_model = model  # keep the full model for device moves (see MaskGenerator)
+    return amg
+
+
 def load_sam(config: Dict[str, Any], device: str = "cuda") -> SamAutomaticMaskGenerator:
     """ Load SAM or SAM2 model
     """
     sam_version = config.get("sam_version","2.1")
+
+    if sam_version == "3":
+        return build_sam3_image_amg(config, device=device)
 
     model_cards = {"vit_b": "vit_b_01ec64.pth", "vit_h": "vit_h_4b8939.pth", "hiera_l": "hiera_large.pt", "hiera_t": "hiera_tiny.pt"}
     sam_encoder = config.get("sam_encoder","hiera_l")

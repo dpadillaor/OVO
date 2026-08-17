@@ -52,31 +52,33 @@ class MaskGenerator:
             self.mask_generator.generate(np.random.rand(512,512,3).astype(np.float32))
             self.mask_generator.generate(np.random.rand(512,512,3).astype(np.float32)) 
 
+    def _movable(self):
+        """Module to move across devices. For SAM3 it is the full image model (`_sam3_model`, set
+        by the builder); for SAM1/SAM2, the predictor's model."""
+        if not self.mask_generator:
+            return None
+        return getattr(self.mask_generator, "_sam3_model", None) or self.mask_generator.predictor.model
+
     def to(self, device: str) -> None:
-        """
-        Move predictor model to specified device.
-        Args:
-            device (str): device to mode the model to.
-        """
+        """Move the segmenter model to the given device."""
         self.device = device
-        if self.mask_generator:
-            self.mask_generator.predictor.model.to(device)
+        m = self._movable()
+        if m is not None:
+            m.to(device)
 
     def cpu(self) -> None:
-        """
-        Move predictor model to cpu device.
-        """
+        """Move the segmenter model to CPU."""
         self.device = "cpu"
-        if self.mask_generator:
-            self.mask_generator.predictor.model.cpu()
+        m = self._movable()
+        if m is not None:
+            m.cpu()
 
     def cuda(self) -> None:
-        """
-        Move predictor model to cuda default device.
-        """
+        """Move the segmenter model to CUDA."""
         self.device = "cuda"
-        if self.mask_generator:
-            self.mask_generator.predictor.model.cuda()
+        m = self._movable()
+        if m is not None:
+            m.cuda()
     
     def get_masks(self, image: np.ndarray, frame_id: int = None):
         """
