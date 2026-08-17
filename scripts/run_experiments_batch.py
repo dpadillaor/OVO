@@ -119,6 +119,22 @@ class ExperimentRunner:
             case _:
                 raise ValueError(f"Slam module '{self.slam_module}' not recognized or supported by experiment runner")
 
+    def _get_segmenter_token(self) -> str:
+        """Segmenter token, only when it differs from the default SAM2 (so SAM2 names stay unchanged).
+
+        Distinguishes SAM3 used as the segmenter from SAM3 used as a descriptor (fusion_method).
+        """
+        ver = self.experiment.ovo_config.semantic.get("sam", {}).get("sam_version")
+        match ver:
+            case None | "2.1" | "2":
+                return ""
+            case "3":
+                return "SAM3seg"
+            case "":
+                return "SAM1seg"
+            case _:
+                return f"SAM{ver}seg"
+
     def _get_fusion_token(self) -> str:
         """
         Generates the fusion config part of the experiment name.
@@ -157,10 +173,15 @@ class ExperimentRunner:
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         slam_token = self._get_slam_token()
         fusion_config_token = self._get_fusion_token()
+        segmenter_token = self._get_segmenter_token()
         tag = self.experiment.label
         uid = self.experiment.experiment_uid or uuid.uuid4().hex[:5]
 
-        return f"{date_str}_{slam_token}_{fusion_config_token}_{tag}_{uid}"
+        parts = [date_str, slam_token, fusion_config_token]
+        if segmenter_token:  # omitted for the default SAM2 segmenter
+            parts.append(segmenter_token)
+        parts += [tag, uid]
+        return "_".join(parts)
 
     def _build_ovo_data(self) -> dict:
         """
@@ -250,6 +271,7 @@ class ExperimentRunner:
             "trans_noise":                trans_noise,
             "rot_noise":                  rot_noise,
             "jump_count":                 jump_count,
+            "sam_version":                semantic.get("sam", {}).get("sam_version", "2.1"),
             "fusion_method":              semantic.get("fusion_method", "clip"),
             "fusion_criteria":            semantic.get("fusion_criteria", None),
             "th_centroid":                float(semantic.get("th_centroid", 1.5)),

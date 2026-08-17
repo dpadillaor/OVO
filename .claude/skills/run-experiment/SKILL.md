@@ -64,6 +64,7 @@ across entries to share one folder (see Shared output folder below).
 
 SLAM tokens: `GT`, `GTNoise-T{t}-R{r}`, `GTJump-J{n}`, `orbslam2`, `Vanilla`
 Fusion tokens: `CLIP`, `PE-Core`, `PE-Spatial`, `SAM3`, `DINO`
+Segmenter token (inserted before the label only when not the default SAM2): `SAM3seg`
 
 ---
 
@@ -329,6 +330,23 @@ semantic:
   fusion_method: dino
 ```
 
+### Segmenter (`sam_version`) — swap the mask generator (optional)
+
+Orthogonal to `fusion_method`: `fusion_method` picks the **descriptor** (what represents each
+instance), while `sam_version` picks the **segmenter** (what produces the 2D masks). By default OVO
+segments with SAM2 (`sam_version: '2.1'`). To run with **SAM3 as the segmenter**, override the
+`sam:` block under `semantic:`:
+```yaml
+semantic:
+  fusion_method: clip        # keep any descriptor; the segmenter is independent
+  sam:
+    sam_version: '3'
+```
+- SAM3 as segmenter adds the token `SAM3seg` to the experiment name (SAM2 runs are unchanged).
+  Do not confuse it with the `SAM3` **fusion** token, which means SAM3 as a *descriptor*.
+- Everything downstream (pruning, assignment, fusion) is untouched: only the mask source changes.
+- Requires `sam3` installed (`thirdParty/sam3`); SAM1/SAM2 runs do not.
+
 ### `fusion_criteria` — Custom criterion chain (optional)
 
 Override the default criterion chain for any `fusion_method`. Default chains all use `[cooccurrence, centroid, cos_sim, overlap]`.
@@ -379,20 +397,25 @@ ovo_config:
 When `enabled: false` (or block omitted), the original brute-force pair loop
 runs unchanged.
 
-### Contest mechanism (merge/split discriminator)
+### Contest mechanism (point-level merge/split arbitration)
 
-The contest mechanism is an alternative fusion path. It watches which points one
-instance's mask steals from another, then a discriminator emits per-pair verdicts
-(MERGE_CONTAINMENT / SPLIT / NO_ACTION) using containment + geometry guards
-(seam-normal turn, persistence) instead of the classic criterion chain.
+The contest records which points one instance's mask steals from another (a *grab*),
+accumulates per-point evidence, then a discriminator emits per-pair verdicts
+(MERGE_CONTAINMENT / SPLIT / NO_ACTION) from that evidence (containment, confidence,
+exclusivity), and an actuator applies them to the map. It runs at the fusion cadence AND
+once more at the **end of the scene** (a final pass on the full accumulated store, fired
+even if the last frame did not update the map). Only when `contest_fusion != off`.
+
+**All-or-nothing apply.** When the contest acts (`only`/`both`), it applies **every**
+verdict: merges AND splits. There is no per-type selection any more — the old
+`contest_split_mode` key was removed and is now ignored.
 
 Two top-level `semantic:` keys control whether it acts:
 
 | Key | Default | Values | Meaning |
 |---|---|---|---|
-| `contest_fusion` | `observe` | `observe` / `only` / `both` | `observe` = classic fusion runs, contest only logs verdicts. `only` = contest drives merges/splits, classic fusion skipped. `both` = contest merges first, classic fusion on the rest. |
-| `contest_split_mode` | `off` | `off` / `partial` / `dominance` / `all` | Which SPLIT verdicts actually get applied. `off` = none (merges only). `partial`/`dominance` = only that band. `all` = both bands. |
-| `classic_fusion` | `true` | `true` / `false` | `false` skips `_fuse_overlapping_instances` entirely → the map is left RAW (loop closure applied, instances NOT merged). Combine with `contest_fusion: observe` for a raw baseline that still logs contest telemetry, or `contest_fusion: off` for a pure untouched map. Redundant with `contest_fusion: only` (which already skips classic fusion). |
+| `contest_fusion` | `off` | `off` / `observe` / `only` / `both` | `off` = contest disabled (classic fusion only). `observe` = classic fusion runs, contest only logs verdicts (no apply). `only` = contest drives merges+splits, classic fusion skipped. `both` = contest applies first, classic fusion on the rest. |
+| `classic_fusion` | `true` | `true` / `false` | `false` skips `_fuse_overlapping_instances` → the map is left RAW (loop closure applied, instances NOT merged). Combine with `contest_fusion: observe` for a raw baseline that still logs contest telemetry, or `contest_fusion: off` for a pure untouched map. Redundant with `contest_fusion: only` (already skips classic fusion). |
 
 Tuning lives in a nested `contest:` block under `semantic:` (overrides `ovo.yaml`):
 
@@ -400,51 +423,55 @@ Tuning lives in a nested `contest:` block under `semantic:` (overrides `ovo.yaml
 ovo_config:
   semantic:
     contest_fusion: only
-    contest_split_mode: all
     contest:
-      reeval_frontier: true       # phase-2: re-judge "frontera real" with batch union-find
-      max_seam_angle: 15.0        # dominance: normal-turn threshold (deg) for object-in-contact
-      min_persist_split: 0.1      # dominance/partial: below this persistence -> no split
+      agg_mode: batch             # batch | online_shadow | online
+      reeval_frontier: false      # phase-2: re-judge "contained in several" ties with batch union-find
 ```
 
 | `contest:` key | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Master switch for the contest store/record path |
-| `high` | `0.7` | Containment ≥ this → strong band (fragment → merge) |
-| `low` | `0.5` | Containment ≥ this and < `high` → partial (ambiguous) band |
-| `min_mass` | `50` | Min Σ-KF mass for a pair to be considered (noise gate) |
-| `min_split_cont` | `0.05` | Min containment for the dominance band |
-| `max_rev_split` | `0.5` | Reverse-containment above this → bidirectional → no split |
-| `min_persist_split` | `0.1` | Persistence below this → no split (flicker / grazing) |
-| `sim_merge` | `0.81` | Descriptor cos-sim ≥ this in partial band → merge |
-| `max_seam_angle` | `15.0` | Dominance: seam normal-turn (deg) above this → object in contact → no split |
-| `reeval_frontier` | `false` | Phase-2 re-evaluation: build a union-find from the batch's merges and re-judge `frontera real (>=2 raíces)` verdicts with the real root; collapses cases where N winner-IDs are actually one object (e.g. 95→78). Logs `reason="frontera resuelta por root real"`. |
-| `min_grabs` | `5` | Firmness gate (evidence floor): a point counts for a pair only if the challenger grabbed it in ≥ this many KFs. |
-| `firm_tau` | `0.30` | Firmness gate (commitment floor): a point counts only if grabs/claims ≥ this (persistence per point). AND-ed with `min_grabs`. `firm=grabs>=min_grabs AND grabs/claims>=firm_tau`. Set 0 to disable the commitment floor (pure count). Tuned 2026-07-07: 0.30 fixes room1/room2 over-merge regressions (+7.9% global AP_agnostic vs raw, vs +4.3% at firm_tau=0); plateau 0.25–0.30, erodes above 0.40. Renamed from `min_count`. |
-| `prune_every` | `10` | Prune the store every N reports |
+| `agg_mode` | `batch` | `batch` = features re-derived from the full store each report. `online_shadow` = batch drives, the online incremental aggregator runs in parallel and is compared against it (R1 validation, cero cambio de decisión). `online` = the online aggregator **drives** the discriminator; the batch is disconnected. |
+| `min_grabs` | `5` | Firmness evidence floor: a point counts for a pair only if the challenger grabbed it in ≥ this many KFs. |
+| `firm_tau` | `0.30` | Firmness commitment floor: a point counts only if grabs/claims ≥ this. `firm = grabs>=min_grabs AND grabs/claims>=firm_tau`. Set 0 to disable the commitment floor. |
+| `min_mass` | `50` | Noise gate: a pair is ignored if `total_grabs` < this. |
+| `high` | `0.6` | Containment ≥ this → strong band (fragment → merge). |
+| `low` | `0.4` | `low ≤ containment < high` → partial band; below `low` → split territory. |
+| `min_persist_strong` | `0.5` | Strong-band merge requires confidence ≥ this (single root). |
+| `partial_merge_persist` | `0.6` | Partial-band merge requires confidence ≥ this. |
+| `partial_merge_excl` | `0.8` | Partial-band merge requires exclusivity ≥ this (single root). |
+| `min_split_persist` | `0.6` | A split trozo requires confidence ≥ this, per challenger. |
+| `min_split_excl` | `0.9` | A split trozo requires exclusivity ≥ this, per challenger. |
+| `reeval_frontier` | `false` | Phase-2: build a union-find from the batch's merges and re-judge `NO_ACTION "contained in several"` ties with the real root; collapses cases where N winner-IDs are actually one object. |
+| `prune_every` | `10` | Prune the store every N reports. |
+
+> **`agg_mode: online` precondition.** The online aggregator is built to reproduce the batch
+> exactly. Before trusting it to drive, run `online_shadow` on the target scenes and confirm
+> zero mismatches (`shadow_report.csv` empty / `[shadow] ... OK`). Then `online` yields
+> identical decisions computed incrementally.
 
 Recipes:
 
 ```yaml
-# Classic fusion, no contest, cooccurrence veto removed
-semantic:
-  fusion_method: clip
-  fusion_criteria: ["centroid", "cos_sim", "overlap"]
-  # contest_fusion: observe (default), contest_split_mode: off (default)
-
-# Full contest mechanism (merges + all splits + phase-2 reeval)
+# Full contest (merges + splits), batch aggregation
 semantic:
   fusion_method: clip
   contest_fusion: only
-  contest_split_mode: all
   contest:
     reeval_frontier: true
+
+# Contest driven by the online aggregator (validate with online_shadow first)
+semantic:
+  fusion_method: clip
+  contest_fusion: only
+  contest:
+    agg_mode: online
 ```
 
 Verdicts are written to `<scene>/fusion/contest_verdicts.csv` and the raw per-point store
 to `<scene>/fusion/contest.json`. Analyze with the `contest-data` skill
 (`Study_seg/contest_csv.py`, `contest_json.py`). Use `label` to encode the contest
-config (e.g. `contest-only-reeval`) — the name token only encodes `fusion_method`.
+config (e.g. `contest-only-online`) — the name token only encodes `fusion_method`.
 
 ### Key semantic parameters (optional overrides)
 
