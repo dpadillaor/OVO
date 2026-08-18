@@ -22,7 +22,7 @@ from studies.segmentation.core.profiling import profile_frame
 from studies.segmentation.core.timing_stats import aggregate
 from studies.segmentation.viz import (
     pipeline_steps, masks_gallery, removed_masks, decision_trace, point_ambiguity,
-    segmenter_compare, timing as viz_timing, scene_timing, prompt_grid)
+    segmenter_compare, timing as viz_timing, scene_timing, prompt_grid, cost as viz_cost)
 from ovo.utils.segment_utils import mask2segmap
 
 RESULTS = Path(__file__).resolve().parent / "results"
@@ -191,6 +191,7 @@ def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int, dataset_root: 
         blob[model] = asdict(stats[model])
         _free(seg)
     viz_timing.render(stats, str(out_dir / "timing.png"), title=f"{scene}/f{frame} coste AMG (reps={reps})")
+    viz_cost.render({m.upper(): blob[m] for m in blob}, str(out_dir / "cost.png"))
     (out_dir / "timing.json").write_text(json.dumps(blob, indent=2))
     return out_dir / "timing.png"
 
@@ -275,5 +276,6 @@ def run_point(scene: str, frame: int, model: str, cfg: SamConfig, xy: tuple[int,
         point_ambiguity.render(image, named[m], str(out_dir / f"{m}.png"))
     if len(named) > 1:
         point_ambiguity.render_compare(image, named, str(out_dir / "compare.png"))
+        point_ambiguity.dump_panels(image, named, str(out_dir / "panels"))
         return out_dir / "compare.png"
     return out_dir / f"{model}.png"

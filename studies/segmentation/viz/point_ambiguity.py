@@ -70,6 +70,36 @@ def render_compare(image: np.ndarray, named: dict[str, PointMasks], out_path: st
     plt.close(fig)
 
 
+def dump_panels(image: np.ndarray, named: dict[str, PointMasks], out_dir: str) -> None:
+    """Vuelca cada panel suelto y ordenado para montar en Affinity: prompt + {model}_mask{k}.
+
+    Panels limpios (máscara + punto, sin texto). Los conf/stab se anotan en `labels.txt`.
+    Orden de máscaras: por score descendente (igual que la figura). Nombres con prefijo
+    numérico para que el explorador y Affinity los importen en orden.
+    """
+    import os
+    os.makedirs(out_dir, exist_ok=True)
+    labels = list(named)
+    pt = (int(named[labels[0]].point[0]), int(named[labels[0]].point[1]))
+    lines = [f"frame point = {pt}", ""]
+
+    cv2.imwrite(os.path.join(out_dir, "00_prompt.png"),
+                cv2.cvtColor(_prompt_panel(image, pt), cv2.COLOR_RGB2BGR))
+    for mi, label in enumerate(labels, start=1):
+        pm = named[label]
+        order = np.argsort(pm.scores)[::-1]
+        lines.append(label.upper())
+        for k, rank in enumerate(order, start=1):
+            name = f"{mi}{k}_{label}_mask{k}.png"
+            cv2.imwrite(os.path.join(out_dir, name),
+                        cv2.cvtColor(_panel(image, pm.masks[rank], pt), cv2.COLOR_RGB2BGR))
+            lines.append(f"  mask{k}: conf {pm.scores[rank]:.3f}  stab {pm.stability[rank]:.3f}  "
+                         f"area {int(pm.masks[rank].sum())}  -> {name}")
+        lines.append("")
+    with open(os.path.join(out_dir, "labels.txt"), "w") as f:
+        f.write("\n".join(lines))
+
+
 def render(image: np.ndarray, pm: PointMasks, out_path: str) -> None:
     """Guarda: prompt (con el punto) + las 3 máscaras multimask con su score."""
     order = np.argsort(pm.scores)[::-1]
