@@ -685,6 +685,44 @@ class OVO:
 
         return points_ins_ids, fusion_decisions, t_fusion, criterion_times, contest_times
 
+    def run_contest_pass(self, map_data, point_obs=None):
+        """Pasada final del contest sobre el store completo de la escena: SOLO contest, sin fusión
+        clásica. Con toda la evidencia acumulada. Devuelve (points_ins_ids, verdicts); si el contest
+        está en 'off'/'observe' no muta el mapa (points_ins_ids = None)."""
+        self.complete_semantic_info()
+        _points_3d, points_ids_all, points_ins_ids = map_data
+
+        objects_list = []
+        objects_to_del = []
+        self._remove_missing_instances(points_ins_ids, objects_list, objects_to_del)
+
+        contest_mode = self.config.get("contest_fusion", "off")
+        if contest_mode == "off":
+            return None, []
+
+        def _contest_sim(a: int, w: int):
+            oa = self.objects.get(a)
+            ow = self.objects.get(w)
+            if oa is None or ow is None or oa.clip_feature is None or ow.clip_feature is None:
+                return None
+            return float(torch.nn.functional.cosine_similarity(
+                oa.clip_feature[0], ow.clip_feature[0], dim=0))
+
+        verdicts = self.contest.report(points_ids_all, points_ins_ids, point_obs, sim=_contest_sim)
+        print("contest (final pass):", self.contest.summarize(verdicts))
+
+        if contest_mode == "observe":
+            return None, verdicts
+
+        points_ins_ids, contest_fused, _ = self._apply_contest_merges(
+            verdicts, objects_list, points_ins_ids, map_data)
+        # descriptores primero (accede a self.objects[fused] antes de borrarlos), luego se poda
+        self._update_descriptors_after_fusion(contest_fused)
+        self.objects = {k: v for k, v in self.objects.items() if k not in contest_fused}
+        self.update_objects_clip()
+
+        return points_ins_ids, verdicts
+
     def _sync_time(self) -> float:
         """Wall-clock stamp; syncs CUDA first when profiling (config['log']) so GPU work isn't mis-timed."""
         if self.config.get("log", False):
