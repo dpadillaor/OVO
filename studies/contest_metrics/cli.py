@@ -113,6 +113,14 @@ def cmd_query_history(args) -> None:
     _emit(rows, format_history(rows), args.json)
 
 
+def cmd_query_summary(args) -> None:
+    """Resumen agregado: veredictos (merge/split/no-action) e instancias por escena + total."""
+    from .query.summary import format_summary, summarize
+    scenes = [args.scene] if getattr(args, "scene", None) else _resolve_scenes(args.scenes)
+    data = summarize(args.exp, scenes, baseline=args.baseline)
+    _emit(data, format_summary(data), args.json)
+
+
 def cmd_query_resolve(args) -> None:
     """Diagnóstico: qué sustrato se resolvió y si existe."""
     ctx = resolve(args.exp, args.scene)
@@ -149,6 +157,15 @@ def _run_viz_scene(exp_path, scene, args) -> None:
 
 def cmd_viz_scene(args) -> None:
     _run_viz_scene(resolve_exp_path(args.exp), args.scene, args)
+
+
+def cmd_viz_radar(args) -> None:
+    """3 radares (mIoU/mAcc/AP) baseline vs contest, una punta por escena."""
+    from .viz.radar import radar_figure
+    scenes = [args.scene] if getattr(args, "scene", None) else _resolve_scenes(args.scenes)
+    out = args.out or "studies/contest_metrics/radar.png"
+    radar_figure(args.baseline, args.exp, scenes, out)
+    print(f"[ok] {out}")
 
 
 def cmd_viz_exp(args) -> None:
@@ -234,6 +251,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = qsub.add_parser("resolve", help="diagnóstico: qué ckpt se resolvió y si existe")
     _add_exp_scene(p); p.add_argument("--json", action="store_true"); p.set_defaults(func=cmd_query_resolve)
 
+    p = qsub.add_parser("summary", help="agregado: veredictos (merge/split/no-action) e instancias por escena")
+    p.add_argument("--exp", required=True, help="ID, ruta o prefijo del experimento (contest)")
+    grp = p.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--scene", help="una escena")
+    grp.add_argument("--scenes", help="grupo (tuning/held/all) o lista coma-separada")
+    p.add_argument("--baseline", help="ID del baseline para comparar nº de instancias")
+    p.add_argument("--json", action="store_true"); p.set_defaults(func=cmd_query_summary)
+
     # viz
     v = dom.add_parser("viz", help="figuras de telemetría Tier2 (per-KF)")
     vsub = v.add_subparsers(dest="vcmd", required=True)
@@ -248,6 +273,15 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--no-derived", action="store_true")
         p.add_argument("--derivative", action="store_true")
         p.set_defaults(func=fn)
+
+    p = vsub.add_parser("radar", help="3 radares (mIoU/mAcc/AP) baseline vs contest, punta por escena")
+    p.add_argument("--exp", required=True, help="experimento contest")
+    p.add_argument("--baseline", required=True, help="experimento baseline")
+    grp = p.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--scene", help="una escena")
+    grp.add_argument("--scenes", help="grupo (tuning/held/all) o lista coma-separada")
+    p.add_argument("--out", help="ruta de salida (png/pdf)")
+    p.set_defaults(func=cmd_viz_radar)
 
     # eval
     e = dom.add_parser("eval", help="califica las decisiones del contest contra GT (TP/FP/FN/TN por gate)")
