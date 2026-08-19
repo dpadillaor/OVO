@@ -5,8 +5,8 @@ sin reescribir las demás). Los umbrales son empíricos -> van en config.
 
 Mapa de decisiones (lo mismo que la tabla de casos, en código):
   - masa baja                             -> NO_ACTION  (ruido)
-  - muy contenido en 1 objeto             -> MERGE_CONTAINMENT  (fragmento)
-  - muy contenido en varios objetos       -> NO_ACTION  (sin dueño claro)
+  - muy contenido + firme + exclusivo     -> MERGE_CONTAINMENT  (fragmento)
+  - muy contenido pero compartido         -> NO_ACTION  (sin dueño limpio)
   - parcial + firme + exclusivo + 1 raíz  -> MERGE_CONTAINMENT  (fragmento, sin descriptor ni split)
   - contención baja: por CADA challenger con trozo exclusivo+persistente -> SPLIT (0..N)
   - contención baja, ningún trozo cualifica -> NO_ACTION  (borde)
@@ -27,6 +27,7 @@ class ContestThresholds:
     low: float = 0.4                      # cont < low -> borde/focused; [low, high) -> partial
     # banda strong
     min_persist_strong: float = 0.5       # dueño fiable: cada punto robado de media >= esto (mayoría)
+    min_excl_strong: float = 0.8          # trozo no compartido: corta costuras (además de la raíz única)
     # banda partial (merge de fragmento, sin descriptor ni split)
     partial_merge_persist: float = 0.6    # lo agarran de media >= esto (dueño real, no roce)
     partial_merge_excl: float = 0.8       # y el trozo es de un solo pretendiente (zona no disputada)
@@ -72,15 +73,18 @@ class ContestDiscriminator:
         return self._split_verdicts(defender, pairs, sim)
 
     def _strong_verdict(self, defender: InsId, strong: List[PairFeatures]) -> List[Verdict]:
-        # strong = contenido en un dueño. Merge si un dueño fiable (pers, mayoría) único lo contiene.
-        firm = [p for p in strong if p.persistence >= self.th.min_persist_strong]
+        # strong = contenido en un dueño. Merge si un dueño fiable (persistencia) y no compartido
+        # (exclusividad) lo contiene, y es único (raíz única del batch).
+        firm = [p for p in strong
+                if p.persistence >= self.th.min_persist_strong
+                and p.exclusivity >= self.th.min_excl_strong]
         if not firm:
             return [Verdict(Decision.NO_ACTION, defender,
-                            reason="mostly contained but no firm owner -> no action")]
+                            reason="mostly contained but no firm exclusive owner -> no action")]
         if len({self.root(p.challenger) for p in firm}) == 1:
             best = max(firm, key=lambda p: p.containment)
             return [Verdict(Decision.MERGE_CONTAINMENT, defender, challenger=best.challenger,
-                            reason=f"mostly contained in 1 object (cont {best.containment:.2f}) -> merge")]
+                            reason=f"contained (cont {best.containment:.2f}, pers {best.persistence:.2f}, excl {best.exclusivity:.2f}) -> merge")]
         return [Verdict(Decision.NO_ACTION, defender,
                         reason="mostly contained in several, no clear owner -> no action")]
 
