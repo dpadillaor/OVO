@@ -349,12 +349,16 @@ semantic:
 
 ### `fusion_criteria` — Custom criterion chain (optional)
 
-Override the default criterion chain for any `fusion_method`. Default chains all use `[cooccurrence, centroid, cos_sim, overlap]`.
+Override the default criterion chain for any `fusion_method`. The default chain (all methods:
+`clip`/`dino`/`pe`/`sam3`) is **`[centroid, cos_sim, overlap_old]`** — **no** `cooccurrence`, and
+`overlap_old` (not `overlap`) — per `_DEFAULT_CHAINS` in `ovo/entities/fusion/factory.py`. So a
+run that omits `fusion_criteria` does NOT apply the cooccurrence veto. Add `cooccurrence` explicitly
+if you want it.
 
 ```yaml
 semantic:
   fusion_method: clip
-  fusion_criteria: ["centroid", "cos_sim", "overlap"]   # skip cooccurrence veto
+  fusion_criteria: ["cooccurrence", "centroid", "cos_sim", "overlap_old"]   # add the cooccurrence veto
 ```
 
 Available criteria (run in order listed):
@@ -513,7 +517,7 @@ experiments:
       semantic:
         fusion_method: clip
         th_cossim: 0.75             # new fusion params to test
-        fusion_criteria: ["centroid", "cos_sim", "overlap"]
+        fusion_criteria: ["centroid", "cos_sim", "overlap_old"]
 ```
 
 Checkpoints are saved at `data/checkpoints/Replica/<experiment>/<scene>/pre_fusion.ckpt` whenever `save_pre_fusion_checkpoint: true` is set in the noise config — with or without `jump_drift_enabled`. A clean GT run (no jumps) with `close_loops: true` produces a checkpoint captured just before its single end-of-sequence fusion.
