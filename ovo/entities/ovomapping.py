@@ -241,8 +241,13 @@ class OVOSemMap():
         ids_np = ids.cpu().numpy().astype(ids_dtype)
         return points_np, ids_np
 
-    def _send_stream_frame(self, frame_id: int, mpqueue) -> None:
-        """Capture and send a stream frame snapshot to the visualizer."""
+    def _send_stream_frame(self, frame_id: int, mpqueue, step: int | None = None) -> None:
+        """Capture and send a stream frame snapshot to the visualizer.
+
+        ``step`` overrides ONLY the timeline value (the message's frame_id key) while the
+        pose/snapshot still come from the real ``frame_id``. Used by the end-of-scene contest
+        pass so its corrected map lands on its own timeline step instead of colliding with the
+        last frame's."""
         if not self.stream or self.rerun_mode not in ("stream", "tracking"):
             return
 
@@ -301,7 +306,7 @@ class OVOSemMap():
             mpqueue,
             {
                 "type": "stream_frame",
-                "frame_id": frame_id,
+                "frame_id": frame_id if step is None else step,
                 "points": pcd.cpu().numpy().astype(np.float16),
                 "obj_ids": pcd_obj_ids.cpu().numpy().astype(np.int16),
                 "colors": colors,
@@ -504,17 +509,25 @@ class OVOSemMap():
 
         updated_points_ins_ids, verdicts = self.ovo.run_contest_pass(map_data, point_obs)
 
+        # The last loop index need not be a keyframe -> no pose for it, and _send_stream_frame
+        # early-returns on a missing c2w. Use the last frame that actually has a pose.
+        pose_frame = frame_id
+        if self.slam_backbone.get_c2w(frame_id) is None:
+            poses = getattr(self.slam_backbone, "estimated_c2ws", {}) or {}
+            pose_frame = max(poses) if poses else frame_id
+        contest_step = frame_id + 1  # its own timeline step, no collision with the last frame
+
         if updated_points_ins_ids is not None:
             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
-            self._send_stream_frame(frame_id, mpqueue)
+            self._send_stream_frame(pose_frame, mpqueue, step=contest_step)
 
         if self.stream and self.rerun_mode in ("stream", "tracking"):
-            c2w = self.slam_backbone.get_c2w(frame_id)
+            c2w = self.slam_backbone.get_c2w(pose_frame)
             if c2w is not None:
                 n_merged = sum(1 for v in verdicts if v.decision.name == "MERGE_CONTAINMENT")
                 _queue_put_dropping(mpqueue, {
                     "type": "update_map",
-                    "frame_id": frame_id,
+                    "frame_id": contest_step,
                     "c2w": c2w.cpu().numpy().astype(np.float32),
                     "n_fused": n_merged,
                     "decisions": [],
