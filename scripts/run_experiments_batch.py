@@ -29,6 +29,7 @@ class OVOConfigOverride:
     semantic: Dict[str, Any] = field(default_factory=dict)
     vis: Dict[str, Any] = field(default_factory=dict)
     mapping: Dict[str, Any] = field(default_factory=dict)
+    data: Dict[str, Any] = field(default_factory=dict)   # e.g. frame_limit: stop the scene early
 
 @dataclass
 class SLAMConfigOverride:
@@ -202,6 +203,11 @@ class ExperimentRunner:
 
         if self.experiment.ovo_config.mapping:
             _update_recursive(ovo_data, {"mapping": self.experiment.ovo_config.mapping})
+
+        # `data` holds dataset-level knobs (frame_limit, ...). scene_name/input_path are set
+        # later by run_eval.py, so overriding here cannot clash with them.
+        if self.experiment.ovo_config.data:
+            _update_recursive(ovo_data, {"data": self.experiment.ovo_config.data})
 
         # Noise goes to ovo.yaml root (not to the slam config file).
         # SimulatedSLAM reads noise from config["noise"] which comes from ovo.yaml.
@@ -413,6 +419,7 @@ def _load_experiment_manifest(manifest_path: Path) -> Manifest:
             semantic=ovo_data.get("semantic", {}),
             vis=ovo_data.get("vis", {}),
             mapping=ovo_data.get("mapping", {}),
+            data=ovo_data.get("data", {}),
         )
         
         slam_data = exp_data.get("slam_config", {})
