@@ -192,7 +192,7 @@ Al inspeccionar en Rerun aparecieron 3 problemas, todos resueltos:
      original ("if transform is identity, skip"). Config: `slam.localba_refresh_min_disp`.
 
 ## 9d. Configurabilidad + timing + optimización (2026-07-13)
-- **Flag on/off:** `slam.localba_refresh` (default `true`, solo orbslam2). `false` = comportamiento
+- **Flag on/off:** `slam.localba_refresh` (default `false`, solo orbslam2). `false` = comportamiento
   original (refresh solo en big change). Documentado en skill `run-experiment`.
 - **Comparativa ScanNet scene0011_00 (LC=2 ambos, justo):** OFF mIoU 0.358 / mAcc 0.494 / 152.9s →
   ON mIoU 0.393 / mAcc 0.512 / 156.9s. BA local **+0.035 mIoU** por +2.6% tiempo. (AP class-agnostic

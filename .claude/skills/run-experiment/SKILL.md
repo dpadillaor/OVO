@@ -42,6 +42,8 @@ experiments:
         rerun_mode: stream         # stream | tracking
         rerun_visual_mode: "off"   # off = no live viewer; change to spawn/serve if needed
         save_rrd: true             # always save recording by default
+      data:
+        frame_limit: -1            # -1 = whole scene; N = stop after N frames (debug/viz only)
     # slam_config block only if noise > 0:
     # slam_config:
     #   noise:
@@ -254,7 +256,7 @@ ovo_config:
   slam:
     slam_module: orbslam2
     close_loops: true
-    localba_refresh: true            # follow local-BA pose updates between big changes
+    localba_refresh: false           # follow local-BA pose updates between big changes
     localba_refresh_min_disp: 0.005  # m; skip KFs moving less than this on refresh
 ```
 
@@ -264,7 +266,7 @@ big changes. Controlled by two `slam:` keys (ignored by other backbones):
 
 | Key | Default | Meaning |
 |---|---|---|
-| `localba_refresh` | `true` | `false` → original behaviour (refresh only on loop-closure/GBA) |
+| `localba_refresh` | `false` | `true` → dense cloud follows local-BA pose updates between big changes; `false` = original behaviour (refresh only on loop-closure/GBA) |
 | `localba_refresh_min_disp` | `0.005` | metres; a KF whose points would move less than this is left untouched (below it the transform is `inv()` numerical noise; re-applying it every poll drifts old KFs) |
 | `profile_refresh` | `false` | print the refresh geometry sub-breakdown (getkf/loop/cat) at end of run — diagnostics only |
 
