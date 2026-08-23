@@ -27,7 +27,9 @@ from ovo.utils.segment_utils import mask2segmap
 
 RESULTS = Path(__file__).resolve().parent / "results"
 DEFAULT_DATASET = "data/input/Datasets/Replica"
-RESIZE = (1200, 680)
+RESIZE = (1200, 680)              # Replica
+SCANNET_RESIZE = (640, 480)       # ScanNet: W,H del loader de OVO
+SCANNET_CROP_EDGE = 12            # ScanNet: `crop_edge` del loader -> 616x456
 LENSES = ("pipeline", "masks", "removed", "trace")
 MODELS = ("sam2", "sam3")
 
@@ -45,20 +47,48 @@ def _free(obj) -> None:
         torch.cuda.empty_cache()
 
 
+def _layout(dataset_root: str, scene: str) -> str:
+    """Distingue el layout del dataset por el directorio de color: `scannet` o `replica`."""
+    if os.path.isdir(os.path.join(dataset_root, scene, "color")):
+        return "scannet"
+    if os.path.isdir(os.path.join(dataset_root, scene, "results")):
+        return "replica"
+    raise FileNotFoundError(f"No reconozco el layout de {os.path.join(dataset_root, scene)}")
+
+
+def _frame_path(dataset_root: str, scene: str, frame: int) -> str:
+    if _layout(dataset_root, scene) == "scannet":
+        return os.path.join(dataset_root, scene, "color", f"{frame}.jpg")
+    return os.path.join(dataset_root, scene, "results", f"frame{frame:06d}.jpg")
+
+
 def _load_frame(dataset_root: str, scene: str, frame: int) -> tuple[np.ndarray, str]:
-    """Carga y prepara un frame de Replica: (RGB uint8 HxW, ruta)."""
-    path = os.path.join(dataset_root, scene, "results", f"frame{frame:06d}.jpg")
+    """Carga y prepara un frame: (RGB uint8 HxW, ruta).
+
+    Reproduce lo que OVO ve: redimensionado del dataset y, en ScanNet, el recorte de borde
+    (`crop_edge`) que el loader aplica antes de segmentar.
+    """
+    path = _frame_path(dataset_root, scene, frame)
     bgr = cv2.imread(path)
     if bgr is None:
         raise FileNotFoundError(f"No existe el frame: {path}")
-    img = cv2.resize(bgr, RESIZE).astype(np.uint8)
+    if _layout(dataset_root, scene) == "scannet":
+        img = cv2.resize(bgr, SCANNET_RESIZE).astype(np.uint8)
+        e = SCANNET_CROP_EDGE
+        img = img[e:-e, e:-e]
+    else:
+        img = cv2.resize(bgr, RESIZE).astype(np.uint8)
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB), path
 
 
 def _scene_frames(dataset_root: str, scene: str, every: int, limit: int | None = None) -> list[int]:
     """Índices de frames de la escena, muestreados cada `every` (= segment_every de OVO)."""
-    files = sorted(glob.glob(os.path.join(dataset_root, scene, "results", "frame*.jpg")))
-    idxs = [int(os.path.basename(f)[5:-4]) for f in files][::every]
+    if _layout(dataset_root, scene) == "scannet":
+        files = glob.glob(os.path.join(dataset_root, scene, "color", "*.jpg"))
+        idxs = sorted(int(os.path.basename(f)[:-4]) for f in files)[::every]
+    else:
+        files = sorted(glob.glob(os.path.join(dataset_root, scene, "results", "frame*.jpg")))
+        idxs = [int(os.path.basename(f)[5:-4]) for f in files][::every]
     return idxs[:limit] if limit else idxs
 
 
@@ -197,7 +227,8 @@ def run_timing(scene: str, frame: int, cfg: SamConfig, reps: int, dataset_root: 
 
 
 def run_scene(scene: str, cfg: SamConfig, thr: dict, every: int, dataset_root: str, device: str,
-              limit: int | None = None, save_frames: bool = False) -> Path:
+              limit: int | None = None, save_frames: bool = False,
+              models: tuple[str, ...] = MODELS) -> Path:
     """Coste sam2 vs sam3 a lo largo de una escena (cada `every` frames) -> scene/timing_scene.{png,json}.
 
     Justo: carga cada modelo UNA vez, warmup en el primer frame, recorre la escena, libera, y el otro.
@@ -208,7 +239,7 @@ def run_scene(scene: str, cfg: SamConfig, thr: dict, every: int, dataset_root: s
     out_dir.mkdir(parents=True, exist_ok=True)
 
     series, coverage, blob = {}, {}, {}
-    for model in MODELS:
+    for model in models:
         seg = _make_segmenter(model, cfg, device)
         profs, covs = [], []
         for i, fidx in enumerate(frames):

@@ -73,6 +73,8 @@ def main() -> None:
     ps.add_argument("--every", type=int, default=10, help="muestreo de frames (= segment_every de OVO)")
     ps.add_argument("--limit", type=int, default=None, help="máx frames (para iterar rápido)")
     ps.add_argument("--save-frames", action="store_true", help="guardar segmap por frame (original|sam2|sam3)")
+    ps.add_argument("--models", nargs="+", default=list(exp.MODELS), choices=("sam2", "sam3"),
+                    help="modelos a recorrer (por defecto ambos)")
 
     args = p.parse_args()
     cfg = SamConfig(sam_ckpt_path=args.ckpt, points_per_side=args.points_per_side,
@@ -100,7 +102,7 @@ def main() -> None:
     elif args.cmd == "scene":
         thr = {"iou_thr": args.iou_thr, "score_thr": args.score_thr, "inner_thr": args.inner_thr}
         out = exp.run_scene(args.scene, cfg, thr, args.every, args.dataset_root, args.device,
-                            args.limit, args.save_frames)
+                            args.limit, args.save_frames, tuple(args.models))
     else:
         out = exp.run_point(args.scene, args.frame, args.model, cfg, tuple(args.xy),
                             args.dataset_root, args.device)
