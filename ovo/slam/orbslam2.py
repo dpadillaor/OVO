@@ -1,10 +1,26 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, NamedTuple, Optional, Set
 import time
 import orbslam3 as orbslam
 import torch
 from pathlib import Path
 
 from .vanilla_mapper import VanillaMapper
+
+
+class _KFEntry(NamedTuple):
+    """One keyframe taking part in a cloud rebuild.
+
+    `pose` is ORB's fresh pose tuple, or None when the keyframe sits in an archived map and
+    must be carried over untouched.
+    """
+    kf_id: int
+    s0: int
+    s1: int
+    pose: Optional[Any]
+
+    @property
+    def frozen(self) -> bool:
+        return self.pose is None
 
 
 def convert_pose(traj, device):
@@ -27,7 +43,7 @@ class WrapperORBSLAM2(VanillaMapper):
         self.geometry_refreshed = False  # light refresh moved poses w/o map_updated (viz traj signal)
         # Local-BA geometry refresh: move the dense cloud to follow local-BA pose updates between big
         # changes (off => original behaviour, only refresh on loop-closure/GBA).
-        self.localba_refresh_enabled = config["slam"].get("localba_refresh", True)
+        self.localba_refresh_enabled = config["slam"].get("localba_refresh", False)
         # A KF whose points would move less than this (m) is left untouched on refresh: below it the
         # transform is just inv() numerical noise, and re-applying it each poll drifts old KFs.
         self.localba_min_disp = config["slam"].get("localba_refresh_min_disp", 0.005)
@@ -53,6 +69,12 @@ class WrapperORBSLAM2(VanillaMapper):
 
         self.orbslam = orbslam.System(str(vocab_path), str(orbslam_config_path), orbslam.Sensor.RGBD, config["slam"].get("use_viewer",False), not self.close_loops)
         self.orbslam.initialize()
+        # Archived-map protection needs the active map id (see _classify_keyframes). Older
+        # builds of the binding lack it; degrade to the previous behaviour instead of failing.
+        self._supports_map_id = hasattr(self.orbslam, "get_current_map_id")
+        if not self._supports_map_id:
+            print("ORB-SLAM binding has no get_current_map_id(): a new Atlas map will drop the"
+                  " cloud built so far. Rebuild thirdParty/ORB_SLAM3 to enable the guard.")
 
     def track_camera(self, frame_data: List[Any]) -> None:
         frame_id, rgb_image, depth_image = frame_data[:3]
@@ -74,7 +96,11 @@ class WrapperORBSLAM2(VanillaMapper):
             first_p_idx = self.pcd_ids.shape[0]
             super().map(frame_data, c2w)
             last_p_idx = self.pcd_ids.shape[0]
-            self.kfs[frame_id] = {"id": frame_id , "pcd_idxs":(first_p_idx, last_p_idx)} # Assumes pcd is not pruned outside of self._update_map
+            # map_id records which Atlas map the KF was born in, so a later rebuild can tell a
+            # culled keyframe (drop its points) from an archived one (keep them). See
+            # _classify_keyframes. Assumes pcd is not pruned outside of update_map.
+            self.kfs[frame_id] = {"id": frame_id, "pcd_idxs": (first_p_idx, last_p_idx),
+                                  "map_id": self._current_map_id()}
 
         # detect loop-closure of GBA
         last_big_change_id = self.orbslam.get_last_big_change_idx()
@@ -101,6 +127,67 @@ class WrapperORBSLAM2(VanillaMapper):
             torch.cuda.synchronize()
         return time.time()
 
+    def _current_map_id(self) -> Optional[int]:
+        """Id of the Atlas' active map, or None when the binding cannot report it."""
+        if not self._supports_map_id:
+            return None
+        return int(self.orbslam.get_current_map_id())
+
+    def _classify_keyframes(self, updated_kfs, map_id: Optional[int]) -> List[_KFEntry]:
+        """Decide, for every KF we track, whether it takes part in the rebuild and how.
+
+        ORB only lists the ACTIVE map, so a KF missing from that listing means one of two very
+        different things, and they must not be conflated:
+          - it was culled as redundant  -> its points are stale, drop them (the old behaviour);
+          - its map was archived after a tracking loss -> the KF is alive elsewhere, so freeze
+            its slice and pose until a map merge brings it back.
+        The per-KF `map_id` tag tells them apart. It is refreshed on every listing, because a
+        merge makes the surviving map adopt the other's id (LoopClosing::MergeLocal), so only a
+        tag kept up to date stays meaningful for the KFs that are absent.
+        """
+        entries: List[_KFEntry] = []
+        listed: Set[int] = set()
+
+        for updated_kf in updated_kfs:
+            kf_id = int(updated_kf[0])
+            kf = self.kfs.get(kf_id)
+            if kf is None:
+                # Only deleted in update_map, so shouldn't still be in ORB's list -- skip defensively.
+                continue
+            listed.add(kf_id)
+            kf["map_id"] = map_id
+            s0, s1 = kf["pcd_idxs"]
+            entries.append(_KFEntry(kf_id, s0, s1, updated_kf))
+
+        if map_id is not None:
+            for kf_id, kf in self.kfs.items():
+                tag = kf.get("map_id")
+                if kf_id in listed or tag is None or tag == map_id:
+                    # listed, of unknown provenance (restored from a checkpoint), or culled from
+                    # the map we are in: nothing to rescue, keep the previous behaviour.
+                    continue
+                s0, s1 = kf["pcd_idxs"]
+                entries.append(_KFEntry(kf_id, s0, s1, None))
+
+        entries.sort(key=lambda e: e.kf_id)  # keep the cloud laid out in keyframe order
+        return entries
+
+    def _moved_kf_ids(self, entries: List[_KFEntry]) -> Set[int]:
+        """Ids of the listed KFs whose camera centre shifted at least `localba_min_disp`.
+
+        Point displacement equals the camera-centre shift, so this is a batched centre diff (no
+        per-KF inv/matmul); only the KFs it returns pay the transform. See design doc §9c.
+        Frozen KFs never appear here: their pose is the one we already applied.
+        """
+        live = [e for e in entries if not e.frozen]
+        if not live:
+            return set()
+        arr = torch.tensor([list(e.pose) for e in live], device=self.device, dtype=self.world_ref.dtype)  # (M,13)
+        new_centres = arr[:, [4, 8, 12]] @ self.world_ref[:3, :3].T + self.world_ref[:3, 3]  # (M,3)
+        old_centres = torch.stack([self.estimated_c2ws[e.kf_id][:3, 3] for e in live])        # (M,3)
+        disp = torch.linalg.norm(new_centres - old_centres, dim=1)                            # (M,)
+        return {e.kf_id for e, moved in zip(live, (disp >= self.localba_min_disp).tolist()) if moved}
+
     def update_map(self, trigger_refusion: bool = True):
         prof = self._profile_refresh
         if trigger_refusion or prof:  # quiet on the frequent light refresh; loud on big change
@@ -119,36 +206,20 @@ class WrapperORBSLAM2(VanillaMapper):
         new_pcd_obs = []
         new_c2w = {}
 
-        # Gather the KFs we still track, in ORB's order (pruned KFs simply drop out).
-        entries = []  # (kf_id, s0, s1, updated_kf)
-        for updated_kf in updated_kfs:
-            kf_id = int(updated_kf[0])
-            kf = self.kfs.get(kf_id)
-            if kf is None:
-                # Only deleted in update_map, so shouldn't still be in ORB's list — skip defensively.
-                continue
-            s0, s1 = kf["pcd_idxs"]
-            entries.append((kf_id, s0, s1, updated_kf))
-
-        # Point displacement == camera-centre shift, so decide skip-vs-move from a batched centre
-        # diff (no per-KF inv/matmul); only moved KFs pay the transform below. See design doc §9c.
-        moved_mask = []
-        if entries:
-            arr = torch.tensor([list(e[3]) for e in entries], device=self.device, dtype=self.world_ref.dtype)  # (M,13)
-            new_centres = arr[:, [4, 8, 12]] @ self.world_ref[:3, :3].T + self.world_ref[:3, 3]  # (M,3)
-            old_centres = torch.stack([self.estimated_c2ws[e[0]][:3, 3] for e in entries])        # (M,3)
-            disp = torch.linalg.norm(new_centres - old_centres, dim=1)                             # (M,)
-            moved_mask = (disp >= self.localba_min_disp).tolist()
+        map_id = self._current_map_id()
+        entries = self._classify_keyframes(updated_kfs, map_id)
+        moved = self._moved_kf_ids(entries)
 
         n_points = 0
         n_moved = 0
-        for idx, (kf_id, s0, s1, updated_kf) in enumerate(entries):
+        for kf_id, s0, s1, updated_kf in entries:
             old_n_points = n_points
             n_points += (s1 - s0)
-            new_kfs[kf_id] = {"id": kf_id, "pcd_idxs": (old_n_points, n_points)}
+            new_kfs[kf_id] = {"id": kf_id, "pcd_idxs": (old_n_points, n_points),
+                              "map_id": self.kfs[kf_id].get("map_id")}
 
-            if not moved_mask[idx]:
-                # unchanged: reuse the existing slice as-is, keep the old baseline
+            if kf_id not in moved:
+                # unchanged, or frozen in an archived map: reuse the slice as-is and keep the pose
                 new_pcd.append(self.pcd[s0:s1])
                 new_c2w[kf_id] = self.estimated_c2ws[kf_id]
             else:
@@ -160,7 +231,7 @@ class WrapperORBSLAM2(VanillaMapper):
                 new_pcd.append(updated_kf_pcd)
                 new_c2w[kf_id] = updated_kf_c2w
 
-            # kfs that are not in updated_kfs were pruned by ORB_SLAM -> dropped with their pcd
+            # kfs missing from BOTH the listing and self.kfs' live maps were culled -> dropped
             new_pcd_ids.append(self.pcd_ids[s0:s1])
             new_pcd_obj_ids.append(self.pcd_obj_ids[s0:s1])
             new_pcd_colors.append(self.pcd_colors[s0:s1])
