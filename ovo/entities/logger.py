@@ -1,5 +1,6 @@
 from typing import Any, Dict
 from pathlib import Path
+from contextlib import contextmanager
 import numpy as np
 import psutil
 import pprint
@@ -7,6 +8,11 @@ import torch
 import wandb
 import csv
 import time
+
+
+class _Elapsed:
+    """Holds the measured seconds so a `timed` block can also read its own duration."""
+    value: float = 0.0
 
 _FUSION_LOG_FIELDS = ["frame_id", "result", "accept_mode", "i1", "i2", "reason", "centroid_dist", "aabb_dist", "cos_sim", "p_dist", "shared_kfs"]
 
@@ -65,8 +71,28 @@ class Logger:
         with open(self._fusion_log_path, "w", newline="") as f:
             csv.DictWriter(f, fieldnames=_FUSION_LOG_FIELDS, extrasaction="ignore").writeheader()
 
-    def log_fusion_timings(self, t_fusion: float, criterion_times: dict) -> None:
-        self.stats["t_fusion"].append(t_fusion)
+    @contextmanager
+    def timed(self, key: str, sync: bool = False):
+        """Time a block and record the elapsed seconds under `key` (one entry per call).
+
+        `sync=True` brackets the block with cuda syncs so async GPU work is not hidden;
+        it stalls the pipeline, so callers pass it only when profiling. Yields an object
+        whose `.value` holds the duration, for callers that also need the number downstream.
+        """
+        do_sync = sync and torch.cuda.is_available()
+        if do_sync:
+            torch.cuda.synchronize()
+        elapsed = _Elapsed()
+        t0 = time.time()
+        try:
+            yield elapsed
+        finally:
+            if do_sync:
+                torch.cuda.synchronize()
+            elapsed.value = round(time.time() - t0, 4)
+            self.stats.setdefault(key, []).append(elapsed.value)
+
+    def log_fusion_timings(self, criterion_times: dict) -> None:
         for key, val in criterion_times.items():
             stat_key = f"t_crit_{key}"
             if stat_key not in self.stats:

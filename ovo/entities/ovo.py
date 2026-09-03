@@ -12,7 +12,7 @@ from .mask_generator import MaskGenerator
 from .pe_generator import PEGenerator
 from .instance3d import Instance3D
 from .logger import Logger
-from .fusion import create_fusion_strategy
+from .fusion import create_fusion_strategy, collect_merge_pairs, group_merge_pairs
 from ..utils.cooccurrence_graph import CooccurrenceGraph
 from .contest import ContestManager
 from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter, SAM3FusionAdapter
@@ -96,6 +96,10 @@ class OVO:
 
         # Initialize fusion strategy
         self.fusion_strategy = create_fusion_strategy(config, self.cooccurrence)
+
+        # Merge policy: False = merge as soon as a pair is accepted (original), True = decide
+        # every pair first over untouched geometry, then apply the merges.
+        self.deferred_fusion = config.get("deferred_fusion", False)
         
         # Initialize fusion encoder adapter
         self.fusion_encoder = self._get_fusion_encoder()
@@ -809,28 +813,47 @@ class OVO:
         objects_list: List[Instance3D],
         points_3d: torch.Tensor,
         map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    ) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor]:
+    ) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor, list, float, dict]:
         """
         Identify and fuse overlapping instances based on the fusion strategy.
         Returns:
             - objects: Dictionary of updated (surviving) Instance3D objects.
             - fused_objects: Dictionary mapping {deleted_instance_id: survivor_instance_id}.
             - points_ins_ids: Updated tensor of instance IDs for each 3D point.
+            - decisions: Per-pair fusion decision records (for the fusion log).
+            - t_fusion: Wall time of the whole fusion step (seconds).
+            - criterion_times: Per-criterion times (t_crit_<name>) plus counts.
         """
         # TODO: optimize brute-force approach (compare all instances to each-other)
-        # Precompute pointcloud data for efficiency
-        t_fuse_start = time.time()
+        profile = self.config.get("log", False)
         _, _, points_ins_ids = map_data
         obj_pcds = {}
-        t_pre = time.time()
-        for instance in objects_list:
-            obj_pcd = points_3d[points_ins_ids == instance.id]
-            obj_pcds[instance.id] = [obj_pcd, obj_pcd.mean(axis=0)]
-        t_precompute_fusion = time.time() - t_pre
-        n_instances_alive = len(objects_list)
+        with self.logger.timed("t_fusion", sync=profile) as t_fuse:
+            with self.logger.timed("t_precompute_fusion", sync=profile):
+                for instance in objects_list:
+                    obj_pcds[instance.id] = points_3d[points_ins_ids == instance.id]
+            self.fusion_strategy.prepare(objects_list, obj_pcds)
+            n_instances_alive = len(objects_list)
 
-        objects = {}
-        fused_objects = {}
+            if self.deferred_fusion:
+                objects, fused_objects, points_ins_ids = self._fuse_deferred(objects_list, obj_pcds, map_data)
+            else:
+                objects, fused_objects, points_ins_ids = self._fuse_eager(objects_list, obj_pcds, map_data)
+
+        decisions = self.fusion_strategy.pop_decisions()
+        criterion_times = self.fusion_strategy.pop_timings()
+        criterion_times["n_instances_alive"] = n_instances_alive
+        return objects, fused_objects, points_ins_ids, decisions, t_fuse.value, criterion_times
+
+    def _fuse_eager(self, objects_list, obj_pcds, map_data):
+        """Merge as soon as a pair is accepted (original behaviour).
+
+        A survivor keeps absorbing inside the same pass, so from its first merge on it is
+        compared against the rest with the cloud and centroid it had before absorbing. Pairs
+        involving an already merged instance are skipped.
+        """
+        _, _, points_ins_ids = map_data
+        objects, fused_objects = {}, {}
         for i, instance1 in enumerate(objects_list):
             if instance1.id in fused_objects:
                 continue
@@ -845,13 +868,31 @@ class OVO:
                     self.contest.on_merge(target=instance1.id, source=instance2.id)
                     fused_objects[instance2.id] = instance1.id
             objects[instance1.id] = instance1
+        return objects, fused_objects, points_ins_ids
 
-        t_fusion = time.time() - t_fuse_start
-        decisions = self.fusion_strategy.pop_decisions()
-        criterion_times = self.fusion_strategy.pop_timings()
-        criterion_times["t_precompute_fusion"] = round(t_precompute_fusion, 4)
-        criterion_times["n_instances_alive"] = n_instances_alive
-        return objects, fused_objects, points_ins_ids, decisions, t_fusion, criterion_times
+    def _fuse_deferred(self, objects_list, obj_pcds, map_data):
+        """Decide every pair first, merge afterwards (`semantic.deferred_fusion: true`).
+
+        Every instance is compared against every other over the geometry precomputed at the
+        start of the pass, so no verdict is taken on a cloud a previous merge has already
+        outdated. The accepted pairs are then resolved into transitive groups and applied.
+        """
+        _, _, points_ins_ids = map_data
+        by_id = {instance.id: instance for instance in objects_list}
+        pairs = collect_merge_pairs(objects_list, obj_pcds, self.fusion_strategy)
+
+        fused_objects = {}
+        for survivor_id, absorbed_ids in group_merge_pairs(objects_list, pairs):
+            survivor = by_id[survivor_id]
+            for absorbed_id in absorbed_ids:
+                survivor, points_ins_ids = instance_utils.fuse_instances(survivor, by_id[absorbed_id], map_data)
+                self.cooccurrence.merge(target=survivor_id, source=absorbed_id)
+                self.contest.on_merge(target=survivor_id, source=absorbed_id)
+                fused_objects[absorbed_id] = survivor_id
+            by_id[survivor_id] = survivor
+
+        objects = {ins_id: instance for ins_id, instance in by_id.items() if ins_id not in fused_objects}
+        return objects, fused_objects, points_ins_ids
 
     def _update_descriptors_after_fusion(self, fused_objects: Dict[int, int]) -> float:
         """

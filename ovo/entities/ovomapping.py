@@ -469,7 +469,7 @@ class OVOSemMap():
         _EXTRA_STAT_KEYS = {"t_precompute_fusion", "t_descriptor_update", "n_instances_alive", "n_pairs_evaluated"}
         extra_stats = {k: v for k, v in criterion_times.items() if k in _EXTRA_STAT_KEYS or k.startswith("sc_")}
         crit_only = {k: v for k, v in criterion_times.items() if k not in extra_stats}
-        self.logger.log_fusion_timings(t_fusion, crit_only)
+        self.logger.log_fusion_timings(crit_only)
         if extra_stats:
             self.logger.log_ovo_stats(extra_stats)
         if contest_times:
@@ -606,7 +606,7 @@ class OVOSemMap():
         _EXTRA_STAT_KEYS = {"t_precompute_fusion", "t_descriptor_update", "n_instances_alive", "n_pairs_evaluated"}
         extra_stats = {k: v for k, v in criterion_times.items() if k in _EXTRA_STAT_KEYS or k.startswith("sc_")}
         crit_only = {k: v for k, v in criterion_times.items() if k not in extra_stats}
-        self.logger.log_fusion_timings(t_fusion, crit_only)
+        self.logger.log_fusion_timings(crit_only)
         if extra_stats:
             self.logger.log_ovo_stats(extra_stats)
         if contest_times:
