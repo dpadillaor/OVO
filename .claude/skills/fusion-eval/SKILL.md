@@ -64,7 +64,28 @@ Original `fusion_decisions.csv` rows + `same_object` + `verdict`. Columns:
 Four blocks (two universes: the real run vs the GT-projected pairs we could score):
 - `run` = the real fusion: `instances_pre`, `instances_post` (raw unique obj_ids from `ovo_map.ckpt` points, no projection), `merges_applied` (= pre - post). Plus the projection cross-check: `instances_post_reprojected` = post instances that win ≥1 GT vertex (reproject `match_labels_to_vtx`, same count production's `instance_pred/<scene>.txt` writes), and `post_unmatched_gt` = obj_ids present in the raw post map but absent from the GT projection (have points, reach no vertex). `instances_post - instances_post_reprojected = len(post_unmatched_gt)`; non-empty means our raw count and production's evaluated count diverge — names exactly which.
 - `evaluation` = what we could score: `pairs_total`/`pairs_scored`/`pairs_skipped`, `merges_scored`/`merges_skipped`, and `skipped_objects` = per dropped object `{obj_id, pairs, merges}` (how many decisions it was in, how many were real ACCEPTED merges). An obj is skipped when it doesn't project to GT (drift noise, NOT fusion signal).
-  - Reconciliation: `run.merges_applied = merges_scored + merges_skipped`; `pairs_total = pairs_scored + pairs_skipped`. A `skipped_objects[i].merges > 0` is exactly why `merges_applied` exceeds `merges_scored`.
+  - Reconciliation: `pairs_total = pairs_scored + pairs_skipped`. For **online** fusion (the
+    default) `run.merges_applied = merges_scored + merges_skipped`, and a
+    `skipped_objects[i].merges > 0` is exactly why `merges_applied` exceeds `merges_scored`.
+  - **With `deferred_fusion: true` that identity does not hold**, and the gap is not a bug.
+    The deferred pass collects every accepted pair first and resolves them into connected
+    components, so a group of *n* instances removes *n-1* instances no matter how many accepted
+    pairs it contains: `merges_applied <= accepted pairs`, the difference being the pairs that
+    join two instances already in the same group. Measured on office0 of a 25 cm-jump replay:
+    116 accepted pairs, 141 instances in 45 groups, `merges_applied = 141 - 45 = 96`, 20 pairs
+    redundant. **Both numbers are right and they answer different questions**: `merges_applied`
+    counts objects consolidated, `TP + FP` counts merge decisions taken. The confusion matrix is
+    per *pair*, so redundant pairs belong in it: the criterion did judge them. They do not skew
+    the rates either, since they split TP/FP in roughly the same proportion as the rest (in that
+    scene, precision 0.853 with them and 0.854 without).
+  - **With the voxel broadphase** (`overlap_voxel` as the sole accepting criterion) `pairs_total`
+    is NOT N²: `fusion_decisions.csv` holds only the candidate pairs (those sharing a voxel cell),
+    so a run drops from ~19900 to ~660 scored pairs. **`precision` stays comparable** (the accepted
+    merges are identical to brute force, so TP/FP are the same), but **`recall`/`FN`/`TN` are over a
+    much smaller universe and are NOT comparable to a brute-force run's** (the non-candidate
+    same-object pairs, which brute force scores as FN, never enter the CSV). When comparing a
+    broadphase run against a non-broadphase one, restrict both to the shared-cell pairs first, or
+    compare precision only.
 - `verdicts` (scored pairs only): `counts` {TP,FP,FN,TN}, `rates` {precision,recall,f1}, `by_group` (verdicts split by ACCEPTED vs REJECTED/<reason> — where FN/FP come from).
 - `agnostic_impact` = class-agnostic instance AP **pre vs post** fusion, computed **two ways**:
   - `all` = every GT instance counts (background included). The raw view.
@@ -115,3 +136,7 @@ or as its `matched_obj_id` — that tells you which GT object got glued on.
 ## Gotchas
 - Drift breaks the GT projection (`match_labels_to_vtx` assumes shared frame). On jump-drift scenes, `evaluation.skipped_objects` and some low IoUs are **projection noise**, not fusion error. Use `show <obj_id>` to see the displacement. A clean (no-drift) scene isolates the fusion effect.
 - `run.merges_applied` (real merges) can exceed `evaluation.merges_scored` (GT-projected pairs only): the gap is `merges_skipped`, attributable per object in `skipped_objects` (one universe is the full run, the other is scored pairs).
+- Under `deferred_fusion: true`, `merges_applied` is **lower** than the accepted-pair count
+  (`TP + FP`) instead: connected components collapse each group in one go. Subtracting the two
+  and reading the difference as missing decisions is the mistake to avoid — see the
+  reconciliation note above.

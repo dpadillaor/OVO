@@ -312,9 +312,12 @@ semantic:
   fusion_method: pe
   pe:
     model_card: PE-Core-L14-336      # or PE-Spatial-L14-448
+    crop: seg                        # seg (default, masked segment) | bbox (box with context)
+    bbox_margin: 50                  # only for crop: bbox
 ```
 - `PE-Core-L14-336` → experiment token `PE-Core`
 - `PE-Spatial-L14-448` → experiment token `PE-Spatial`
+- `crop` picks what the fusion descriptor sees: `seg` = the mask with black background (tight, previous default); `bbox` = the bounding box with real background/context. Only the fusion descriptor (PE/SAM3) honors it; CLIP labeling keeps its learned multi-crop. Note: `crop: bbox` raises cosine globally (not selectively) and tends to over-merge; `seg` is the better default.
 
 #### `sam3` — SAM3 finetuned perception model
 Requires a `sam3:` block under `semantic:`.
@@ -373,8 +376,34 @@ Available criteria (run in order listed):
 | `cos_sim` | Rejects pairs with cosine similarity < `th_cossim` |
 | `overlap` | Symmetric: fraction of smaller cloud's points within `th_points` of larger cloud. Accepts if > 0.5 (or > 0.2 if cos_sim > 0.9) |
 | `overlap_old` | Asymmetric: fraction of points1 within `th_points` of pcd2 (not normalized by cloud size). Same accept thresholds as `overlap`. Use to compare against legacy behaviour. |
+| `overlap_voxel` | Voxel overlap: `\|cells(A) ∩ cells(B)\| / min(\|cells(A)\|,\|cells(B)\|)` on a shared grid, instead of point KD-tree distance. Same two-branch accept (`> voxel_th_geom`, or `> voxel_th_sem` with cos_sim > 0.9). ~15x faster than `overlap_old`. Tuned by `voxel_size` (cell edge, m; default 0.05), `voxel_th_geom` (0.5), `voxel_th_sem` (0.2), `voxel_origin` (grid origin, default 0.0). |
 
-**Note:** the experiment name token only encodes `fusion_method`. Use `label` to distinguish experiments with custom chains (e.g. `clip-no-cooc`).
+**Voxel broadphase (automatic).** When `overlap_voxel` is the *only* accepting criterion in the chain (e.g. `[cos_sim, overlap_voxel]`), the fusion loop stops being O(N²): the voxel cells double as a spatial index and only instance pairs that share a cell are judged. Lossless (a pair sharing no cell can never be accepted) and much faster; no config needed. If the chain also contains `overlap`/`overlap_old`, it falls back to the brute-force loop.
+
+**Note:** the experiment name token only encodes `fusion_method`. Use `label` to distinguish experiments with custom chains (e.g. `clip-no-cooc`, `voxel`).
+
+### `deferred_fusion` — Decide every pair before merging any (optional)
+
+```yaml
+semantic:
+  fusion_method: clip
+  deferred_fusion: true      # default false = original behaviour
+```
+
+By default the fusion loop merges the moment a pair is accepted. Two consequences: a survivor
+keeps being compared against the rest of the map with the cloud and centroid it had **before**
+absorbing anything, and pairs involving an already merged instance are skipped and never judged.
+
+With `deferred_fusion: true` the pass first judges every pair against the geometry precomputed at
+its start, and only then applies the merges. No verdict is taken on an outdated cloud, and every
+instance is compared against every other.
+
+Accepted pairs are transitive: if A merges with B and B with C, the three end up together even
+though A and C were rejected. The survivor of a group is its earliest member in the instance list,
+the same one the eager loop would have kept, so merge direction does not change.
+
+Costs a few more comparisons (the eager loop skips pairs whose members are already merged, which
+is a small fraction). Recorded in `experiment_meta.json` as `deferred_fusion`.
 
 ### Covisibility filter (optional)
 
