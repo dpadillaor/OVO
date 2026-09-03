@@ -778,40 +778,33 @@ class OVO:
         apply_times = {"merges": round(self._sync_time() - t0, 4)}
 
         t0 = self._sync_time()
-        split_mode = self.config.get("contest_split_mode", "off")
+        # Contest en modo apply (only/both): aplica SIEMPRE todos los splits, sin filtro.
         split_count = 0
-        if split_mode != "off":
-            for v in verdicts:
-                if v.decision.name != "SPLIT" or v.challenger is None or not v.split_points:
-                    continue
-                is_partial = "parcial" in v.reason
-                is_dominance = "dominancia" in v.reason
-                if split_mode == "partial" and not is_partial:
-                    continue
-                if split_mode == "dominance" and not is_dominance:
-                    continue
-                defender_id = v.defender
-                challenger_id = v.challenger
-                # skip if either side was already consumed by a merge in this batch
-                # (e.g. contradictory MERGE+SPLIT verdicts on the same pair) -> avoids
-                # reassigning points to an instance that is about to be deleted.
-                if defender_id in fused_objects or challenger_id in fused_objects:
-                    continue
-                if defender_id not in self.objects or challenger_id not in self.objects:
-                    continue
-                subset_set = set(v.split_points)
-                defender = self.objects[defender_id]
-                challenger = self.objects[challenger_id]
-                removed = defender.remove_points_ids(subset_set)
-                if removed > 0:
-                    challenger.add_points_ids(list(subset_set))
-                    subset_t = torch.as_tensor(list(subset_set), device=points_ins_ids.device)
-                    points_ins_ids[torch.isin(points_ids.flatten(), subset_t)] = v.challenger
-                    # online (R1): el trozo cambió de owner -> defender y challenger sucios. No-op en batch.
-                    self.contest.on_split(defender_id, challenger_id, list(subset_set))
-                    split_count += 1
+        for v in verdicts:
+            if v.decision.name != "SPLIT" or v.challenger is None or not v.split_points:
+                continue
+            defender_id = v.defender
+            challenger_id = v.challenger
+            # skip if either side was already consumed by a merge in this batch
+            # (e.g. contradictory MERGE+SPLIT verdicts on the same pair) -> avoids
+            # reassigning points to an instance that is about to be deleted.
+            if defender_id in fused_objects or challenger_id in fused_objects:
+                continue
+            if defender_id not in self.objects or challenger_id not in self.objects:
+                continue
+            subset_set = set(v.split_points)
+            defender = self.objects[defender_id]
+            challenger = self.objects[challenger_id]
+            removed = defender.remove_points_ids(subset_set)
+            if removed > 0:
+                challenger.add_points_ids(list(subset_set))
+                subset_t = torch.as_tensor(list(subset_set), device=points_ins_ids.device)
+                points_ins_ids[torch.isin(points_ids.flatten(), subset_t)] = v.challenger
+                # online (R1): el trozo cambió de owner -> defender y challenger sucios. No-op en batch.
+                self.contest.on_split(defender_id, challenger_id, list(subset_set))
+                split_count += 1
         if split_count:
-            print(f"  contest splits ({split_mode}): {split_count}")
+            print(f"  contest splits: {split_count}")
         apply_times["split"] = round(self._sync_time() - t0, 4)
 
         return points_ins_ids, fused_objects, apply_times
