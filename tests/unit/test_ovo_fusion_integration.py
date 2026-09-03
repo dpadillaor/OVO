@@ -16,8 +16,8 @@ class TestOVOFusionIntegration:
     @pytest.fixture
     def mock_ovo(self, minimal_ovo_config):
         """Create a mocked OVO instance."""
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'), \
+        with patch('ovo.entities.ovo.CLIPEncoder'), \
+             patch('ovo.entities.ovo.PEEncoder'), \
              patch('ovo.entities.ovo.MaskGenerator'):
             
             # Setup config

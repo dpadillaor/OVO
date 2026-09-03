@@ -3,12 +3,15 @@ import torch
 import yaml
 import os
 
-from ..utils import clip_utils
-from ..utils import segment_utils
+from ...utils import clip_utils
+from ...utils import segment_utils
 
-from .clips_merging import WeightsPredictorMerger
+from ..clips_merging import WeightsPredictorMerger
 
-class CLIPGenerator:
+from .base import ImageEncoder
+
+
+class CLIPEncoder(ImageEncoder):
     def __init__(self, config: Dict, device: str = "cuda"):
         self.config = config
         self.device = device
@@ -35,8 +38,8 @@ class CLIPGenerator:
 
         self.model_card = config.get("model_card", "SigLIP-384")
         self.model, self.tokenizer, self.preprocess, clip_dim = clip_utils.load_clip_model(self.model_card, config.get("use_half", False))
-        self.clip_dim=clip_dim        
-        
+        self.clip_dim=clip_dim
+
         if self.model_card[:6] == "SigLIP":
             self.get_similarity = clip_utils.siglip_cosine_similarity
 
@@ -55,39 +58,21 @@ class CLIPGenerator:
             self.similarity_args = (logit_scale, logit_bias)
         else:
             self.get_similarity = clip_utils.clip_cosine_similarity
-            self.similarity_args = ()  
+            self.similarity_args = ()
         self.to(self.device)
 
     @property
     def get_clip_dim(self) -> str:
         return self.clip_dim
-            
-    def to(self, device: str) -> None:
-        """
-        Move predictor model to either 'cpu' or 'cuda' device.
-        Args:
-            device (str): device to mode the model to.
-        """
-        if "cuda" in device:
-            return self.cuda()
-        else:
-            return self.cpu()
 
     def cpu(self) -> None:
-        """
-        Move predictor model to cpu device.
-        """
         self.device = "cpu"
         self.model.cpu()
         self.similarity_args = [x.cpu() for x in self.similarity_args]
         if self.embed_type == "learned":
             self.clips_fusion_model.cpu()
-        
 
     def cuda(self) -> None:
-        """
-        Move predictor model to cuda default device.
-        """
         self.device = "cuda"
         self.model.cuda()
         self.similarity_args = [x.cuda() for x in self.similarity_args]
@@ -96,27 +81,15 @@ class CLIPGenerator:
 
     @torch.no_grad
     def encode_image(self, input: torch.Tensor) -> torch.Tensor:
-        """ Compute CLIP descriptor of an RGB image
-        Args:
-            - input (torch.Tensor): RGB image as tensor with shape (3,H,W) in range [0,1]
-        Return:
-            - clip_descriptor (torch.Tensor): as tensor with shape (self.clip_dim)
-        """
+        """ Compute CLIP descriptor of an RGB image (3,H,W in [0,1]). """
         processed_input = self.preprocess(input)
         if self.config.get("use_half", False):
             processed_input = processed_input.half()
-        return self.model.encode_image(processed_input)    
+        return self.model.encode_image(processed_input)
 
     @torch.no_grad
     def extract_clip(self, image: torch.Tensor, binary_maps: torch.Tensor, return_all: bool = False) -> torch.Tensor:
-        """ Computes a CLIP vector for each mask of the segmented image.
-        Args:
-            - image (torch.Tensor): Full source RGB image with dimensions (3,H,W) and range 0-255.
-            - binary_maps (torch.Tensor): A tensor of (N, H, W) containing N binary maps, one for each segmented instance.
-            - return_all: if True returns the three computed descriptors of each image in seg_images instead of merging them.
-        Return:
-            - climp_embeds: list of numpy arrays with dim (N, self.clip_dim).        
-        """
+        """ Computes a CLIP vector for each mask (global + seg + bbox fused). """
         if self.embed_type != "vanilla":
             if len(image.shape) ==3:
                 image = image[None, ...]
@@ -125,7 +98,7 @@ class CLIPGenerator:
         seg_images = segment_utils.segmap2segimg(binary_maps, image.squeeze(), self.embed_type != "vanilla", out_l=self.mask_res)/255.
         if len(seg_images) == 0:
             return torch.tensor([], device = self.device)
-        
+
         if self.embed_type == "vanilla":
             clip_embed = torch.nn.functional.normalize(self.encode_image(seg_images[:,:3]), p=2,dim=-1)
         else:
@@ -136,21 +109,14 @@ class CLIPGenerator:
                 clip_embed = torch.cat([clip_g.repeat(n_clips,1)[:,None], clip_seg[:n_clips][:,None], clip_seg[n_clips:][:,None] ],dim=1)
             else:
                 clip_embed = self.clips_fusion(clip_g.repeat(n_clips,1), clip_seg[:n_clips], clip_seg[n_clips:,])
-            
+
         if self.config.get("use_half", False):
             clip_embed = clip_embed.half()
         return clip_embed
 
     @torch.no_grad
     def get_txt_embedding(self, text_list: List[str]) -> torch.Tensor:
-        """
-        Compute text embeddings for a list of strings. Each element of the list is tokenized individually
-        Args:
-            - text_list (List[str]): A list of strings to be embedded.
-        Returns:
-            - embeds (torch.Tensor): A tensor containing the normalized embeddings for the input phrases.
-        """
-
+        """ Compute normalized text embeddings, one per string. """
         tok_phrases = torch.cat([self.tokenizer(phrase) for phrase in text_list]).to(self.device)
         embeds = self.model.encode_text(tok_phrases)
         embeds /= embeds.norm(dim=-1, keepdim=True)
@@ -158,16 +124,7 @@ class CLIPGenerator:
 
     @torch.no_grad
     def get_embed_txt_similarity(self, ins_descriptors: torch.Tensor, txt_queries: List[str], templates: str | List[str] = ['{}']) -> torch.Tensor:
-        """
-        Computes independently the similarity between image embeddings and text queries.
-        Args:
-            - ins_descriptors (torch.Tensor): A tensor containing image embeddings.
-            - txt_queries (List[str]): A list of text queries.
-            - templates (str | List[str], optional): A template or a list of templates to use for classification. If it's a list, the classes embeddings will be an ensembles of the templates. 
-        Returns:
-            - sim_map (torch.Tensor): A tensor containing the similarity scores between each text query and the image embeddings.
-        """
-
+        """ Similarity between instance descriptors and text queries (final labels). """
         n_queries = len(txt_queries)
         txt_embeds = torch.zeros((n_queries, ins_descriptors.shape[1]), device = ins_descriptors.device)
         if isinstance(templates, str):
@@ -175,8 +132,7 @@ class CLIPGenerator:
         queries = [[template.format(query) for template in templates] for query in txt_queries]
 
         for j in range(n_queries):
-            # Compute the text embedding of each query individually to make them independent from other queries
-            embed = self.get_txt_embedding(queries[j]).mean(0, keepdim=True).float() 
+            embed = self.get_txt_embedding(queries[j]).mean(0, keepdim=True).float()
             txt_embeds[j] = torch.nn.functional.normalize(embed, p=2, dim=-1)
 
         sim_map = self.get_similarity(txt_embeds, ins_descriptors, *self.similarity_args)

@@ -7,9 +7,8 @@ import time
 
 
 from ..utils import geometry_utils, instance_utils
-from .clip_generator import CLIPGenerator
+from .encoders import CLIPEncoder, PEEncoder
 from .mask_generator import MaskGenerator
-from .pe_generator import PEGenerator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import create_fusion_strategy, collect_merge_pairs, group_merge_pairs
@@ -45,17 +44,17 @@ class OVO:
         if "mask_res" in config["sam"] and "mask_res" not in config["clip"]:
             config["clip"]["mask_res"] = config["sam"]["mask_res"]
 
-        self.clip_generator = CLIPGenerator(config["clip"], device=device)
-        self.pe_generator = PEGenerator(config["pe"], device=device) if "pe" in config else None
+        self.clip_generator = CLIPEncoder(config["clip"], device=device)
+        self.pe_generator = PEEncoder(config["pe"], device=device) if "pe" in config else None
 
-        # Lazy import SAM3Generator to avoid dependency issues when SAM3 is not used
+        # Lazy import SAM3Encoder to avoid dependency issues when SAM3 is not used
         if "sam3" in config:
             try:
-                from .sam3_generator import SAM3Generator
-                self.sam3_generator = SAM3Generator(config["sam3"], device=device)
+                from .encoders.sam3 import SAM3Encoder
+                self.sam3_generator = SAM3Encoder(config["sam3"], device=device)
             except ImportError as e:
                 raise ImportError(
-                    f"Failed to import SAM3Generator. SAM3 dependencies may not be installed: {e}"
+                    f"Failed to import SAM3Encoder. SAM3 dependencies may not be installed: {e}"
                 ) from e
         else:
             self.sam3_generator = None

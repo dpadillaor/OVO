@@ -3,7 +3,7 @@ from typing import Optional, Dict, List, Any
 import torch
 
 from ovo.entities.instance3d import Instance3D
-from ovo.entities.pe_generator import PEGenerator
+from ovo.entities.encoders import PEEncoder
 
 class FusionEncoderAdapter(ABC):
     """
@@ -40,7 +40,7 @@ class FusionEncoderAdapter(ABC):
 class PEFusionAdapter(FusionEncoderAdapter):
     """Adapter for Perception Encoder fusion."""
 
-    def __init__(self, pe_generator: PEGenerator, storage_key: str = "ins_pe_descriptors"):
+    def __init__(self, pe_generator: PEEncoder, storage_key: str = "ins_pe_descriptors"):
         self.generator = pe_generator
         self.storage_key = storage_key
 
@@ -150,7 +150,7 @@ class DINOFusionAdapter(FusionEncoderAdapter):
 class SAM3FusionAdapter(FusionEncoderAdapter):
     """Adapter for SAM3 fusion."""
 
-    def __init__(self, sam3_generator: "SAM3Generator", storage_key: str = "ins_sam3_descriptors"):
+    def __init__(self, sam3_generator: "SAM3Encoder", storage_key: str = "ins_sam3_descriptors"):
         self.generator = sam3_generator
         self.storage_key = storage_key
 

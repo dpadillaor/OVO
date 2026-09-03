@@ -155,8 +155,8 @@ class TestOVOIntegration:
     """OVO integrates with fusion strategy."""
 
     def test_ovo_has_fusion_strategy_attribute(self, minimal_ovo_config):
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.ovo.CLIPEncoder'), \
+             patch('ovo.entities.ovo.PEEncoder'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 
@@ -167,8 +167,8 @@ class TestOVOIntegration:
             assert isinstance(ovo.fusion_strategy, FusionStrategy)
 
     def test_ovo_creates_correct_strategy_from_config(self, minimal_ovo_config):
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.ovo.CLIPEncoder'), \
+             patch('ovo.entities.ovo.PEEncoder'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 
@@ -181,8 +181,8 @@ class TestOVOIntegration:
             assert cos.feature_attr == "clip_feature"
 
     def test_ovo_uses_strategy_for_fusion_decision(self, minimal_ovo_config):
-        with patch('ovo.entities.ovo.CLIPGenerator'), \
-             patch('ovo.entities.ovo.PEGenerator'):
+        with patch('ovo.entities.ovo.CLIPEncoder'), \
+             patch('ovo.entities.ovo.PEEncoder'):
             from ovo.entities.ovo import OVO
             from ovo.entities.logger import Logger
 

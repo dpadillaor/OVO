@@ -21,7 +21,7 @@ class TestOVOCooccurrenceIntegration(unittest.TestCase):
             "fusion_method": "clip",
         }
         with patch('ovo.entities.ovo.create_fusion_strategy'), \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
+             patch('ovo.entities.ovo.CLIPEncoder'), \
              patch('ovo.entities.ovo.MaskGenerator'), \
              patch('ovo.entities.ovo.Logger'):
             ovo = OVO(config, logger=MagicMock(), cam_intrinsics=torch.eye(3))
@@ -38,7 +38,7 @@ class TestOVOCooccurrenceIntegration(unittest.TestCase):
             "fusion_method": "clip",
         }
         with patch('ovo.entities.ovo.create_fusion_strategy') as mock_factory, \
-             patch('ovo.entities.ovo.CLIPGenerator'), \
+             patch('ovo.entities.ovo.CLIPEncoder'), \
              patch('ovo.entities.ovo.MaskGenerator'), \
              patch('ovo.entities.ovo.Logger'):
             ovo = OVO(config, logger=MagicMock(), cam_intrinsics=torch.eye(3))
