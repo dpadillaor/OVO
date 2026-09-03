@@ -376,7 +376,8 @@ class OVOSemMap():
             scene_data = [frame_id, image, frame_data[2], rgb_depth_ratio]
 
             map_data = self.slam_backbone.get_map()
-            updated_points_ins_ids = self.ovo.detect_and_track_objects(scene_data, map_data, estimated_c2w)
+            epoch_start = self.slam_backbone.semantic_epoch_start()
+            updated_points_ins_ids = self.ovo.detect_and_track_objects(scene_data, map_data, estimated_c2w, epoch_start)
 
             if updated_points_ins_ids is not None:
                 self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)

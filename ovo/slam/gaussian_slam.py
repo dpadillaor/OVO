@@ -72,6 +72,10 @@ class WrapperGaussianSLAM():
     def get_map(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         return self.gaussian_model.get_xyz().detach(), self.gaussian_model.get_ids(), self.gaussian_model.get_obj_ids()
 
+    def semantic_epoch_start(self) -> int:
+        """No epoch boundary for this backbone; whole map is eligible for tracking."""
+        return 0
+
     def get_map_dict(self) -> Dict[str, Any]:
         return self.gaussian_model.capture_dict()
 

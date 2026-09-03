@@ -105,6 +105,12 @@ class VanillaMapper():
         """Returns a reference to map tensors."""
         return self.pcd, self.pcd_ids, self.pcd_obj_ids.squeeze()
 
+    def semantic_epoch_start(self) -> int:
+        """Lowest point-id eligible to lend/receive instance identity this frame.
+        0 = whole map eligible (no epoch boundary). Overridden by backbones that
+        open epochs (e.g. jump drift); base is always 0."""
+        return 0
+
     def get_point_observations(self) -> torch.Tensor:
         """Returns per-point observation counts (squeezed)."""
         return self.pcd_obs.squeeze()

@@ -87,6 +87,8 @@ def make_slam(config, trajectory=None, device="cpu"):
         slam._lc_traj_before = None
         slam.last_big_change_id = -1
         slam._dedup_min_idx = 0
+        slam._guard_enabled = noise_cfg.get("jump_semantic_guard", False)
+        slam._epoch_start_id = 0
 
     return slam
 
@@ -505,3 +507,43 @@ class TestChainedLocalJumpsUseDriftedPose:
 
         assert torch.allclose(slam.jump_controller.offset[:3, :3], expected_offset_rot, atol=1e-5)
         assert not torch.allclose(slam.jump_controller.offset[:3, :3], wrong_offset_rot, atol=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Semantic epoch guard: after a jump, pre-jump points must not lend/receive
+# instance identity to the displaced surfaces (config: jump_semantic_guard).
+# ---------------------------------------------------------------------------
+
+class TestSemanticEpochGuard:
+    def _jump_slam(self, guard):
+        noise_cfg = {
+            "jump_drift_enabled": True,
+            "jump_seed": 42,
+            "jump_semantic_guard": guard,
+            "jumps": [{"kf_index": 1, "translation_magnitude": 0.5, "rotation_magnitude": 20.0}],
+        }
+        slam = make_slam(make_minimal_config(noise_cfg))
+        slam.max_id = 500
+        slam.kfs = {0: {"id": 0, "pcd_idxs": (0, 0), "pose": torch.eye(4)}}
+        return slam
+
+    def test_default_epoch_start_zero(self):
+        assert self._jump_slam(guard=True).semantic_epoch_start() == 0
+
+    def test_guard_off_keeps_zero_after_jump(self):
+        slam = self._jump_slam(guard=False)
+        slam._apply_pending_jump(frame_id=1, c2w=torch.eye(4))
+        assert len(slam.pending_jump_events) == 1        # jump did fire
+        assert slam.semantic_epoch_start() == 0          # but no epoch opened
+
+    def test_guard_on_bumps_to_max_id(self):
+        slam = self._jump_slam(guard=True)
+        slam._apply_pending_jump(frame_id=1, c2w=torch.eye(4))
+        assert len(slam.pending_jump_events) == 1
+        assert slam.semantic_epoch_start() == 500        # floor = max_id at jump
+
+    def test_reset_clears_epoch(self):
+        slam = self._jump_slam(guard=True)
+        slam._epoch_start_id = 500
+        slam._reset_drift_state()
+        assert slam.semantic_epoch_start() == 0

@@ -77,6 +77,14 @@ class SimulatedSLAM(VanillaMapper):
         # 0 means dedup against the whole map (default / non-jump behaviour).
         self._dedup_min_idx = 0
 
+        # Semantic epoch guard: when enabled, a jump opens a semantic epoch so that
+        # points mapped BEFORE the jump cannot lend/receive instance identity to the
+        # displaced surfaces observed after it (avoids a ghost mask inheriting an old,
+        # unrelated instance id by coincidental depth match). _epoch_start_id is the
+        # point-id floor; 0 = whole map eligible. Off by default (vanilla behaviour).
+        self._guard_enabled = noise_config.get("jump_semantic_guard", False)
+        self._epoch_start_id = 0
+
     def _build_tracking_strategy(self, noise_config: Dict[str, Any]) -> TrackingStrategy:
         """Select the pose-computation strategy. Noise takes priority over jump drift,
         which takes priority over plain ground truth (preserves prior dispatch order)."""
@@ -95,6 +103,11 @@ class SimulatedSLAM(VanillaMapper):
     def _fallback_pose(self) -> torch.Tensor:
         """Pose to reuse when a frame is out of trajectory bounds (last known KF pose)."""
         return self.kfs[list(self.kfs.keys())[-1]]["pose"]
+
+    def semantic_epoch_start(self) -> int:
+        """Point-id floor for semantic tracking: 0 normally, bumped to the map size at
+        the last jump when the semantic guard is on (reset by the global correction)."""
+        return self._epoch_start_id
 
     def track_camera(self, frame_data: List[Any]) -> None:
         """Compute and store the camera pose for the current frame via the active strategy."""
@@ -138,6 +151,10 @@ class SimulatedSLAM(VanillaMapper):
         # the pre-jump map, so the re-observed (now displaced) surfaces are added
         # as a fresh ghost instead of being absorbed back into the old points.
         self._dedup_min_idx = self.pcd.shape[0]
+        # Semantic guard: freeze the id floor at the current max_id so pre-jump
+        # points (id < floor) are invisible to instance tracking of the ghost.
+        if self._guard_enabled:
+            self._epoch_start_id = self.max_id
         # Retroactively reflect the jump on the stored pose for this frame.
         c2w = self.jump_controller.offset @ gt_pose
         self.estimated_c2ws[frame_id] = c2w
@@ -281,6 +298,7 @@ class SimulatedSLAM(VanillaMapper):
         if self.jump_drift_enabled:
             self.jump_controller.reset()
             self._dedup_min_idx = 0
+            self._epoch_start_id = 0
 
     def _transform_pcd_slice(self, pcd_idxs: Tuple[int, int], T: torch.Tensor) -> None:
         """Apply a rigid transform to the point-cloud slice [start, end) of a keyframe."""

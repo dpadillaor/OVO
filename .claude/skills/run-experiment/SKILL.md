@@ -171,6 +171,32 @@ Each jump entry supports either explicit vectors or random magnitudes:
 
 `noise_enabled` must NOT be set (jump drift uses `jump_drift_enabled`, a separate flag).
 
+##### Semantic epoch guard (`jump_semantic_guard`, optional)
+
+```yaml
+slam_config:
+  noise:
+    jump_drift_enabled: true
+    jump_semantic_guard: true    # default false
+    jumps: [ ... ]
+```
+
+After a jump the camera sits at a wrong pose, so a re-observed surface is remapped
+as displaced ghost points. Without the guard, a few pre-jump points can still fall
+in the displaced frustum and match its depth by coincidence, so the ghost's 2D mask
+inherits an old, unrelated instance id (`torch.mode` of the assigned points) and that
+label + mask keep growing (contaminates mIoU/AP and makes fusion-criterion comparison
+unreliable). With `jump_semantic_guard: true`, the jump opens a **semantic epoch**:
+points mapped before it (`id < epoch_start`) are dropped from instance tracking of the
+post-jump frames, so the ghost mask sees only fresh points and becomes a new instance.
+The global end-of-sequence correction closes the epoch (floor back to 0).
+
+- Off by default → vanilla behaviour (no special jump handling; dedup unchanged).
+- Only affects `simulated` with `jump_drift_enabled`; every other backbone reports
+  `semantic_epoch_start()==0` (no-op).
+- Purely a tracking-time filter: geometry/dedup is untouched, the map cloud is identical.
+- Use it when you need a clean map after a jump to fairly compare fusion criteria.
+
 ##### Local-frame rotation jump (`rotation_jump`)
 
 Models a tracking-loss-style heading flip: the rotation is expressed relative to the

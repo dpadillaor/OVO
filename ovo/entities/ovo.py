@@ -199,7 +199,7 @@ class OVO:
                 return func(self, *args, **kwargs)
         return wrapper    
     
-    def detect_and_track_objects(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor) -> torch.Tensor:
+    def detect_and_track_objects(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, epoch_start: int = 0) -> torch.Tensor:
         """ For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
@@ -225,7 +225,7 @@ class OVO:
             return None
 
         last_id = self.next_ins_id
-        matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids, assigned_ins_map = self._match_and_track_instances(frame_id, frame_data[1:], map_data, c2w, seg_maps, binary_maps)
+        matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids, assigned_ins_map = self._match_and_track_instances(frame_id, frame_data[1:], map_data, c2w, seg_maps, binary_maps, epoch_start)
 
         # Keep lightweight visual data aligned with the current segmented frame.
         # ins_map: top-kf survivors only (what feeds CLIP). assigned_ins_map: all assigned ins (what feeds co-occurrence).
@@ -281,7 +281,7 @@ class OVO:
         return self.mask_generator.get_masks(image, frame_id)
     
     @profil
-    def _match_and_track_instances(self, frame_id: int, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor) -> Tuple[List[int], torch.Tensor, int]:
+    def _match_and_track_instances(self, frame_id: int, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor, epoch_start: int = 0) -> Tuple[List[int], torch.Tensor, int]:
         """ For the current frame (1) computes using SAM for each level i \\in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
@@ -325,6 +325,15 @@ class OVO:
         matched_seg_idxs = seg_map[matches[:,1], matches[:,0]]
 
         frustum_points_ids, frustum_points_ins_ids = points_ids[frustum_mask], points_ins_ids[frustum_mask]
+
+        # Semantic epoch guard: after a jump the camera is at a wrong pose, so any
+        # pre-epoch point (id < epoch_start) matching the displaced surface is a
+        # coincidence. Drop those matches so they neither lend their instance id to
+        # the ghost mask nor get stolen into it. epoch_start=0 keeps every match.
+        if epoch_start > 0:
+            keep = (frustum_points_ids[matched_points_idxs].reshape(-1) >= epoch_start)
+            matched_points_idxs, matched_seg_idxs, matches = matched_points_idxs[keep], matched_seg_idxs[keep], matches[keep]
+
         frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, matches, seg_map, self.config["track_th"], kf_id, frame_id)
         matched_ins_ids, binary_maps, assigned_ins_map = self._fuse_masks_with_same_ins_id(binary_maps, matched_ins_info, kf_id)
 
