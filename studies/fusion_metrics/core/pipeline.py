@@ -37,6 +37,7 @@ from .agnostic_impact.fusion_agnostic_impact import (
     PRODUCTION_MIN_REGION_SIZE,
 )
 from .agnostic_impact.writers import write_pairs_csv, write_summary_json, write_instance_stats_csv
+from .agnostic_impact.voxel_overlap import overlapping_pairs
 
 # Repo root (studies/fusion_metrics/core/pipeline.py -> OVO), anchors default data paths.
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -158,11 +159,15 @@ def check_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None,
 def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
                    mesh_root: str | pathlib.Path = DEFAULT_MESH_ROOT,
                    gt_root: str | pathlib.Path = DEFAULT_GT_ROOT,
-                   out_dir: str | pathlib.Path | None = None) -> int:
+                   out_dir: str | pathlib.Path | None = None,
+                   voxel_overlap: bool = False, voxel_size: float = 0.05,
+                   voxel_th: float = 0.5) -> int:
     scene_dir = exp_path / scene
     csv_path = fusion_decisions_csv(scene_dir)
     ckpt_path = pathlib.Path(ckpt) if ckpt else _resolve_ckpt(exp_path, scene)
-    out_dir = pathlib.Path(out_dir) if out_dir else scene_dir / "fusion" / "fusion_LC"
+    # Voxel-filtered eval writes to a sibling dir so it never clobbers the full eval.
+    default_out = "fusion_LC_voxel" if voxel_overlap else "fusion_LC"
+    out_dir = pathlib.Path(out_dir) if out_dir else scene_dir / "fusion" / default_out
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows, frame_id = load_fusion_decisions(csv_path)
@@ -213,6 +218,24 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
     if pairs_skipped:
         print(f"Skipped {pairs_skipped} pairs with obj_ids absent from the GT "
               f"projection: {sorted(skipped_objects)}")
+
+    # Voxel-overlap restriction: keep only pairs whose pre-fusion clouds physically
+    # superpose (real fusion VoxelIndex). Scores the decision where it matters
+    # (overlapping instances), not the mostly-trivial separate universe. Verdicts and
+    # the eval CSV are filtered; the AP impact below stays over ALL merges (it measures
+    # the real post-fusion map, independent of which pairs we score).
+    n_pairs_scored = len(pairs)
+    voxel_pairs_scene = None
+    if voxel_overlap:
+        ov = overlapping_pairs(ckpt_path, voxel_size=voxel_size, th=voxel_th)
+        voxel_pairs_scene = len(ov)
+        keep = [k for k, p in enumerate(pairs)
+                if frozenset((p.decision.i1, p.decision.i2)) in ov]
+        pairs = [pairs[k] for k in keep]
+        eval_rows = [eval_rows[k] for k in keep]
+        print(f"Voxel-overlap filter (v={voxel_size}, th={voxel_th}): kept "
+              f"{len(pairs)} of {n_pairs_scored} scored pairs that physically superpose "
+              f"({voxel_pairs_scene} overlapping pairs in the scene).")
 
     # Class-agnostic AP before vs after fusion (impact of the recorded merges),
     # both over all GT instances and over objects only (production's void handling).
@@ -265,6 +288,11 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
             "pairs_total": len(rows),
             "pairs_scored": len(pairs),
             "pairs_skipped": pairs_skipped,
+            "voxel_overlap_filter": voxel_overlap,
+            "voxel_size": voxel_size if voxel_overlap else None,
+            "voxel_th": voxel_th if voxel_overlap else None,
+            "pairs_before_voxel_filter": n_pairs_scored if voxel_overlap else None,
+            "voxel_overlapping_pairs_scene": voxel_pairs_scene,
             "merges_scored": merges_scored,
             "merges_skipped": merges_skipped,
             "skipped_objects": [
@@ -326,7 +354,9 @@ def evaluate_experiment(exp_path: str | pathlib.Path, scene: str | None = None,
                         ckpt: str | None = None,
                         mesh_root: str | pathlib.Path = DEFAULT_MESH_ROOT,
                         gt_root: str | pathlib.Path = DEFAULT_GT_ROOT,
-                        out_dir: str | pathlib.Path | None = None) -> int:
+                        out_dir: str | pathlib.Path | None = None,
+                        voxel_overlap: bool = False, voxel_size: float = 0.05,
+                        voxel_th: float = 0.5) -> int:
     """Evaluate one scene (``scene`` given) or scan & evaluate every ready scene.
 
     Returns 0 when everything requested was evaluated, 1 otherwise (a batch driver
@@ -338,7 +368,8 @@ def evaluate_experiment(exp_path: str | pathlib.Path, scene: str | None = None,
 
     # One explicit scene -> just run it. No scene -> scan the whole experiment.
     if scene:
-        return evaluate_scene(exp_path, scene, ckpt, mesh_root, gt_root, out_dir)
+        return evaluate_scene(exp_path, scene, ckpt, mesh_root, gt_root, out_dir,
+                              voxel_overlap, voxel_size, voxel_th)
 
     scenes = discover_scenes(exp_path)
     if not scenes:
@@ -365,7 +396,8 @@ def evaluate_experiment(exp_path: str | pathlib.Path, scene: str | None = None,
         for i, s in enumerate(ready, 1):
             print(f"\n=== [{i}/{len(ready)}] {s} ===")
             try:
-                evaluate_scene(exp_path, s, ckpt, mesh_root, gt_root, out_dir)
+                evaluate_scene(exp_path, s, ckpt, mesh_root, gt_root, out_dir,
+                               voxel_overlap, voxel_size, voxel_th)
                 evaluated.append(s)
             except Exception as e:  # one bad scene must not abort the batch
                 failed[s] = f"{type(e).__name__}: {e}"

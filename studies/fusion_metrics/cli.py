@@ -27,6 +27,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return evaluate_experiment(
         args.exp_path, scene=args.scene, ckpt=args.ckpt,
         mesh_root=args.mesh_root, gt_root=args.gt_root, out_dir=args.out_dir,
+        voxel_overlap=args.voxel_overlap, voxel_size=args.voxel_size,
+        voxel_th=args.voxel_th,
     )
 
 
@@ -71,7 +73,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--gt_root", default=str(DEFAULT_GT_ROOT),
                         help="Dir holding instance ground-truth {scene}.txt")
     p_eval.add_argument("--out_dir", default=None,
-                        help="Where to write outputs (default: {scene}/fusion/fusion_LC/)")
+                        help="Where to write outputs (default: {scene}/fusion/fusion_LC/, "
+                             "or fusion_LC_voxel/ with --voxel-overlap)")
+    p_eval.add_argument("--voxel-overlap", dest="voxel_overlap", action="store_true",
+                        help="Score only pairs whose pre-fusion clouds physically superpose "
+                             "(voxel max-containment >= --voxel-th), not the whole universe.")
+    p_eval.add_argument("--voxel-size", dest="voxel_size", type=float, default=0.05,
+                        help="Voxel cell edge in metres for the overlap filter (default 0.05).")
+    p_eval.add_argument("--voxel-th", dest="voxel_th", type=float, default=0.5,
+                        help="Min voxel max-containment to count a pair as overlapping (default 0.5).")
     p_eval.set_defaults(func=cmd_eval)
 
     p_report = sub.add_parser("report", help="Per-criterion timing + verdict counts (run eval first)")
