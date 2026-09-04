@@ -101,8 +101,11 @@ class OVOSemMap():
         config["semantic"]["debug_info"] = self.config.get("debug_info", False)
         config["semantic"]["fusion_method"] = config["semantic"].get("fusion_method", "CLIP")
 
-        # Semantic module and SLAM backend.
-        self.ovo = OVO(config["semantic"], self.logger, config["data"]["scene_name"], cam_intrinsics, device=self.device)
+        # Semantic module and SLAM backend. A fusion replay restores cached descriptors
+        # and never segments, so build OVO in eval mode: skips the SAM mask generator
+        # (dead weight in replay). CLIP/PE stay (needed by the eval stage, freed after).
+        is_replay = bool(self.config.get("restore_pre_fusion_checkpoint"))
+        self.ovo = OVO(config["semantic"], self.logger, config["data"]["scene_name"], cam_intrinsics, eval=is_replay, device=self.device)
         # Diagnostics renderer: let ovo accumulate per-frame robbed/new point ids (zero cost otherwise).
         self.ovo.track_viz_enabled = self.stream and self.rerun_mode == "tracking"
         self.ovo.contest.set_output_dir(self.output_path / "fusion" / "contest")
