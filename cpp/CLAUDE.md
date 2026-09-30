@@ -44,7 +44,7 @@ Un nivel solo usa los de abajo, nunca los de arriba. Carpeta = namespace (`commo
 1. `common/`: ladrillos básicos (`StrongId`). No depende de nada.
 2. `geometry/`: matemática pura sin estado (cámara, pose, frustum, matcher). `ovo::core::geometry`.
 3. `mapping/` y `semantics/` (futuro): el sistema, con estado. `semantics` usa `mapping`, nunca al revés.
-Los tests replican la estructura (`tests/core/<nivel>/test_<fichero>.cpp`).
+Los tests replican la estructura (`tests/unit/core/<nivel>/test_<fichero>.cpp`).
 Cuando llegue `semantics/`, valorar una librería CMake por nivel para que el compilador imponga las fronteras.
 
 ## Modelo de dominio
@@ -73,7 +73,11 @@ Lo maduro se copia a `tfm/` como material de tesis.
 ## Estilo y build
 - Naming: `PascalCase` para tipos, `camelCase` para funciones/métodos/variables, miembros privados con sufijo `_`.
 - Build: CMake + Ninja (toolchain local: MinGW g++ 13.2, CMake 3.29). Claude escribe y mantiene el CMake; David lo revisa.
-- Tests: GoogleTest + GoogleMock (mocks de puertos).
+- Tests: GoogleTest + GoogleMock (mocks de puertos). **TDD:** test primero (rojo → verde → refactor).
+  Incluir casos límite (0, negativos, NaN, ±inf). Un test rompe una sola cosa.
+- Tipos de test, cada uno con su ejecutable: `tests/unit/` (rápidos, sin datos, siempre),
+  `tests/integration/` (adaptadores reales, datos), `tests/regression/` (C++ vs salida de referencia de Python);
+  `benchmarks/` aparte (rendimiento).
 
 ## Pendiente de decidir
 - Pertenencia punto↔instancia: única fuente de verdad (punto→instancia o instancia→puntos).
