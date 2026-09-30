@@ -10,7 +10,7 @@ include(GoogleTest)
 
 # Un ejecutable de tests por capa. Añade cada test_*.cpp nuevo a la lista.
 add_executable(ovo_core_tests
-    core/test_build.cpp)
+    core/test_strong_id.cpp)
 target_link_libraries(ovo_core_tests PRIVATE ovo::core GTest::gtest_main GTest::gmock)
 ovo_set_warnings(ovo_core_tests)
 gtest_discover_tests(ovo_core_tests)

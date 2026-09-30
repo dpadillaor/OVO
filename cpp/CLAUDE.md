@@ -29,6 +29,8 @@ Regla: primero correcto, luego medir (Tracy, benchmarks), luego optimizar lo que
   (`shared_ptr<const T>`); asserts en Debug, sin coste en Release.
 - **Rápido:** puntos en struct-of-arrays contiguos; etiquetas como `vector` indexado por `PointId`;
   templates/concepts en el camino caliente, `virtual` solo en fronteras (SLAM, I/O); `std::span` y move, sin copias.
+- **Contenedores:** no copiar las estructuras de Python. Se eligen caso a caso según el patrón de acceso
+  (ids densos → `vector` indexado; `std::map` no es la opción por defecto). Decidir midiendo.
 - **Eficiente:** bloques de puntos por keyframe (un LC solo copia lo que se mueve); tipos ajustados
   (`float` xyz, `uint8` color).
 - La primera versión CPU puede ser más lenta que Python (GPU) en frustum/proyección: es esperado.
