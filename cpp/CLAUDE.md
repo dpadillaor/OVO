@@ -56,12 +56,15 @@ Lo maduro se copia a `tfm/` como material de tesis.
 - Excepciones para errores fatales (config inválida al arrancar).
 - Nunca `*r` sobre un `expected` sin comprobar antes.
 
+## Estilo y build
+- Naming: `PascalCase` para tipos, `camelCase` para funciones/métodos/variables, miembros privados con sufijo `_`.
+- Build: CMake + Ninja (toolchain local: MinGW g++ 13.2, CMake 3.29). Claude escribe y mantiene el CMake; David lo revisa.
+- Tests: GoogleTest + GoogleMock (mocks de puertos).
+
 ## Pendiente de decidir
 - Pertenencia punto↔instancia: única fuente de verdad (punto→instancia o instancia→puntos).
 - Polimorfismo de puertos: `virtual` vs `concepts` (tendencia: `virtual` en fronteras, `concepts` dentro).
-- Naming (snake_case vs PascalCase/camelCase).
 - Descomposición de `VanillaMapper` en dominio / puertos / adaptadores.
-- Build y tests (CMake + framework de tests).
 - Telemetría: puerto de observabilidad (eventos, métricas, trazas) con adaptadores (JSONL, Rerun, wandb, Tracy).
 - Gestión de errores detallada (errores también como eventos de telemetría).
 
