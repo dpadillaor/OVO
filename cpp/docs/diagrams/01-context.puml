@@ -1,0 +1,42 @@
+@startuml 01-context
+' C4 nivel 1: Contexto. OVO como caja negra y lo que le rodea.
+' Estado: borrador v2.
+!include <C4/C4_Context>
+
+LAYOUT_WITH_LEGEND()
+
+title OVO C++ - Contexto (nivel 1)
+
+Person(researcher, "Investigador", "Lanza experimentos, hace consultas open-vocabulary, analiza resultados")
+
+System(ovo, "OVO", "Mapeo semántico 3D online con instancias open-vocabulary")
+
+System_Ext(dataset, "Dataset RGB-D", "Replica, ScanNet: RGB, profundidad, intrínsecos, poses GT")
+System_Ext(slam, "Backbone SLAM", "Intercambiable: poses GT (vanilla), ORB-SLAM3, Gaussian SLAM")
+System_Ext(seg, "Modelos de segmentación", "SAM2 / SAM3: máscaras por frame")
+System_Ext(enc, "Modelos de descriptores", "CLIP, PE, DINO: embeddings por máscara y texto")
+System_Ext(viewer, "Visor interactivo", "Rerun, Open3D: muestra el mapa, lanza consultas")
+System_Ext(telemetry, "Backends de telemetría", "JSONL, wandb, Tracy, Rerun (timeline)")
+System_Ext(eval, "Evaluación", "Scripts de métricas sobre el mapa exportado")
+
+Rel(researcher, ovo, "Configura y lanza")
+Rel(ovo, dataset, "Lee frames")
+Rel(ovo, slam, "Pide poses / recibe correcciones")
+Rel(ovo, seg, "Pide máscaras")
+Rel(ovo, enc, "Pide descriptores")
+
+' Tres flujos separados por intención (ver tabla en la conversación / futuro ADR):
+Rel(ovo, telemetry, "Telemetría: eventos, métricas, trazas", "salida, ligero, con pérdida")
+Rel(ovo, viewer, "Estado del mapa: puntos, instancias, poses", "salida, pesado, throttled")
+Rel(viewer, ovo, "Consultas open-vocabulary", "entrada, petición/respuesta")
+Rel(ovo, eval, "Estado del mapa: exportación final")
+
+Rel(researcher, viewer, "Explora y consulta")
+Rel(researcher, telemetry, "Observa el experimento")
+
+note bottom of viewer
+  Rerun puede implementar los tres flujos
+  (telemetría, estado, consultas): un adaptador,
+  tres puertos distintos para el dominio.
+end note
+@enduml

@@ -1,0 +1,110 @@
+@startuml 02-containers-asis
+' AS-IS: estructura actual de OVO Python (nivel 2, contenedores/módulos).
+' Objetivo: ver dónde duele. Los problemas van numerados [P1..P8] en notas rojas.
+' Estado: borrador v1.
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam note {
+  BackgroundColor #FDECEA
+  BorderColor #C62828
+}
+
+title OVO Python - As-is (nivel 2)
+
+actor Investigador as user
+database "config (dict)" as config
+database "Dataset\n(Replica/ScanNet)" as dataset
+
+package "Proceso principal" {
+  component "OVOSemMap\n(ovomapping.py, 753 líneas)\n--\nbucle de frames, scheduling,\ncheckpoints, profiling" as semmap
+
+  package "Backbone SLAM (ovo/slam)" {
+    component "VanillaMapper\n--\nposes GT, desproyección,\nnube de puntos + obj_ids" as vanilla
+    component "WrapperORBSLAM2\n(hereda de VanillaMapper)" as orb
+    component "WrapperGaussianSLAM" as gs
+  }
+
+  component "OVO\n(ovo.py, 1056 líneas)\n--\ntracking de instancias, cola de KFs,\ndescriptores, update_map, consultas" as ovo
+
+  package "Modelos" {
+    component "MaskGenerator\n(SAM2/SAM3)" as sam
+    component "CLIP / PE / SAM3 / DINO\ngenerators" as encoders
+  }
+
+  component "Fusión clásica\n(fusion/strategy, criteria)" as fusion
+  component "ContestManager\n(contest/)" as contest
+  component "CooccurrenceGraph" as cooc
+  component "Instance3D\n(clip_feature, pe_feature,\nsam3_feature, dino_feature)" as inst
+  component "Logger\n(wandb + ficheros)" as logger
+}
+
+package "Proceso visualizador (mp.Process)" {
+  component "Visualizer\n(Rerun / Open3D)" as viz
+}
+
+user --> semmap : run_eval.py
+config --> semmap
+semmap --> config : muta (output_path,\ndebug_info, fusion_method)
+semmap --> dataset : dataset[frame_id]
+
+semmap --> vanilla : track_camera / map /\nget_map / get_c2w
+vanilla <|-- orb
+semmap --> gs
+semmap --> ovo : detect_and_track_objects /\nupdate_map / compute_semantic_info
+
+semmap ..> vanilla : map_data (tupla xyz, ids, obj_ids)
+ovo ..> semmap : obj_ids actualizados
+semmap ..> vanilla : update_pcd_obj_ids(...)
+
+ovo --> sam
+ovo --> encoders
+ovo --> fusion
+ovo --> contest
+ovo --> cooc
+ovo *-- inst : objects{id: Instance3D}
+fusion --> cooc
+
+semmap --> logger
+ovo --> logger
+
+semmap --> viz : mpqueue (snapshots + eventos)
+viz --> semmap : query_pipe + query_flag
+semmap ..> viz : copia de self.ovo\nal arrancar el proceso
+
+note right of config
+  [P1] Config global mutable: cualquier
+  módulo lo lee y algunos lo escriben.
+end note
+
+note bottom of vanilla
+  [P2] La etiqueta punto->instancia (obj_ids) la decide OVO
+  pero vive en el SLAM. Viaja como tupla map_data y vuelve.
+  Sin dueño claro: bloqueante para threads.
+end note
+
+note left of orb
+  [P3] Herencia para reutilizar código, sin interfaz.
+  OVOSemMap usa hasattr(refresh_geometry_if_local_ba,
+  pending_jump_events) y toca estimated_c2ws a mano.
+end note
+
+note right of ovo
+  [P4] 9 responsabilidades: modelos, tracking, cola KF,
+  descriptores, update_map, contest, fusión, consultas, serialización.
+  [P5] Frustum + match 3D-2D duplicado con VanillaMapper.
+  [P6] Modos como strings (contest_fusion off|observe|only|both).
+end note
+
+note bottom of inst
+  [P7] Un campo por tipo de descriptor:
+  añadir un encoder obliga a tocar la clase.
+end note
+
+note bottom of viz
+  [P8] Telemetría, estado del mapa y consultas
+  por la misma cola + pipe (ver ADR-0001).
+  Logging/timing entrelazado con la lógica.
+end note
+@enduml

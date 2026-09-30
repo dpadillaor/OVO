@@ -48,6 +48,9 @@ day's entry at the end of a working session; template and conventions live in
 *   Keep `tfm/` self-contained: no absolute paths, no symlinks, no `../` outside it.
 *   **Em-dash (—) is BANNED**, everywhere: in thesis prose, `.tex` sources (no `---`), chat, commits, docs. Use commas, colons, or parentheses instead. Applies to all writing, not just the TFM.
 
+## C++ port (`cpp/`)
+C++ rewrite in progress on branch `feat/cpp-core`. Its own rules live in `cpp/CLAUDE.md` (the user writes the code; Claude guides and reviews).
+
 ## Project Structure
 ```text
 /

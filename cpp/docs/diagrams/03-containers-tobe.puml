@@ -1,0 +1,117 @@
+@startuml 03-containers-tobe
+' TO-BE: OVO C++ (nivel 2). Hexágono: dominio en el centro, puertos en el borde, adaptadores fuera.
+' Ver ADR-0001 (tres flujos de salida) y ADR-0002 (dueños de datos + eventos).
+' Estado: borrador v1.
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam package {
+  BackgroundColor<<thread>> #EEF4FB
+  BorderColor<<thread>> #1565C0
+}
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #F9A825
+}
+
+title OVO C++ - To-be (nivel 2)
+
+' ---------------- Adaptadores externos (fuera del hexágono) ----------------
+package "Adaptadores de entrada" {
+  component "Dataset reader\n(Replica, ScanNet)" as a_dataset
+  component "CLI / Rerun\n(consultas)" as a_query
+}
+
+package "Adaptadores SLAM" {
+  component "GT poses\n(vanilla)" as a_gt
+  component "ORB-SLAM3" as a_orb
+  component "SLAM propio\n(futuro)" as a_own #line.dashed
+}
+
+package "Adaptadores de modelos" {
+  component "SAM2 / SAM3" as a_sam
+  component "CLIP / PE / DINO" as a_enc
+}
+
+package "Adaptadores de salida" {
+  component "JSONL / wandb / Tracy" as a_tel
+  component "Rerun / Open3D" as a_viz
+  component "Exportador\n(evaluación)" as a_exp
+}
+
+' ---------------- Hexágono ----------------
+package "OVO (dominio)" {
+
+  package "Thread geometría" <<thread>> {
+    component "Geometría\n--\ndueña de puntos y poses\nbloques inmutables por SlamKeyframe" as geom
+  }
+
+  queue "Eventos de geometría\n--\nPointsAdded, BlockTransformed,\nPointsRemoved, SubmapOpened,\nSubmapsMerged" as ev
+
+  package "Thread semántica" <<thread>> {
+    component "Semántica\n--\ndueña de instancias, descriptores,\netiquetas punto->instancia\norganizada por SubmapId" as sem
+    component "SubmapPolicy\n--\nv1: trivial\nfuturo: detector de drift" as policy
+    component "Fusión / Contest\n(estrategias)" as fusion
+  }
+
+  component "Orquestador\n(caso de uso: procesar frame)" as orch
+
+  ' Puertos (interfaces) en el borde
+  interface "FrameSource" as p_frames
+  interface "PoseSource /\nGeometryBackend" as p_slam
+  interface "MaskGenerator" as p_mask
+  interface "DescriptorEncoder" as p_enc
+  interface "QueryService\n(entrada)" as p_query
+  interface "TelemetrySink" as p_tel
+  interface "MapStateSink" as p_map
+}
+
+' Entrada
+a_dataset -up- p_frames
+p_frames --> orch
+a_query --> p_query
+p_query --> sem
+
+' SLAM intercambiable
+a_gt -- p_slam
+a_orb -- p_slam
+a_own .. p_slam
+geom --> p_slam : poses, correcciones
+
+' Flujo interno
+orch --> geom : frame
+orch --> sem : frame (keyframe semántico)
+geom --> ev : publica
+ev --> sem : consume
+ev --> policy : consume
+policy --> sem : abrir submapa
+sem --> fusion
+
+' Modelos
+sem --> p_mask
+sem --> p_enc
+p_mask -- a_sam
+p_enc -- a_enc
+
+' Salidas (ADR-0001)
+geom ..> p_tel
+sem ..> p_tel : incl. InstanceMerged
+p_tel -- a_tel
+sem ..> p_map
+geom ..> p_map
+p_map -- a_viz
+p_map -- a_exp
+
+note right of ev
+  Ningún thread escribe datos del otro:
+  geometría publica hechos, semántica reacciona.
+  ABIERTO: tipo de cola, orden, backpressure,
+  snapshots para leer geometría.
+end note
+
+note bottom of policy
+  Punto de extensión: señales propias
+  (drift semántico) + tracking de ORB-SLAM3.
+end note
+@enduml
