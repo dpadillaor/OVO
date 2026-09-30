@@ -8,13 +8,14 @@
 | Build: CMake + Ninja, C++23, warnings estrictos + `-Werror`, GoogleTest, Eigen 3.4 (FetchContent) | `CMakeLists.txt`, `cmake/` | — |
 | `StrongId<Tag>` → `FrameId`, `PointId`, `InstanceId` | `core/include/ovo/core/common/strong_id.hpp` | 4 + 4 `static_assert` |
 | `PinholeCamera`: validación, `project`, `unproject` | `core/include/ovo/core/geometry/pinhole_camera.hpp` | 19 (incl. 2 death tests) |
+| `Pose` (c2w, `R` + `t`): constructor privado + `fromCamToWorld` / `identity`, `camToWorld`, `worldToCam` | `core/include/ovo/core/geometry/pose.hpp` | 10 (comprobados con mutaciones) |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002, modelo de dominio | `docs/` | — |
 
 ## Siguiente (en orden)
-1. **`Pose`** (`geometry/pose.hpp`, hoy vacío). Envuelve `Eigen::Isometry3f`, siempre **c2w** (convención OpenCV,
-   la de OVO). Operaciones que usa OVO (salen del análisis del Python): `inverse`, componer, pose relativa
-   (`new * old⁻¹`, loop closure), transformar puntos (uno y por lotes), centro de cámara, diferencia de rotación.
-   TDD como con la cámara.
+1. **Terminar `Pose`** (la lista de tests pendientes está al final de `tests/unit/core/geometry/test_pose.cpp`):
+   - `center()`: devuelve `translation_`. Tests `PoseCenter`.
+   - `assert` en `fromCamToWorld`: `R` ortonormal (`RᵀR ≈ I`), `det(R) ≈ +1`, todo finito. Death tests `PoseDeathTest`.
+   - Más adelante, cuando llegue el loop closure: componer, pose relativa (`new * old⁻¹`), transformar por lotes.
 2. **`Frustum`** (`geometry/frustum.hpp` + `.cpp`): 8 esquinas (profundidad mín/máx del frame) → AABB (fase rápida)
    + 6 planos (fase precisa) → qué puntos ve la cámara. Interfaz por lotes.
 3. **`PointPixelMatcher`**: proyecta, lee profundidad, empareja si |Δz| < 3 cm. Única pieza con interfaz
