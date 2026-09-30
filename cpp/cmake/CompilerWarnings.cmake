@@ -1,6 +1,6 @@
-# ovo_set_warnings(<target>): política de warnings del proyecto.
-# Se aplica por target para no afectar a dependencias externas (GoogleTest, Eigen).
-option(OVO_WARNINGS_AS_ERRORS "Tratar warnings como errores" ON)
+# ovo_set_warnings(<target>): project warning policy.
+# Applied per target so external dependencies (GoogleTest, Eigen) are not affected.
+option(OVO_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 
 function(ovo_set_warnings target)
     set(warnings

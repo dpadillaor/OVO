@@ -1,7 +1,7 @@
 #pragma once
 
-// Pose: dónde está la cámara en el mundo (c2w). Componer, invertir, transformar puntos.
-// Depende de: Eigen (pendiente de añadir al build)
+// Pose: where the camera is in the world (c2w). Compose, invert, transform points.
+// Depends on: Eigen
 
 namespace ovo::core::geometry {
 

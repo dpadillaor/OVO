@@ -1,4 +1,4 @@
-# Tests unitarios: GoogleTest + GoogleMock, descargado con FetchContent (versión fijada).
+# Unit tests: GoogleTest + GoogleMock, fetched with FetchContent (pinned version).
 include(FetchContent)
 FetchContent_Declare(googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.tar.gz
@@ -8,11 +8,11 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
-# Tests unitarios de core: rápidos, sin datos ni dependencias externas.
-# La carpeta replica la de headers. integration/ y regression/ tendrán su propio ejecutable.
+# Core unit tests: fast, no data, no external dependencies.
+# Folder mirrors the header layout. integration/ and regression/ will get their own executables.
 add_executable(ovo_unit_tests
     unit/core/common/test_strong_id.cpp
-    unit/core/geometry/test_camera_intrinsics.cpp
+    unit/core/geometry/test_pinhole_camera.cpp
     unit/core/geometry/test_pose.cpp
     unit/core/geometry/test_frustum.cpp
     unit/core/geometry/test_point_pixel_matcher.cpp)

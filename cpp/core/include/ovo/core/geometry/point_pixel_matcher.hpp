@@ -1,7 +1,7 @@
 #pragma once
 
-// Matcher: qué punto 3D corresponde a qué píxel (proyección + umbral de profundidad, 3 cm).
-// Depende de: camera_intrinsics, pose
+// Matcher: which 3D point corresponds to which pixel (projection + depth threshold, 3 cm).
+// Depends on: pinhole_camera, pose
 
 namespace ovo::core::geometry {
 

@@ -17,7 +17,7 @@ PointId | xyz | color | obs              PointId | InstanceId
 | Tipo | Clase | Contiene |
 |---|---|---|
 | `Frame` | valor | `FrameId`, RGB, profundidad |
-| `CameraIntrinsics` | valor | fx, fy, cx, cy |
+| `PinholeCamera` | valor | fx, fy, cx, cy, ancho, alto; `project` / `unproject` |
 | `Pose` | valor | transformación c2w |
 | `PointBlock` | valor inmutable | `PointId[]`, xyz[], color[], obs[] de los puntos que creó un keyframe |
 | `SlamKeyframe` | entidad | `FrameId`, `Pose`, su `PointBlock` |

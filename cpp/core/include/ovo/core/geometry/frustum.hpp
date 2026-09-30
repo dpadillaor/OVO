@@ -1,7 +1,7 @@
 #pragma once
 
-// Frustum: qué puntos del mapa caen dentro de la vista de la cámara (fase AABB + fase planos).
-// Depende de: camera_intrinsics, pose
+// Frustum: which map points fall inside the camera view (AABB broad phase + planes narrow phase).
+// Depends on: pinhole_camera, pose
 
 namespace ovo::core::geometry {
 

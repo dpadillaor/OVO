@@ -12,9 +12,12 @@ Primera meta: reproducir el mapeo geométrico de `VanillaMapper` (poses GT + des
   submapa semántico nuevo; más tarde los submapas se fusionan (fusión de instancias entre submapas).
 - El detector de drift es **dominio** (decide). La telemetría solo **observa** (puede perder datos).
 
-**Modo de trabajo:** el código lo escribe David. Claude pregunta, guía y revisa;
-no genera código ni estructura sin que se le pida explícitamente.
-Excepción: Claude redacta los diagramas `.puml` a partir de lo que David decide; David los visualiza y corrige.
+**Modo de trabajo:** David escribe el código de dominio; Claude pregunta, guía, explica y revisa.
+Claude no genera código ni estructura sin que se le pida explícitamente (a veces David pide "hazlo tú":
+tests, esqueletos, refactors). Claude redacta los `.puml` y mantiene el CMake.
+Explicar **un concepto cada vez**, con ejemplos y analogías con Python; si David se pierde, parar y simplificar.
+
+**Estado y próximos pasos:** ver `docs/progress.md` (leer al empezar cada sesión).
 
 ## Arquitectura
 Hexagonal (ports & adapters) + SOLID.
@@ -61,19 +64,30 @@ Lo maduro se copia a `tfm/` como material de tesis.
 - Sin `new`/`delete` a mano ni punteros crudos que posean memoria.
   Orden de preferencia: valor > `unique_ptr` > `shared_ptr` (solo propiedad compartida real).
   Puntero crudo o referencia = observador sin propiedad.
-- RAII, rule of zero, const-correctness, `[[nodiscard]]`.
+- RAII, rule of zero, const-correctness, `[[nodiscard]]`, `noexcept` en lo que no puede lanzar.
+- Tipos fuertes solo donde el error es fácil y silencioso (ids, dirección de la pose). Puntos/vectores: Eigen
+  a pelo, con el sistema de referencia en el nombre (`pointCam`, `pointWorld`).
+- `float` para geometría (precisión suficiente, mitad de memoria, GPU). Eigen por `const&`. Nunca dejar un
+  vector de Eigen sin inicializar (no se inicializa a cero).
+- **Header vs `.cpp`:** en el header lo obligatorio (templates, `constexpr`) y las funciones pequeñas del camino
+  caliente (inlining + SIMD + CUDA). En `.cpp` las grandes, las no calientes y las que necesitan includes pesados.
 - Ids con tipo fuerte (`FrameId`, `PointId`, `InstanceId`), no `int`.
 - Inyección de dependencias por constructor; sin singletons ni estado global.
 
-## Errores
-- `std::expected` opcional para fallos esperables (pose NaN, frame vacío); siempre con `[[nodiscard]]`.
-- Excepciones para errores fatales (config inválida al arrancar).
+## Errores (tres niveles)
+| Situación | Ejemplo | Herramienta |
+|---|---|---|
+| Fallo esperable del mundo real | pose NaN del SLAM, frame sin profundidad | `std::expected` (opcional), con `[[nodiscard]]` |
+| Dato inválido al arrancar | cámara con `fx = 0` | excepción (validar en el constructor: "valida en la frontera, confía dentro") |
+| Bug del programador (precondición) | `project` con `z <= 0` | `assert` + comentario de precondición; death test en `...DeathTest` |
 - Nunca `*r` sobre un `expected` sin comprobar antes.
+- Validar floats con comparaciones "en positivo" (`x > 0 && x < inf`) para rechazar NaN.
 
 ## Estilo y build
+- **Código en inglés:** comentarios, mensajes de error y strings del código (C++ y CMake). La documentación (`docs/`, este fichero) sigue en español.
 - Naming: `PascalCase` para tipos, `camelCase` para funciones/métodos/variables, miembros privados con sufijo `_`.
 - Build: CMake + Ninja (toolchain local: MinGW g++ 13.2, CMake 3.29). Claude escribe y mantiene el CMake; David lo revisa.
-- Tests: GoogleTest + GoogleMock (mocks de puertos). **TDD:** test primero (rojo → verde → refactor).
+- Tests: GoogleTest + GoogleMock (mocks de puertos). Una suite por clase y operación (`PinholeCamera`, `PinholeCameraProject`...); death tests en suites `...DeathTest`. **TDD:** test primero (rojo → verde → refactor).
   Incluir casos límite (0, negativos, NaN, ±inf). Un test rompe una sola cosa.
 - Tipos de test, cada uno con su ejecutable: `tests/unit/` (rápidos, sin datos, siempre),
   `tests/integration/` (adaptadores reales, datos), `tests/regression/` (C++ vs salida de referencia de Python);
