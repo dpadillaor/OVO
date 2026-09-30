@@ -37,4 +37,10 @@ Visión: a largo plazo el SLAM será propio, y habrá submapas semánticos abier
 ## Consecuencias
 - La semántica busca etiquetas por `PointId` en lugar de por fila (mitigable: los ids son densos y crecientes).
 - Hay latencia entre un cambio geométrico y su reflejo semántico (el tiempo de procesar el evento).
+- **GPU (futuro): residencia de datos.** Copiar CPU<->GPU cuesta (PCIe ~10-25 GB/s: nube de 1M puntos ~12 MB
+  ~1 ms por sentido, y crece con el mapa). Cuando haya GPU, el mapa vivirá también en GPU y se actualizará por
+  incrementos: subir solo el bloque nuevo de cada keyframe (~1 MB), la profundidad de cada frame y las 4x4 de un LC
+  (la transformación se aplica en GPU); bajar solo resultados (matches). Los bloques inmutables y append-only hacen
+  trivial saber qué falta por subir. Copias y cálculo se solapan con CUDA streams.
+  Abierto: quién lee el mapa en CPU (semántica, visualización) si su copia principal vive en GPU.
 - Pendiente: canal de eventos (colas, orden, backpressure) y cómo lee la semántica la geometría (snapshots).

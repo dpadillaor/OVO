@@ -29,6 +29,10 @@ Regla: primero correcto, luego medir (Tracy, benchmarks), luego optimizar lo que
   (`shared_ptr<const T>`); asserts en Debug, sin coste en Release.
 - **Rápido:** puntos en struct-of-arrays contiguos; etiquetas como `vector` indexado por `PointId`;
   templates/concepts en el camino caliente, `virtual` solo en fronteras (SLAM, I/O); `std::span` y move, sin copias.
+- **Preparado para GPU (sin escribir GPU aún):** (1) datos en arrays contiguos por campo (SoA), subir a GPU = una copia;
+  (2) operaciones caras con interfaz por lotes (bloques de puntos), implementables en CPU o CUDA;
+  (3) matemática de un punto pura, header-only, sin estado ni memoria dinámica (ladrillo reutilizable en kernels);
+  (4) nada de reservas, virtuales ni excepciones dentro del bucle caliente. El bucle por lotes llama al ladrillo y el compilador vectoriza (SIMD).
 - **Contenedores:** no copiar las estructuras de Python. Se eligen caso a caso según el patrón de acceso
   (ids densos → `vector` indexado; `std::map` no es la opción por defecto). Decidir midiendo.
 - **Eficiente:** bloques de puntos por keyframe (un LC solo copia lo que se mueve); tipos ajustados
