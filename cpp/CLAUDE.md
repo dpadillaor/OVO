@@ -23,6 +23,19 @@ Hexagonal (ports & adapters) + SOLID.
 - Adaptadores = implementaciones concretas (GT, ORB-SLAM3, PLY, mocks).
 - Las dependencias apuntan hacia dentro: el dominio nunca incluye un adaptador.
 
+## Prioridades: correcto > rápido > eficiente en memoria
+Regla: primero correcto, luego medir (Tracy, benchmarks), luego optimizar lo que diga el profiler.
+- **Seguro:** un solo escritor por dato; datos compartidos entre threads = snapshots inmutables
+  (`shared_ptr<const T>`); asserts en Debug, sin coste en Release.
+- **Rápido:** puntos en struct-of-arrays contiguos; etiquetas como `vector` indexado por `PointId`;
+  templates/concepts en el camino caliente, `virtual` solo en fronteras (SLAM, I/O); `std::span` y move, sin copias.
+- **Eficiente:** bloques de puntos por keyframe (un LC solo copia lo que se mueve); tipos ajustados
+  (`float` xyz, `uint8` color).
+- La primera versión CPU puede ser más lenta que Python (GPU) en frustum/proyección: es esperado.
+
+## Modelo de dominio
+Ver `docs/domain-model.md` (entidades, valores, dueños, link por `PointId`).
+
 ## Documentación de arquitectura (`cpp/docs/`)
 Excepción a la regla del raíz: los diagramas del port C++ viven en `cpp/docs/`, no en `tfm/diagrams/`.
 Lo maduro se copia a `tfm/` como material de tesis.
@@ -44,7 +57,8 @@ Lo maduro se copia a `tfm/` como material de tesis.
 - Nunca `*r` sobre un `expected` sin comprobar antes.
 
 ## Pendiente de decidir
-- Polimorfismo de puertos: `virtual` vs `concepts`.
+- Pertenencia punto↔instancia: única fuente de verdad (punto→instancia o instancia→puntos).
+- Polimorfismo de puertos: `virtual` vs `concepts` (tendencia: `virtual` en fronteras, `concepts` dentro).
 - Naming (snake_case vs PascalCase/camelCase).
 - Descomposición de `VanillaMapper` en dominio / puertos / adaptadores.
 - Build y tests (CMake + framework de tests).
