@@ -8,9 +8,13 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
-# Un ejecutable de tests por capa. Añade cada test_*.cpp nuevo a la lista.
+# Un ejecutable de tests para core. La carpeta de tests replica la de headers.
 add_executable(ovo_core_tests
-    core/test_strong_id.cpp)
+    core/common/test_strong_id.cpp
+    core/geometry/test_camera_intrinsics.cpp
+    core/geometry/test_pose.cpp
+    core/geometry/test_frustum.cpp
+    core/geometry/test_point_pixel_matcher.cpp)
 target_link_libraries(ovo_core_tests PRIVATE ovo::core GTest::gtest_main GTest::gmock)
 ovo_set_warnings(ovo_core_tests)
 gtest_discover_tests(ovo_core_tests)

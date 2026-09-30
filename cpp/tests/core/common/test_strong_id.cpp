@@ -3,7 +3,7 @@
 #include <cstdint> 
 #include <type_traits>
 
-#include "ovo/core/strong_id.hpp"
+#include "ovo/core/common/strong_id.hpp"
 
 using namespace ovo::core;
 

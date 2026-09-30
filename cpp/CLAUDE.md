@@ -35,6 +35,14 @@ Regla: primero correcto, luego medir (Tracy, benchmarks), luego optimizar lo que
   (`float` xyz, `uint8` color).
 - La primera versión CPU puede ser más lenta que Python (GPU) en frustum/proyección: es esperado.
 
+## Estructura de `core/` por niveles
+Un nivel solo usa los de abajo, nunca los de arriba. Carpeta = namespace (`common/` vive en `ovo::core`).
+1. `common/`: ladrillos básicos (`StrongId`). No depende de nada.
+2. `geometry/`: matemática pura sin estado (cámara, pose, frustum, matcher). `ovo::core::geometry`.
+3. `mapping/` y `semantics/` (futuro): el sistema, con estado. `semantics` usa `mapping`, nunca al revés.
+Los tests replican la estructura (`tests/core/<nivel>/test_<fichero>.cpp`).
+Cuando llegue `semantics/`, valorar una librería CMake por nivel para que el compilador imponga las fronteras.
+
 ## Modelo de dominio
 Ver `docs/domain-model.md` (entidades, valores, dueños, link por `PointId`).
 
