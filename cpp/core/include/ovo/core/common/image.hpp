@@ -15,13 +15,15 @@ public:
         assert(width > 0 && height > 0);
     }
 
+    // Getters
     [[nodiscard]] std::uint32_t width() const noexcept { return width_; }
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
 
+    // Accessors
     [[nodiscard]] T* data() noexcept { return data_.data(); }
     [[nodiscard]] const T* data() const noexcept { return data_.data(); }
 
-    // Pixel (u, v) = (column, row), like PinholeCamera. Precondition: u < width, v < height.
+    // Element access
     [[nodiscard]] T& at(std::uint32_t u, std::uint32_t v) noexcept {
         assert(u < width_ && v < height_);
         return data_[static_cast<std::size_t>(v) * width_ + u];
@@ -34,7 +36,7 @@ public:
 private:
     std::uint32_t width_;
     std::uint32_t height_;
-    std::vector<T> data_;  // width_ * height_ pixels, row-major
+    std::vector<T> data_;
 };
 
 }  // namespace ovo::core

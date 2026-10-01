@@ -71,6 +71,8 @@ Lo maduro se copia a `tfm/` como material de tesis.
   vector de Eigen sin inicializar (no se inicializa a cero).
 - **Header vs `.cpp`:** en el header lo obligatorio (templates, `constexpr`) y las funciones pequeñas del camino
   caliente (inlining + SIMD + CUDA). En `.cpp` las grandes, las no calientes y las que necesitan includes pesados.
+- Píxeles: `(u, v)` = (columna, fila); el centro del píxel está en la coordenada entera (como el `meshgrid` del
+  Python al desproyectar). Coordenada → píxel = redondear al más cercano (`std::lround`, con signo), luego límites.
 - Ids con tipo fuerte (`FrameId`, `PointId`, `InstanceId`), no `int`.
 - Inyección de dependencias por constructor; sin singletons ni estado global.
 
