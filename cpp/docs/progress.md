@@ -48,6 +48,13 @@
   Impacto: casi seguro solo rendimiento, porque `match_3d_points_to_2d_pixels` vuelve a filtrar por imagen y por
   |Δz|. En C++ el frustum es correcto (normales orientadas con un punto interior), así que la salida del frustum
   diferirá del Python: los tests de regresión deben comparar el mapa final, no el paso intermedio.
+- **Bug de configuración en `VanillaMapper`** (`vanilla_mapper.py:32`): lee `config["mapping"]["downscale_res"]`,
+  pero los yaml (`data/working/configs/slam/vanilla/*.yaml`) escriben `downscale_ratio`. Siempre usa el valor por
+  defecto, 2: ScanNet++ pide 1 y corre con 2 (4 veces menos puntos nuevos). Ojo al comparar con resultados publicados.
+- `VanillaMapper` (densidad, configurable en C++): dilatación `k_pooling` (3, 5 en ScanNet++), hecha como
+  `~maxpool(~mask)` = cada punto emparejado bloquea su vecindario; submuestreo `[::2, ::2]` solo al crear puntos
+  (matcher y dilatación a resolución completa), conservando las coordenadas originales del píxel.
+  `max_frame_points` se lee y no se usa. Frame sin profundidad válida: `min()` de vacío revienta.
 - `match_3d_points_to_2d_pixels` comenta que descartar profundidad 0 "se podría saltar": falso. Un punto a
   menos de `th_dist` de la cámara emparejaría con un píxel sin medida (test `IgnoresPixelsWithoutDepth`).
 - Posibles bugs del Python detectados (sin verificar; chips abiertos en la sesión): limpieza de keyframes borrados

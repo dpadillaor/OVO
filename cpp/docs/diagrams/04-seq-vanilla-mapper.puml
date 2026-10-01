@@ -1,0 +1,76 @@
+@startuml 04-seq-vanilla-mapper
+' TO-BE: un paso de mapeo de VanillaMapper en C++ (diagrama dinámico).
+' Referencia Python: ovo/slam/vanilla_mapper.py (map), ovo/utils/geometry_utils.py.
+' Estado: borrador v1, para discutir antes de implementar.
+
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam sequenceMessageAlign left
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #F9A825
+}
+
+title VanillaMapper::map - un frame (to-be)
+
+participant "Orquestador" as orch
+participant "VanillaMapper" as vm
+participant "GeometricMap" as map
+participant "Frustum" as fr
+participant "PointPixelMatcher" as pm
+participant "PinholeCamera\n+ Pose" as cam
+queue "Eventos\ngeometría" as ev
+
+orch -> vm : map(frame{rgb, depth}, cameraPose)
+note right of orch
+  Python: cada map_every = 10 frames
+  (ovomapping.py:437), con pose GT.
+end note
+
+vm -> vm : rango de profundidad válida\n(min y max de depth > 0)
+
+alt sin ninguna profundidad válida
+  vm --> orch : nada que mapear
+  note right of vm
+    Python: min() de un tensor vacío revienta.
+    En C++: salida temprana (no es un bug).
+  end note
+end
+
+group Puntos que ya existen (se salta si el mapa está vacío)
+  vm -> fr ** : Frustum(camera, cameraPose, minDepth, maxDepth)
+  vm -> map : puntos del mapa (xyz por bloques)
+  map --> vm : span<const Vector3f> por bloque
+  loop por cada punto
+    vm -> fr : contains(pointWorld)
+  end
+  note right of vm
+    candidatos = los que pasan.
+    ABIERTO: copiar xyz a un vector de
+    candidatos + tabla índice -> PointId,
+    o filtrar por bloque sin copiar.
+  end note
+  vm -> pm : match(candidatos, cameraPose, depth)
+  pm --> vm : vector<PointPixelMatch>{pointIndex, u, v}
+  vm -> map : obs += 1 de cada PointId emparejado
+end
+
+group Píxeles que faltan
+  vm -> vm : cobertura = depth > 0\nquitar píxeles de los matches\ndilatar lo ocupado 3x3 (k_pooling)
+  vm -> vm : submuestrear x2 (depth[::2, ::2])
+  loop por cada píxel libre
+    vm -> cam : unproject(pixel, depth) y camToWorld
+    cam --> vm : pointWorld
+  end
+end
+
+vm -> map : añadir bloque nuevo\n(PointId nuevos, xyz, color, obs = 1)
+map -> ev : PointsAdded{ids}
+
+note over vm, map
+  Python guarda también pcd_obj_ids (instancia de cada punto) en el mapper:
+  en C++ eso es de la semántica (ADR-0002), el mapper no lo toca.
+  Dilatar y submuestrear: funciones libres sobre Image<uint8_t> en mapping/,
+  no métodos de Image (regla anti-crecimiento, ADR-0003).
+end note
+@enduml
