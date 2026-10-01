@@ -13,6 +13,11 @@ class Frustum {
 public:
     Frustum(const PinholeCamera& camera, const Pose& cameraPose, float minDepth, float maxDepth);
 
+    // Depth range [minDepth - margin, maxDepth + margin]. If the margin would put near at or below 0,
+    // near is minDepth / 2. Valid when minDepth == maxDepth (margin > 0 keeps near < far).
+    [[nodiscard]] static Frustum withDepthMargin(const PinholeCamera& camera, const Pose& cameraPose,
+                                                 float minDepth, float maxDepth, float margin);
+
     [[nodiscard]] bool contains(const Eigen::Vector3f& pointWorld) const noexcept {
         for (const Eigen::Vector4f& plane : planes_) {
             if (plane.head<3>().dot(pointWorld) + plane.w() < 0.f) { return false; }

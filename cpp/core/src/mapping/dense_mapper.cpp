@@ -37,6 +37,30 @@ std::optional<DepthRange> validDepthRange(const Image<float>& depth) {
     return range;
 }
 
+// Map points inside the frustum, copied into one contiguous array for the matcher.
+std::vector<Eigen::Vector3f> pointsInside(const geometry::Frustum& frustum, const GeometricMap& map) {
+    std::vector<Eigen::Vector3f> inside;
+    for (const PointBlock& block : map.blocks()) {
+        for (const Eigen::Vector3f& pointWorld : block.xyzWorld()) {
+            if (frustum.contains(pointWorld)) { inside.push_back(pointWorld); }
+        }
+    }
+    return inside;
+}
+
+// Each pixel at its measured depth, in world coordinates.
+std::vector<Eigen::Vector3f> unprojectToWorld(const std::vector<Pixel>& pixels, const Image<float>& depth,
+                                              const geometry::PinholeCamera& camera,
+                                              const geometry::Pose& cameraPose) {
+    std::vector<Eigen::Vector3f> pointsWorld;
+    pointsWorld.reserve(pixels.size());
+    for (const Pixel& p : pixels) {
+        const Eigen::Vector2f pixel{static_cast<float>(p.u), static_cast<float>(p.v)};
+        pointsWorld.push_back(cameraPose.camToWorld(camera.unproject(pixel, depth.at(p.u, p.v))));
+    }
+    return pointsWorld;
+}
+
 }  // namespace
 
 DenseMapper::DenseMapper(const geometry::PinholeCamera& camera, const Config& config)
@@ -51,33 +75,17 @@ void DenseMapper::map(FrameId frameId, const Image<float>& depth, const geometry
     const std::optional<DepthRange> range = validDepthRange(depth);
     if (!range) { return; }  // no measurement at all: nothing to match, nothing to create
 
-    // 1. Map points this frame already sees.
-    std::vector<geometry::PointPixelMatch> matches;
+    std::vector<geometry::PointPixelMatch> matches;  // map points this frame already sees
     if (!map_.empty()) {
-        // Depth range widened by the tolerance: a point up to maxDepthError in front of the nearest
-        // (or behind the farthest) measurement can still match. Also keeps near < far when min == max.
-        const float nearDepth = std::max(range->min - maxDepthError_, range->min * 0.5f);
-        const float farDepth = range->max + maxDepthError_;
-        const geometry::Frustum frustum(camera_, cameraPose, nearDepth, farDepth);
-
-        std::vector<Eigen::Vector3f> candidates;
-        for (const PointBlock& block : map_.blocks()) {
-            for (const Eigen::Vector3f& pointWorld : block.xyzWorld()) {
-                if (frustum.contains(pointWorld)) { candidates.push_back(pointWorld); }
-            }
-        }
-        matches = matcher_.match(candidates, cameraPose, depth);
+        // Widened by the match tolerance: a point up to maxDepthError in front of the nearest
+        // (or behind the farthest) measurement can still match.
+        const auto frustum =
+            geometry::Frustum::withDepthMargin(camera_, cameraPose, range->min, range->max, maxDepthError_);
+        matches = matcher_.match(pointsInside(frustum, map_), cameraPose, depth);
     }
 
-    // 2. Pixels nothing covers become new points.
-    const std::vector<Pixel> freePixels = coverage_.freePixels(matches, depth);
-    std::vector<Eigen::Vector3f> newPoints;
-    newPoints.reserve(freePixels.size());
-    for (const Pixel& p : freePixels) {
-        const Eigen::Vector2f pixel{static_cast<float>(p.u), static_cast<float>(p.v)};
-        newPoints.push_back(cameraPose.camToWorld(camera_.unproject(pixel, depth.at(p.u, p.v))));
-    }
-    map_.addBlock(frameId, std::move(newPoints));
+    const std::vector<Pixel> freePixels = coverage_.freePixels(matches, depth);  // where nothing covers
+    map_.addBlock(frameId, unprojectToWorld(freePixels, depth, camera_, cameraPose));
 }
 
 }  // namespace ovo::core::mapping

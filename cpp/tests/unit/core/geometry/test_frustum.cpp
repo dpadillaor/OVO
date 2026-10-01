@@ -120,3 +120,30 @@ TEST(FrustumDeathTest, RejectsNaNDepth) {
     const float nan = std::numeric_limits<float>::quiet_NaN();
     EXPECT_DEBUG_DEATH(static_cast<void>(Frustum(kCamera, Pose::identity(), 1.f, nan)), "");
 }
+
+// --- withDepthMargin: depth range [min - margin, max + margin].
+
+TEST(FrustumWithDepthMargin, ExtendsNearAndFarByMargin) {
+    const Frustum frustum = Frustum::withDepthMargin(kCamera, Pose::identity(), 2.f, 4.f, 0.1f);
+    EXPECT_TRUE(frustum.contains({0.f, 0.f, 1.95f}));   // past min, within margin
+    EXPECT_TRUE(frustum.contains({0.f, 0.f, 4.05f}));   // past max, within margin
+    EXPECT_FALSE(frustum.contains({0.f, 0.f, 1.85f}));  // past min - margin
+    EXPECT_FALSE(frustum.contains({0.f, 0.f, 4.15f}));  // past max + margin
+}
+
+// A single depth value (min == max) still gives a volume: the margin opens it on both sides.
+TEST(FrustumWithDepthMargin, AcceptsSingleDepthValue) {
+    const Frustum frustum = Frustum::withDepthMargin(kCamera, Pose::identity(), 2.f, 2.f, 0.03f);
+    EXPECT_TRUE(frustum.contains({0.f, 0.f, 2.f}));
+}
+
+// Margin larger than min would put near behind the camera: near stays at min / 2.
+TEST(FrustumWithDepthMargin, KeepsNearInFrontOfCamera) {
+    const Frustum frustum = Frustum::withDepthMargin(kCamera, Pose::identity(), 0.02f, 1.f, 0.03f);
+    EXPECT_TRUE(frustum.contains({0.f, 0.f, 0.015f}));   // between min / 2 = 0.01 and min
+    EXPECT_FALSE(frustum.contains({0.f, 0.f, 0.005f}));  // before min / 2
+}
+
+TEST(FrustumDeathTest, WithDepthMarginRejectsNegativeMargin) {
+    EXPECT_DEBUG_DEATH(static_cast<void>(Frustum::withDepthMargin(kCamera, Pose::identity(), 1.f, 5.f, -0.1f)), "");
+}

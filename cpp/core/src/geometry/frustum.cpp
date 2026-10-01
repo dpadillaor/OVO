@@ -1,5 +1,6 @@
 #include "ovo/core/geometry/frustum.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 
@@ -68,6 +69,13 @@ Frustum::Frustum(const PinholeCamera& camera, const Pose& cameraPose, float minD
     planes_[kRight] = planeFacingInward(nearCorners[1], nearCorners[3], farCorners[1], centre);
     planes_[kTop] = planeFacingInward(nearCorners[0], nearCorners[1], farCorners[0], centre);
     planes_[kBottom] = planeFacingInward(nearCorners[2], nearCorners[3], farCorners[2], centre);
+}
+
+Frustum Frustum::withDepthMargin(const PinholeCamera& camera, const Pose& cameraPose, float minDepth,
+                                 float maxDepth, float margin) {
+    assert(margin >= 0.f);  // positive form: NaN fails too
+    const float nearDepth = std::max(minDepth - margin, minDepth * 0.5f);
+    return Frustum(camera, cameraPose, nearDepth, maxDepth + margin);
 }
 
 }  // namespace ovo::core::geometry
