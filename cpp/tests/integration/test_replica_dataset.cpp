@@ -6,6 +6,7 @@
 #include <string>
 
 #include "ovo/adapters/replica/replica_frame_source.hpp"
+#include "ovo/adapters/replica/replica_pose_source.hpp"
 #include "ovo/core/geometry/pinhole_camera.hpp"
 
 using ovo::adapters::replica::ReplicaFrameSource;
@@ -69,4 +70,14 @@ TEST_F(ReplicaOffice0, FirstFrameHasIndoorDepthsInMetres) {
 TEST_F(ReplicaOffice0, LastFrameLoads) {
     const ReplicaFrameSource source(office0(), kReplicaCamera, kReplicaDepthScale);
     EXPECT_EQ(source.frame(source.size() - 1).id.value(), 1999u);
+}
+
+// Every GT pose of office0 loads and passes Pose's checks (orthonormal, det +1, finite).
+TEST_F(ReplicaOffice0, Loads2000ValidPoses) {
+    ovo::adapters::replica::ReplicaPoseSource poses(office0());
+    ASSERT_EQ(poses.size(), std::size_t{2000});
+    for (std::uint32_t id = 0; id < 2000; ++id) {
+        const ovo::core::ports::Frame frame{ovo::core::FrameId{id}, ovo::core::Image<float>(1, 1)};
+        EXPECT_TRUE(poses.pose(frame).has_value()) << "frame " << id;
+    }
 }

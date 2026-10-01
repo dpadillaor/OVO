@@ -2,12 +2,14 @@
 #   gmake                          build and run every test
 #   gmake test T=^Image            build and run the tests whose name (Suite.Test) matches regex T
 #   gmake build                    build only
-#   gmake clean                    delete the build folder (the next build reconfigures, slow)
+#   gmake release                  optimised build (no asserts) in build-release/, for timing real runs
+#   gmake clean                    delete the build folders (the next build reconfigures, slow)
 
 BUILD_DIR := build
+RELEASE_DIR := build-release
 T ?= .
 
-.PHONY: all build test configure clean
+.PHONY: all build test configure release clean
 
 all: test
 
@@ -22,5 +24,11 @@ build: configure
 test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure -R "$(T)"
 
+$(RELEASE_DIR)/CMakeCache.txt:
+	cmake -S . -B $(RELEASE_DIR) -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+release: $(RELEASE_DIR)/CMakeCache.txt
+	cmake --build $(RELEASE_DIR)
+
 clean:
-	cmake -E rm -rf $(BUILD_DIR)
+	cmake -E rm -rf $(BUILD_DIR) $(RELEASE_DIR)

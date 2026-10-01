@@ -21,7 +21,9 @@ add_executable(ovo_unit_tests
     unit/core/mapping/test_geometric_map.cpp
     unit/core/mapping/test_coverage.cpp
     unit/core/mapping/test_dense_mapper.cpp
-    unit/adapters/replica/test_replica_frame_source.cpp)
+    unit/adapters/replica/test_replica_frame_source.cpp
+    unit/adapters/replica/test_replica_pose_source.cpp
+    unit/adapters/ply/test_ply_writer.cpp)
 target_link_libraries(ovo_unit_tests PRIVATE ovo::core ovo::adapters GTest::gtest_main GTest::gmock)
 ovo_set_warnings(ovo_unit_tests)
 gtest_discover_tests(ovo_unit_tests)

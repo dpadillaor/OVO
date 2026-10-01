@@ -6,7 +6,7 @@
 | Pieza | Fichero | Tests |
 |---|---|---|
 | Build: CMake + Ninja, C++23, warnings estrictos + `-Werror`, GoogleTest, Eigen 3.4 (FetchContent) | `CMakeLists.txt`, `cmake/` | sin tests |
-| `Makefile`: atajos sobre CMake + CTest (`gmake`, `gmake test T=^Suite`; en Linux `make`) | `Makefile` | sin tests |
+| `Makefile`: atajos sobre CMake + CTest (`gmake`, `gmake test T=^Suite`, `gmake release` en `build-release/`; en Linux `make`) | `Makefile` | sin tests |
 | `StrongId<Tag>` → `FrameId`, `PointId`, `InstanceId` | `core/include/ovo/core/common/strong_id.hpp` | 4 + 4 `static_assert` |
 | `PinholeCamera`: validación, `project`, `unproject` | `core/include/ovo/core/geometry/pinhole_camera.hpp` | 19 (incl. 2 death tests) |
 | `Pose` (c2w, `R` + `t`): constructor privado + `fromCamToWorld` / `identity`, `camToWorld`, `worldToCam`, `center`; `assert` en el constructor (ortonormal, `det = +1`, finito) | `core/include/ovo/core/geometry/pose.hpp` | 15 (incl. 3 death tests; comprobados con mutaciones) |
@@ -17,16 +17,24 @@
 | `GeometricMap` (`mapping/`): bloques del mapa denso; dueño del contador de `PointId` (desde 0, consecutivos, sin reutilizar); `addBlock` asigna ids e ignora bloques vacíos; `blocks()` como `span` de solo lectura | `core/include/ovo/core/mapping/geometric_map.hpp` | 6 |
 | `Coverage` (`mapping/`): píxeles donde crear puntos; copia del Python (`k_pooling` + `downscale`): libre si en su ventana `k x k` no hay match ni píxel sin profundidad, solo en la rejilla del paso; comprueba la ventana solo en la rejilla (mismo resultado que dilatar y submuestrear); config validada con excepción | `core/include/ovo/core/mapping/coverage.hpp`, `core/src/mapping/coverage.cpp` | 13 (incl. 1 death test; comprobados con mutaciones) |
 | `DenseMapper` (`mapping/`, antes `VanillaMapper`): `Config` (tolerancia, dilatación, paso; valores del Python), dueño del `GeometricMap`; `map(frameId, depth, pose)`: rango de profundidad válida (`std::optional`) → frustum ampliado ±tolerancia (`Frustum::withDepthMargin`) → candidatos copiados → matcher → `Coverage` → desproyectar → `addBlock`. Composición, sin herencia | `core/include/ovo/core/mapping/dense_mapper.hpp`, `core/src/mapping/dense_mapper.cpp` | 15 (incl. 1 death test) |
+| Puertos de entrada (`core/ports/`): `FrameSource` (`camera`, `size`, `frame(i)` → `{FrameId, depth}` en metros) y `PoseSource` (`pose(const Frame&)` → `optional<Pose>`; recibe el frame entero y no es `const` para que encaje un SLAM) | `core/include/ovo/core/ports/` | vía adaptadores |
+| Adaptadores (`adapters/`, librería `ovo_adapters`): `ReplicaFrameSource` (lista `results/depth*.png`, PNG 16 bits con `stb_image` fijado a un commit, RAII, comprueba 1 canal, tamaño y `depthScale`), `ReplicaPoseSource` (`traj.txt` con `from_chars` para leer `nan`, re-ortonormaliza con SVD, NaN → `nullopt`), `writePly` (PLY binario xyz) | `adapters/` | 16 unitarios + 4 de integración con `office0` (se saltan sin datos) |
+| `ovo_dense_map` (`apps/`): CLI `<escena> <salida.ply> [mapEvery=10] [maxFrames]`; cámara de Replica escrita a mano (TODO YAML). **Primera reconstrucción: Replica `office0`, 200 frames mapeados, 1.960.617 puntos; 378 s en Debug, 7,3 s en Release (PLY idénticos)**, CPU un hilo | `apps/dense_map.cpp` | manual |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002/0003, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
-Meta actual: **mapa denso geométrico** (solo xyz). El dominio ya está; falta correrlo con datos reales:
-1. **Adaptadores mínimos** (fuera de `core/`): leer Replica (profundidad PNG → `Image<float>` en metros con
-   `depth_scale`, poses GT → `Pose`, intrínsecos → `PinholeCamera`) y exportar el mapa (PLY, solo xyz).
-2. **Ejecutable** que recorra una escena con `map_every` y escriba el PLY.
-3. **Regresión**: volcar el mapa del Python en la misma escena y comparar (nº de puntos, distancia entre nubes).
+Meta actual: mapa denso funcionando en `office0` (salida PLY). Siguiente, a elegir:
+1. **Medir por etapas** (leer PNG, frustum, matcher, cobertura, desproyectar) con `std::chrono`, como primer paso
+   del puerto de telemetría (ADR-0001); después Tracy / `perf`. Sospechoso: el frustum recorre todos los puntos.
+2. **Visualización con Rerun** (puerto `MapObserver`: `onFrame`, `onBlockAdded`): el SDK C++ no enlaza con MinGW
+   (librería precompilada solo MSVC); compilar ese adaptador en Linux o con MSVC.
+3. **Config desde YAML** (`yaml-cpp`): cámara y `depth_scale` del dataset, parámetros del mapper.
+4. **Regresión** contra el mapa del Python en `office0` (nº de puntos, distancia entre nubes).
 
 ## Decisiones pendientes (cuando toque)
+- Limitaciones conocidas de `ReplicaFrameSource`: orden alfabético (necesita ceros a la izquierda), `FrameId` =
+  índice (sin huecos), rutas Unicode en Windows (`STBI_WINDOWS_UTF8`), `stbi_failure_reason` global (threads).
+- `PoseSource` con SLAM: necesitará todos los frames en orden (hoy el bucle solo carga 1 de cada `mapEvery`).
 - Diferencias conocidas con el Python en `DenseMapper`, a tener en cuenta en la regresión: frustum ampliado
   ±tolerancia (el Python usa `[min, max]` exacto y duplica puntos hasta 3 cm por delante de la medida más cercana);
   frustum del Python roto (ver notas); dilatación también en el frame 0.

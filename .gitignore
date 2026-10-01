@@ -28,3 +28,4 @@ ins_eval_example/scannet200_gt/
 # Rerun recordings (large binaries; keep out of git)
 *.rrd
 references/ovo_paper.pdf
+build-release/

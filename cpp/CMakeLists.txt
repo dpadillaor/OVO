@@ -20,6 +20,7 @@ include(Dependencies)
 
 add_subdirectory(core)
 add_subdirectory(adapters)
+add_subdirectory(apps)
 
 enable_testing()
 add_subdirectory(tests)
