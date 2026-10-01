@@ -13,14 +13,22 @@
 | `Frustum`: 6 planos `(n, d)` con normales orientadas hacia dentro con el centroide (no depende del orden de las esquinas); constructor en `.cpp` (una vez por frame), `contains` en header (una vez por punto); `assert` `0 < minDepth < maxDepth`. Primer `.cpp`: `ovo_core` pasa a `STATIC` | `core/include/ovo/core/geometry/frustum.hpp`, `core/src/geometry/frustum.cpp` | 16 (incl. 3 death tests; comprobados con mutaciones) |
 | `Image<T>` (ADR-0003): dueño de un `std::vector<T>`, `width()`, `height()`, `at(u, v)` (versión que escribe y versión `const`), `data()` como puntero (se pueden cambiar los píxeles, no el tamaño); memoria fila a fila como numpy; `assert` en `at` y en tamaño 0 | `core/include/ovo/core/common/image.hpp` | 11 (incl. 3 death tests) |
 | `PointPixelMatcher`: sin estado; config (cámara por copia, tolerancia) en el constructor, que lanza si la tolerancia no es finita y > 0; `match(span de puntos, pose, profundidad)` devuelve `vector<PointPixelMatch>` `{pointIndex, u, v}` (índice en la entrada, no `PointId`). Redondeo al píxel más cercano con signo, luego límites, luego profundidad > 0 y `\|Δz\| < tolerancia`. `assert` si la profundidad no tiene el tamaño de la cámara | `core/include/ovo/core/geometry/point_pixel_matcher.hpp`, `core/src/geometry/point_pixel_matcher.cpp` | 19 (incl. 1 death test; comprobados con mutaciones) |
+| `PointBlock` (`mapping/`): puntos que creó un keyframe, inmutable; `firstId` + xyz (ids consecutivos: punto `i` = `firstId + i`); el vector entra por valor y se mueve (sin copia) | `core/include/ovo/core/mapping/point_block.hpp` | 8 (incl. 1 death test) |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002/0003, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
-1. **`VanillaMapper`** en C++ (`mapping/`): frustum → matcher → cobertura (marcar píxeles emparejados,
-   dilatar 3x3, submuestrear a la mitad) → desproyectar los píxeles sin cubrir. Comparado con la salida de
-   referencia del Python. Antes: decidir el layout del mapa de puntos (SoA) y quién es dueño de qué.
+Meta actual: **mapa denso geométrico** (solo xyz). Orden, de abajo arriba:
+1. **`GeometricMap`** (`mapping/`): los bloques, añadir bloque (asigna ids), recorrer.
+2. **Cobertura** (`mapping/`): marcar píxeles emparejados, dilatar `k_pooling`, recorrer libres con paso `downscale`.
+3. **`VanillaMapper`**: frustum → matcher → cobertura → desproyectar → bloque nuevo. Config: tolerancia,
+   dilatación, paso. Comparado con la salida de referencia del Python.
 
 ## Decisiones pendientes (cuando toque)
+- Aplazados del mapa (nadie los necesita para el mapa denso): `obs` por punto (hoy solo se exporta; la semántica
+  ya no lo usa), con contador aparte y mutable, fuera del bloque inmutable; y color por punto (solo visualización
+  y exportación), cuando llegue el exportador PLY o Rerun.
+- `PointBlock` con ids consecutivos se rompe si algún día se borran puntos sueltos (filtro de outliers): volver a
+  un array de ids sin cambiar la interfaz (`pointId(i)`).
 - `Frustum`: AABB (fase rápida) cuando exista el mapa por bloques (caja del frustum contra caja del bloque),
   o si un benchmark lo pide; interfaz por lotes cuando se decida el layout del mapa (SoA).
 - `Pose`, para el loop closure: componer, pose relativa (`new * old⁻¹`), transformar por lotes.
