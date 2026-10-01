@@ -36,8 +36,8 @@ private:
     Pose(const Eigen::Matrix3f& rotation, const Eigen::Vector3f& translation) noexcept
         : rotation_(rotation), translation_(translation) {
         assert((rotation_.transpose() * rotation_).isIdentity(1e-4f));  // orthonormal
-        assert(std::abs(rotation_.determinant() - 1.f) < 1e-4f);  // no reflection
-        assert(rotation_.allFinite() && translation_.allFinite());  // no NaN or inf
+        assert(std::abs(rotation_.determinant() - 1.f) < 1e-4f);        // no reflection
+        assert(rotation_.allFinite() && translation_.allFinite());      // no NaN or inf
     }
 
     Eigen::Matrix3f rotation_;     // c2w rotation

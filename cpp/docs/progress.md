@@ -9,16 +9,17 @@
 | `StrongId<Tag>` → `FrameId`, `PointId`, `InstanceId` | `core/include/ovo/core/common/strong_id.hpp` | 4 + 4 `static_assert` |
 | `PinholeCamera`: validación, `project`, `unproject` | `core/include/ovo/core/geometry/pinhole_camera.hpp` | 19 (incl. 2 death tests) |
 | `Pose` (c2w, `R` + `t`): constructor privado + `fromCamToWorld` / `identity`, `camToWorld`, `worldToCam`, `center`; `assert` en el constructor (ortonormal, `det = +1`, finito) | `core/include/ovo/core/geometry/pose.hpp` | 15 (incl. 3 death tests; comprobados con mutaciones) |
+| `Frustum`: 6 planos `(n, d)` con normales orientadas hacia dentro con el centroide (no depende del orden de las esquinas); constructor en `.cpp` (una vez por frame), `contains` en header (una vez por punto); `assert` `0 < minDepth < maxDepth`. Primer `.cpp`: `ovo_core` pasa a `STATIC` | `core/include/ovo/core/geometry/frustum.hpp`, `core/src/geometry/frustum.cpp` | 16 (incl. 3 death tests; comprobados con mutaciones) |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
-1. **`Frustum`** (`geometry/frustum.hpp` + `.cpp`): 8 esquinas (profundidad mín/máx del frame) → AABB (fase rápida)
-   + 6 planos (fase precisa) → qué puntos ve la cámara. Interfaz por lotes.
-2. **`PointPixelMatcher`**: proyecta, lee profundidad, empareja si |Δz| < 3 cm. Única pieza con interfaz
+1. **`PointPixelMatcher`**: proyecta, lee profundidad, empareja si |Δz| < 3 cm. Única pieza con interfaz
    (CPU hoy, CUDA mañana). Necesita decidir antes el tipo de imagen.
-3. Con 1-2: `VanillaMapper` en C++ (`mapping/`), comparado con la salida de referencia del Python.
+2. Con 1: `VanillaMapper` en C++ (`mapping/`), comparado con la salida de referencia del Python.
 
 ## Decisiones pendientes (cuando toque)
+- `Frustum`: AABB (fase rápida) cuando exista el mapa por bloques (caja del frustum contra caja del bloque),
+  o si un benchmark lo pide; interfaz por lotes cuando se decida el layout del mapa (SoA).
 - `Pose`, para el loop closure: componer, pose relativa (`new * old⁻¹`), transformar por lotes.
 - Tipo de imagen (profundidad, RGB): `Image<T>` propio o `cv::Mat`. Lo necesita el Matcher.
 - Pertenencia punto↔instancia: una sola fuente de verdad.
@@ -33,6 +34,14 @@
   izquierda por `world_ref` (pose GT del frame 0) para alinear con el mundo del GT. `float32`, sin volteos.
 - Intrínsecos duplicados a mano (YAML de ORB y dataset; ScanNet con desfase `crop_edge = 12`): en C++ una sola fuente.
 - El Atlas (multimapa) de ORB-SLAM3 no se trata: relevante para los submapas semánticos.
+- **Bug en los planos del frustum** (`ovo/submodules/gaussian_slam/utils/mapper_utils.py`,
+  `compute_camera_frustum_planes`), verificado a mano con la cámara de test (pose identidad, profundidad [1, 5]):
+  `D` usa `corners[i]` con `i` = índice del plano, así que el plano "far" pasa por una esquina near y duplica al near;
+  los planos "top"/"bottom" se construyen con esquinas de los lados (normales sin componente y). Resultado: no hay
+  límite vertical (`(0, ±2, 3)` pasa) y el límite far es accidental (`(0, 0, 6)` pasa, `(0, 0, 100)` no).
+  Impacto: casi seguro solo rendimiento, porque `match_3d_points_to_2d_pixels` vuelve a filtrar por imagen y por
+  |Δz|. En C++ el frustum es correcto (normales orientadas con un punto interior), así que la salida del frustum
+  diferirá del Python: los tests de regresión deben comparar el mapa final, no el paso intermedio.
 - Posibles bugs del Python detectados (sin verificar; chips abiertos en la sesión): limpieza de keyframes borrados
   en `ovo.py`, y `slam_module` desconocido que cae en silencio a poses GT.
 
