@@ -1,28 +1,25 @@
 # Progreso del port C++
 
-Última sesión: 2026-09-30 (rama `feat/cpp-core`).
+Última sesión: 2026-10-01 (rama `feat/cpp-core`).
 
 ## Hecho
 | Pieza | Fichero | Tests |
 |---|---|---|
-| Build: CMake + Ninja, C++23, warnings estrictos + `-Werror`, GoogleTest, Eigen 3.4 (FetchContent) | `CMakeLists.txt`, `cmake/` | — |
+| Build: CMake + Ninja, C++23, warnings estrictos + `-Werror`, GoogleTest, Eigen 3.4 (FetchContent) | `CMakeLists.txt`, `cmake/` | sin tests |
 | `StrongId<Tag>` → `FrameId`, `PointId`, `InstanceId` | `core/include/ovo/core/common/strong_id.hpp` | 4 + 4 `static_assert` |
 | `PinholeCamera`: validación, `project`, `unproject` | `core/include/ovo/core/geometry/pinhole_camera.hpp` | 19 (incl. 2 death tests) |
-| `Pose` (c2w, `R` + `t`): constructor privado + `fromCamToWorld` / `identity`, `camToWorld`, `worldToCam` | `core/include/ovo/core/geometry/pose.hpp` | 10 (comprobados con mutaciones) |
-| Diseño: contexto, as-is, to-be, ADR-0001/0002, modelo de dominio | `docs/` | — |
+| `Pose` (c2w, `R` + `t`): constructor privado + `fromCamToWorld` / `identity`, `camToWorld`, `worldToCam`, `center`; `assert` en el constructor (ortonormal, `det = +1`, finito) | `core/include/ovo/core/geometry/pose.hpp` | 15 (incl. 3 death tests; comprobados con mutaciones) |
+| Diseño: contexto, as-is, to-be, ADR-0001/0002, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
-1. **Terminar `Pose`** (la lista de tests pendientes está al final de `tests/unit/core/geometry/test_pose.cpp`):
-   - `center()`: devuelve `translation_`. Tests `PoseCenter`.
-   - `assert` en `fromCamToWorld`: `R` ortonormal (`RᵀR ≈ I`), `det(R) ≈ +1`, todo finito. Death tests `PoseDeathTest`.
-   - Más adelante, cuando llegue el loop closure: componer, pose relativa (`new * old⁻¹`), transformar por lotes.
-2. **`Frustum`** (`geometry/frustum.hpp` + `.cpp`): 8 esquinas (profundidad mín/máx del frame) → AABB (fase rápida)
+1. **`Frustum`** (`geometry/frustum.hpp` + `.cpp`): 8 esquinas (profundidad mín/máx del frame) → AABB (fase rápida)
    + 6 planos (fase precisa) → qué puntos ve la cámara. Interfaz por lotes.
-3. **`PointPixelMatcher`**: proyecta, lee profundidad, empareja si |Δz| < 3 cm. Única pieza con interfaz
+2. **`PointPixelMatcher`**: proyecta, lee profundidad, empareja si |Δz| < 3 cm. Única pieza con interfaz
    (CPU hoy, CUDA mañana). Necesita decidir antes el tipo de imagen.
-4. Con 1-3: `VanillaMapper` en C++ (`mapping/`), comparado con la salida de referencia del Python.
+3. Con 1-2: `VanillaMapper` en C++ (`mapping/`), comparado con la salida de referencia del Python.
 
 ## Decisiones pendientes (cuando toque)
+- `Pose`, para el loop closure: componer, pose relativa (`new * old⁻¹`), transformar por lotes.
 - Tipo de imagen (profundidad, RGB): `Image<T>` propio o `cv::Mat`. Lo necesita el Matcher.
 - Pertenencia punto↔instancia: una sola fuente de verdad.
 - `virtual` vs `concepts` en puertos (tendencia: `virtual` en fronteras, `concepts` dentro).

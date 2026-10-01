@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
@@ -102,13 +104,32 @@ TEST(PoseWorldToCam, RoundTripWithCamToWorld) {
     EXPECT_NEAR(back.z(), original.z(), 1e-5f);
 }
 
-// Tests to write (TDD: one at a time, red -> green):
-//
-// PoseCenter (needs center() first)
-//   EqualsTranslation                  center() == translation
-//   CameraOriginGoesToCenter           camToWorld((0,0,0)) == center()
-//
-// PoseDeathTest (needs the assert in fromCamToWorld first)
-//   RejectsNonOrthonormalRotation      R scaled by 2 -> assert
-//   RejectsReflection                  det(R) = -1 -> assert
-//   RejectsNaN                         NaN in t -> assert
+TEST(PoseCenter, EqualsTranslation) {
+    const Eigen::Vector3f translation{1.f, 2.f, 3.f};
+    const Pose cameraPose = Pose::fromCamToWorld(kRotZ90, translation);
+    const Eigen::Vector3f center = cameraPose.center();
+    EXPECT_FLOAT_EQ(center.x(), translation.x());
+    EXPECT_FLOAT_EQ(center.y(), translation.y());
+    EXPECT_FLOAT_EQ(center.z(), translation.z());
+}
+
+TEST(PoseCenter, CameraOriginGoesToCenter) {
+    const Pose cameraPose = Pose::fromCamToWorld(kRotZ90, {1.f, 2.f, 3.f});
+    const Eigen::Vector3f originInWorld = cameraPose.camToWorld(Eigen::Vector3f::Zero());
+    EXPECT_TRUE(originInWorld.isApprox(cameraPose.center()));
+}
+
+TEST(PoseDeathTest, RejectsNonOrthonormalRotation) {
+    const Eigen::Matrix3f scaled = 2.f * kRotZ90;
+    EXPECT_DEBUG_DEATH(static_cast<void>(Pose::fromCamToWorld(scaled, Eigen::Vector3f::Zero())), "");
+}
+
+TEST(PoseDeathTest, RejectsReflection) {
+    const Eigen::Matrix3f mirrorZ = Eigen::Vector3f{1.f, 1.f, -1.f}.asDiagonal();
+    EXPECT_DEBUG_DEATH(static_cast<void>(Pose::fromCamToWorld(mirrorZ, Eigen::Vector3f::Zero())), "");
+}
+
+TEST(PoseDeathTest, RejectsNaN) {
+    const Eigen::Vector3f badTranslation{1.f, std::numeric_limits<float>::quiet_NaN(), 3.f};
+    EXPECT_DEBUG_DEATH(static_cast<void>(Pose::fromCamToWorld(kRotZ90, badTranslation)), "");
+}
