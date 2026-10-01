@@ -19,8 +19,24 @@
 | `DenseMapper` (`mapping/`, antes `VanillaMapper`): `Config` (tolerancia, dilatación, paso; valores del Python), dueño del `GeometricMap`; `map(frameId, depth, pose)`: rango de profundidad válida (`std::optional`) → frustum ampliado ±tolerancia (`Frustum::withDepthMargin`) → candidatos copiados → matcher → `Coverage` → desproyectar → `addBlock`. Composición, sin herencia | `core/include/ovo/core/mapping/dense_mapper.hpp`, `core/src/mapping/dense_mapper.cpp` | 15 (incl. 1 death test) |
 | Puertos de entrada (`core/ports/`): `FrameSource` (`camera`, `size`, `frame(i)` → `{FrameId, depth}` en metros) y `PoseSource` (`pose(const Frame&)` → `optional<Pose>`; recibe el frame entero y no es `const` para que encaje un SLAM) | `core/include/ovo/core/ports/` | vía adaptadores |
 | Adaptadores (`adapters/`, librería `ovo_adapters`): `ReplicaFrameSource` (lista `results/depth*.png`, PNG 16 bits con `stb_image` fijado a un commit, RAII, comprueba 1 canal, tamaño y `depthScale`), `ReplicaPoseSource` (`traj.txt` con `from_chars` para leer `nan`, re-ortonormaliza con SVD, NaN → `nullopt`), `writePly` (PLY binario xyz) | `adapters/` | 16 unitarios + 4 de integración con `office0` (se saltan sin datos) |
-| `ovo_dense_map` (`apps/`): CLI `<escena> <salida.ply> [mapEvery=10] [maxFrames]`; cámara de Replica escrita a mano (TODO YAML). **Primera reconstrucción: Replica `office0`, 200 frames mapeados, 1.960.617 puntos; 378 s en Debug, 7,3 s en Release (PLY idénticos)**, CPU un hilo | `apps/dense_map.cpp` | manual |
+| `ovo_dense_map` (`apps/`): CLI `<escena> <salida.ply> [mapEvery=10] [maxFrames]`; cámara de Replica escrita a mano (TODO YAML). **Primera reconstrucción: Replica `office0`, 200 frames mapeados, 1.960.617 puntos; 378 s en Debug, 7,3 s en Release (PLY idénticos)**, CPU un hilo. En Linux (unizar), mismo PLY byte a byte (md5) con gcc 14 | `apps/dense_map.cpp` | manual |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002/0003, modelo de dominio | `docs/` | sin tests |
+
+## Rendimiento medido (office0, 2000 frames, `map_every` 10, solo geometría)
+| Máquina | Implementación | Total | Puntos |
+|---|---|---|---|
+| unizar (Linux) | Python `VanillaMapper`, GPU RTX 4090 (`scripts/bench_vanilla_mapper.py`) | 8,32 s (lectura RGB+depth 2,25 s; mapeo 29,9 ms/frame) | 1.967.495 |
+| unizar (Linux) | C++ `DenseMapper`, CPU 1 hilo, Release, gcc 14 | **2,59 s** | 1.960.617 (-0,35 %) |
+| Windows local | C++ `DenseMapper`, CPU 1 hilo, Release, MinGW 13 | 6,8 s | 1.960.617 |
+| Windows local | C++ `DenseMapper`, Debug | 378 s | 1.960.617 |
+
+Matices: solo geometría (sin SLAM ni semántica); el Python lee también el RGB; nubes aún no comparadas punto a punto
+(están en unizar `/tmp/ovo_bench/office0_{python,cpp}.ply`).
+
+**Compilar en unizar** (gcc 9 y CMake 3.16 del sistema no sirven): worktree de `feat/cpp-core` en `/tmp/ovo_cpp_wt`,
+CMake/Ninja en un venv desechable `/tmp/ovo_cpp_tools` (creado con el Python de `ovo2`), compilador gcc 14 de
+conda `ovo2` (`CC/CXX=~/anaconda3/envs/ovo2/bin/x86_64-conda-linux-gnu-{gcc,g++}`), y al ejecutar
+`LD_LIBRARY_PATH=~/anaconda3/envs/ovo2/lib`. Datos: `OVO_DATASETS_DIR=/home/padidavid/repos/OVO/data/input/Datasets`.
 
 ## Siguiente (en orden)
 Meta actual: mapa denso funcionando en `office0` (salida PLY). Siguiente, a elegir:
@@ -29,7 +45,8 @@ Meta actual: mapa denso funcionando en `office0` (salida PLY). Siguiente, a eleg
 2. **Visualización con Rerun** (puerto `MapObserver`: `onFrame`, `onBlockAdded`): el SDK C++ no enlaza con MinGW
    (librería precompilada solo MSVC); compilar ese adaptador en Linux o con MSVC.
 3. **Config desde YAML** (`yaml-cpp`): cámara y `depth_scale` del dataset, parámetros del mapper.
-4. **Regresión** contra el mapa del Python en `office0` (nº de puntos, distancia entre nubes).
+4. **Regresión** contra el mapa del Python en `office0`: nº de puntos ya casi igual (-0,35 %); falta la distancia
+   entre nubes (las dos están en unizar `/tmp/ovo_bench/`).
 
 ## Decisiones pendientes (cuando toque)
 - Limitaciones conocidas de `ReplicaFrameSource`: orden alfabético (necesita ceros a la izquierda), `FrameId` =
