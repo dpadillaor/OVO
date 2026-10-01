@@ -12,6 +12,7 @@ include(GoogleTest)
 # Folder mirrors the header layout. integration/ and regression/ will get their own executables.
 add_executable(ovo_unit_tests
     unit/core/common/test_strong_id.cpp
+    unit/core/common/test_image.cpp
     unit/core/geometry/test_pinhole_camera.cpp
     unit/core/geometry/test_pose.cpp
     unit/core/geometry/test_frustum.cpp

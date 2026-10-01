@@ -10,14 +10,14 @@
 | `PinholeCamera`: validación, `project`, `unproject` | `core/include/ovo/core/geometry/pinhole_camera.hpp` | 19 (incl. 2 death tests) |
 | `Pose` (c2w, `R` + `t`): constructor privado + `fromCamToWorld` / `identity`, `camToWorld`, `worldToCam`, `center`; `assert` en el constructor (ortonormal, `det = +1`, finito) | `core/include/ovo/core/geometry/pose.hpp` | 15 (incl. 3 death tests; comprobados con mutaciones) |
 | `Frustum`: 6 planos `(n, d)` con normales orientadas hacia dentro con el centroide (no depende del orden de las esquinas); constructor en `.cpp` (una vez por frame), `contains` en header (una vez por punto); `assert` `0 < minDepth < maxDepth`. Primer `.cpp`: `ovo_core` pasa a `STATIC` | `core/include/ovo/core/geometry/frustum.hpp`, `core/src/geometry/frustum.cpp` | 16 (incl. 3 death tests; comprobados con mutaciones) |
+| `Image<T>` (ADR-0003): dueño de un `std::vector<T>`, `width()`, `height()`, `at(u, v)` (versión que escribe y versión `const`), `data()` como puntero (se pueden cambiar los píxeles, no el tamaño); memoria fila a fila como numpy; `assert` en `at` y en tamaño 0 | `core/include/ovo/core/common/image.hpp` | 11 (incl. 3 death tests) |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002/0003, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
-1. **`Image<T>`** (`common/image.hpp`, ADR-0003): dueño de un `std::vector<T>`, `width()`, `height()`,
-   `at(u, v)`, `data()`; memoria como numpy (fila a fila, HWC). Nada más.
-2. **`PointPixelMatcher`**: proyecta, lee profundidad (`Image<float>`, metros), empareja si |Δz| < 3 cm.
+1. **`PointPixelMatcher`**: proyecta, lee profundidad (`Image<float>`, metros), empareja si |Δz| < 3 cm.
    Única pieza con interfaz (CPU hoy, CUDA mañana). Ignora profundidad 0 (sin medida).
-3. Con 1-2: `VanillaMapper` en C++ (`mapping/`), comparado con la salida de referencia del Python.
+   Empieza por la decisión del redondeo coordenada → píxel.
+2. Con 1: `VanillaMapper` en C++ (`mapping/`), comparado con la salida de referencia del Python.
 
 ## Decisiones pendientes (cuando toque)
 - `Frustum`: AABB (fase rápida) cuando exista el mapa por bloques (caja del frustum contra caja del bloque),
