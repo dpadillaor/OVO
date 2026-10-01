@@ -18,7 +18,8 @@ add_executable(ovo_unit_tests
     unit/core/geometry/test_frustum.cpp
     unit/core/geometry/test_point_pixel_matcher.cpp
     unit/core/mapping/test_point_block.cpp
-    unit/core/mapping/test_geometric_map.cpp)
+    unit/core/mapping/test_geometric_map.cpp
+    unit/core/mapping/test_coverage.cpp)
 target_link_libraries(ovo_unit_tests PRIVATE ovo::core GTest::gtest_main GTest::gmock)
 ovo_set_warnings(ovo_unit_tests)
 gtest_discover_tests(ovo_unit_tests)

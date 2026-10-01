@@ -15,15 +15,22 @@
 | `PointPixelMatcher`: sin estado; config (cámara por copia, tolerancia) en el constructor, que lanza si la tolerancia no es finita y > 0; `match(span de puntos, pose, profundidad)` devuelve `vector<PointPixelMatch>` `{pointIndex, u, v}` (índice en la entrada, no `PointId`). Redondeo al píxel más cercano con signo, luego límites, luego profundidad > 0 y `\|Δz\| < tolerancia`. `assert` si la profundidad no tiene el tamaño de la cámara | `core/include/ovo/core/geometry/point_pixel_matcher.hpp`, `core/src/geometry/point_pixel_matcher.cpp` | 19 (incl. 1 death test; comprobados con mutaciones) |
 | `PointBlock` (`mapping/`): puntos que creó un keyframe, inmutable; `firstId` + xyz (ids consecutivos: punto `i` = `firstId + i`); el vector entra por valor y se mueve (sin copia) | `core/include/ovo/core/mapping/point_block.hpp` | 8 (incl. 1 death test) |
 | `GeometricMap` (`mapping/`): bloques del mapa denso; dueño del contador de `PointId` (desde 0, consecutivos, sin reutilizar); `addBlock` asigna ids e ignora bloques vacíos; `blocks()` como `span` de solo lectura | `core/include/ovo/core/mapping/geometric_map.hpp` | 6 |
+| `Coverage` (`mapping/`): píxeles donde crear puntos; copia del Python (`k_pooling` + `downscale`): libre si en su ventana `k x k` no hay match ni píxel sin profundidad, solo en la rejilla del paso; comprueba la ventana solo en la rejilla (mismo resultado que dilatar y submuestrear); config validada con excepción | `core/include/ovo/core/mapping/coverage.hpp`, `core/src/mapping/coverage.cpp` | 13 (incl. 1 death test; comprobados con mutaciones) |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002/0003, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
 Meta actual: **mapa denso geométrico** (solo xyz). Orden, de abajo arriba:
-1. **Cobertura** (`mapping/`): marcar píxeles emparejados, dilatar `k_pooling`, recorrer libres con paso `downscale`.
-2. **`VanillaMapper`**: frustum → matcher → cobertura → desproyectar → bloque nuevo. Config: tolerancia,
+1. **`VanillaMapper`**: frustum → matcher → cobertura → desproyectar → bloque nuevo. Config: tolerancia,
    dilatación, paso. Comparado con la salida de referencia del Python.
 
 ## Decisiones pendientes (cuando toque)
+- Diferencia conocida con el Python en la cobertura: el Python no dilata en el primer frame (la dilatación está
+  dentro de `if self.max_id > 0`), así que en el frame 0 los huecos de profundidad no bloquean a sus vecinos; en
+  C++ bloquean siempre. En Replica (profundidad sintética, casi sin huecos) no debería notarse.
+- Cobertura v1 = copia de la del Python (dilatación en píxeles + submuestreo) para poder comparar mapas.
+  Ideas de mejora para la tesis, medibles (nº de puntos, huecos en bordes, efecto en instancias):
+  densidad métrica con vóxeles (hoy la densidad depende de la distancia: 1 px ≈ 1.7 mm a 1 m, ≈ 7 mm a 4 m) y
+  dilatación consciente de la profundidad (hoy un match del primer plano bloquea el fondo vecino en las siluetas).
 - Aplazados del mapa (nadie los necesita para el mapa denso): `obs` por punto (hoy solo se exporta; la semántica
   ya no lo usa), con contador aparte y mutable, fuera del bloque inmutable; y color por punto (solo visualización
   y exportación), cuando llegue el exportador PLY o Rerun.
