@@ -16,3 +16,10 @@ if(NOT TARGET Eigen3::Eigen)
         SYSTEM)
     FetchContent_MakeAvailable(eigen)
 endif()
+
+# --- stb_image (single header, adapters only): reads PNG, including 16-bit depth ---
+# No CMake project: fetch the sources pinned to a commit; adapters/ compiles the implementation.
+FetchContent_Declare(stb
+    URL https://github.com/nothings/stb/archive/2c980bb59875b0d32144a71867fbdebb2f77cd20.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(stb)

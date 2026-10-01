@@ -1,0 +1,59 @@
+@startuml 05-dense-map-cli
+' TO-BE: primer ejecutable (mapa denso de una escena de Replica). Cómo se unen las piezas.
+' Puerto = interfaz que define el dominio. Adaptador = implementación concreta (ficheros, Rerun...).
+' Estado: borrador v1.
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #F9A825
+}
+
+title Mapa denso: CLI, puertos y adaptadores (to-be v1)
+
+package "Fuera (ficheros)" {
+  file "replica.yaml\n(cam, depth_scale)" as yaml
+  folder "Replica/office0/\nresults/depth*.png\ntraj.txt" as scene
+  file "office0.rrd" as rrd
+}
+
+package "apps/ (ejecutable)" {
+  component "ovo_dense_map\n--\nmain: lee la CLI,\ncrea las piezas, bucle por frames" as app
+}
+
+package "adapters/ (implementaciones)" {
+  component "YAML config reader" as cfg
+  component "ReplicaFrameSource\n--\nPNG -> Image<float> (m)" as rfs
+  component "ReplicaPoseSource\n--\ntraj.txt -> Pose" as rps
+  component "RerunMapObserver\n(solo Linux / MSVC)" as rerun
+}
+
+package "core/ (dominio, sin I/O)" {
+  interface "FrameSource\n(puerto)" as p_frames
+  interface "PoseSource\n(puerto)" as p_poses
+  interface "MapObserver\n(puerto)" as p_obs
+  component "DenseMapper\n(Frustum, Matcher, Coverage,\nGeometricMap)" as mapper
+}
+
+yaml --> cfg : lee
+cfg --> app : DatasetConfig
+scene --> rfs : lee
+scene --> rps : lee
+
+rfs ..|> p_frames : implementa
+rps ..|> p_poses : implementa
+rerun ..|> p_obs : implementa
+rerun --> rrd : escribe
+
+app --> p_frames : frame(i)
+app --> p_poses : pose(id)
+app --> mapper : map(id, depth, pose)
+app --> p_obs : onFrame / onBlockAdded
+
+note bottom of mapper
+  El dominio no conoce ficheros, YAML ni Rerun.
+  Solo el main conoce todas las piezas concretas.
+end note
+@enduml

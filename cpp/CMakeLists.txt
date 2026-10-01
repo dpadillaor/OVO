@@ -19,6 +19,7 @@ include(CompilerWarnings)
 include(Dependencies)
 
 add_subdirectory(core)
+add_subdirectory(adapters)
 
 enable_testing()
 add_subdirectory(tests)

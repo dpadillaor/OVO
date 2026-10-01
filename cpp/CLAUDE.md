@@ -17,6 +17,15 @@ Claude no genera código ni estructura sin que se le pida explícitamente (a vec
 tests, esqueletos, refactors). Claude redacta los `.puml` y mantiene el CMake.
 Explicar **un concepto cada vez**, con ejemplos y analogías con Python; si David se pierde, parar y simplificar.
 
+**Metodología de pair programming (cada pieza nueva).** Antes de escribir código, Claude presenta una **ficha** corta
+y nada más (sin ensayos, sin alternativas salvo que haya una decisión real):
+1. **Fichero:** ruta y para qué sirve (una frase).
+2. **Qué contiene:** tipos y funciones, cada una con **inputs → output** y qué hace (una línea).
+3. **Estado interno:** miembros / variables internas y por qué.
+4. **Decisiones abiertas:** solo las que bloquean, con recomendación.
+5. **Tareas:** lista numerada de pasos pequeños (quién escribe cada uno: David o Claude), incluidos tests.
+Luego se avanza tarea a tarea: David escribe (o pide "hazlo tú"), Claude revisa y compila.
+
 **Estado y próximos pasos:** ver `docs/progress.md` (leer al empezar cada sesión).
 
 ## Arquitectura
