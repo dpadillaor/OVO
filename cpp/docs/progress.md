@@ -14,13 +14,13 @@
 | `Image<T>` (ADR-0003): dueño de un `std::vector<T>`, `width()`, `height()`, `at(u, v)` (versión que escribe y versión `const`), `data()` como puntero (se pueden cambiar los píxeles, no el tamaño); memoria fila a fila como numpy; `assert` en `at` y en tamaño 0 | `core/include/ovo/core/common/image.hpp` | 11 (incl. 3 death tests) |
 | `PointPixelMatcher`: sin estado; config (cámara por copia, tolerancia) en el constructor, que lanza si la tolerancia no es finita y > 0; `match(span de puntos, pose, profundidad)` devuelve `vector<PointPixelMatch>` `{pointIndex, u, v}` (índice en la entrada, no `PointId`). Redondeo al píxel más cercano con signo, luego límites, luego profundidad > 0 y `\|Δz\| < tolerancia`. `assert` si la profundidad no tiene el tamaño de la cámara | `core/include/ovo/core/geometry/point_pixel_matcher.hpp`, `core/src/geometry/point_pixel_matcher.cpp` | 19 (incl. 1 death test; comprobados con mutaciones) |
 | `PointBlock` (`mapping/`): puntos que creó un keyframe, inmutable; `firstId` + xyz (ids consecutivos: punto `i` = `firstId + i`); el vector entra por valor y se mueve (sin copia) | `core/include/ovo/core/mapping/point_block.hpp` | 8 (incl. 1 death test) |
+| `GeometricMap` (`mapping/`): bloques del mapa denso; dueño del contador de `PointId` (desde 0, consecutivos, sin reutilizar); `addBlock` asigna ids e ignora bloques vacíos; `blocks()` como `span` de solo lectura | `core/include/ovo/core/mapping/geometric_map.hpp` | 6 |
 | Diseño: contexto, as-is, to-be, ADR-0001/0002/0003, modelo de dominio | `docs/` | sin tests |
 
 ## Siguiente (en orden)
 Meta actual: **mapa denso geométrico** (solo xyz). Orden, de abajo arriba:
-1. **`GeometricMap`** (`mapping/`): los bloques, añadir bloque (asigna ids), recorrer.
-2. **Cobertura** (`mapping/`): marcar píxeles emparejados, dilatar `k_pooling`, recorrer libres con paso `downscale`.
-3. **`VanillaMapper`**: frustum → matcher → cobertura → desproyectar → bloque nuevo. Config: tolerancia,
+1. **Cobertura** (`mapping/`): marcar píxeles emparejados, dilatar `k_pooling`, recorrer libres con paso `downscale`.
+2. **`VanillaMapper`**: frustum → matcher → cobertura → desproyectar → bloque nuevo. Config: tolerancia,
    dilatación, paso. Comparado con la salida de referencia del Python.
 
 ## Decisiones pendientes (cuando toque)
