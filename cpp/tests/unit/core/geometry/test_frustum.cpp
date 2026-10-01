@@ -11,8 +11,9 @@
 
 using namespace ovo::core::geometry;
 
-// Simple numbers on purpose: with identity pose and depth [1, 5] the frustum is
-// 1 <= z <= 5, |x| <= 0.5z, |y| <= 0.5z (at z = 3: x and y in [-1.5, 1.5]).
+// Simple numbers on purpose: with identity pose and depth [1, 5] the frustum is about
+// 1 <= z <= 5, |x| <= 0.5z, |y| <= 0.5z (at z = 3: x and y in [-1.5, 1.5]). Exactly, the sides go
+// through the outer edge of the border pixels (-0.5 and 99.5), so x in [-0.505z, 0.495z].
 // No tests exactly on a wall: d comes from the corners with rounding, so the result is not stable.
 constexpr PinholeCamera::Params kTestParams{
     .fx = 100.f, .fy = 100.f, .cx = 50.f, .cy = 50.f, .width = 100, .height = 100};

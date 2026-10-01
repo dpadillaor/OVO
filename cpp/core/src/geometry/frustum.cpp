@@ -14,11 +14,14 @@ enum Face : std::size_t { kNear, kFar, kLeft, kRight, kTop, kBottom };
 
 // The 4 image corners, unprojected at `depth` and taken to world.
 // Order: top-left, top-right, bottom-left, bottom-right.
+// Pixel centres are on integers, so the image spans [-0.5, width - 0.5]: the outer edge of the border pixels.
 std::array<Eigen::Vector3f, 4> imageCornersInWorld(const PinholeCamera& camera, const Pose& cameraPose,
                                                    float depth) {
-    const float w = static_cast<float>(camera.width());
-    const float h = static_cast<float>(camera.height());
-    const std::array<Eigen::Vector2f, 4> pixels{{{0.f, 0.f}, {w, 0.f}, {0.f, h}, {w, h}}};
+    const float left = -0.5f;
+    const float top = -0.5f;
+    const float right = static_cast<float>(camera.width()) - 0.5f;
+    const float bottom = static_cast<float>(camera.height()) - 0.5f;
+    const std::array<Eigen::Vector2f, 4> pixels{{{left, top}, {right, top}, {left, bottom}, {right, bottom}}};
 
     std::array<Eigen::Vector3f, 4> corners;
     for (std::size_t i = 0; i < pixels.size(); ++i) {

@@ -12,8 +12,12 @@ using ovo::core::FrameId;
 using ovo::core::PointId;
 using ovo::core::mapping::GeometricMap;
 
+namespace {
+
 // n points, all at the origin: the tests here are about bookkeeping, not positions.
 std::vector<Eigen::Vector3f> points(std::size_t n) { return std::vector<Eigen::Vector3f>(n, Eigen::Vector3f::Zero()); }
+
+}  // namespace
 
 TEST(GeometricMap, StartsEmpty) {
     const GeometricMap map;

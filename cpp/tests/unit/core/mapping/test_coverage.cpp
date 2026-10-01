@@ -18,6 +18,8 @@ using ovo::core::mapping::Pixel;
 // Small 6x6 image with depth everywhere: every pixel can be checked by hand.
 constexpr std::uint32_t kSize = 6;
 
+namespace {
+
 Image<float> fullDepth() {
     Image<float> depth(kSize, kSize);
     std::fill(depth.data(), depth.data() + std::size_t{kSize} * kSize, 2.f);
@@ -27,6 +29,8 @@ Image<float> fullDepth() {
 bool contains(const std::vector<Pixel>& pixels, std::uint32_t u, std::uint32_t v) {
     return std::any_of(pixels.begin(), pixels.end(), [&](const Pixel& p) { return p.u == u && p.v == v; });
 }
+
+}  // namespace
 
 const std::vector<PointPixelMatch> kNoMatches;
 

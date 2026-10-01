@@ -25,12 +25,16 @@ constexpr PinholeCamera::Params kTestParams{
 const PinholeCamera kCamera{kTestParams};
 constexpr float kMaxDepthError = 0.03f;  // 3 cm, as in the Python config
 
+namespace {
+
 // Depth image with the same measured depth on every pixel.
 Image<float> uniformDepth(float metres) {
     Image<float> depth(kTestParams.width, kTestParams.height);
     std::fill(depth.data(), depth.data() + std::size_t{kTestParams.width} * kTestParams.height, metres);
     return depth;
 }
+
+}  // namespace
 
 // --- Construction: the tolerance is configuration, so a bad value throws (like PinholeCamera).
 
