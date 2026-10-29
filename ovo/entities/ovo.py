@@ -11,7 +11,7 @@ from .encoders import CLIPEncoder, PEEncoder
 from .mask_generator import MaskGenerator
 from .instance3d import Instance3D
 from .logger import Logger
-from .fusion import create_fusion_strategy, collect_merge_pairs, group_merge_pairs
+from .fusion import create_fusion_strategy, collect_merge_pairs, eager_partners, group_merge_pairs
 from ..utils.cooccurrence_graph import CooccurrenceGraph
 from .contest import ContestManager
 from .fusion_encoders import FusionEncoderAdapter, PEFusionAdapter, DINOFusionAdapter, SAM3FusionAdapter
@@ -851,14 +851,16 @@ class OVO:
 
         A survivor keeps absorbing inside the same pass, so from its first merge on it is
         compared against the rest with the cloud and centroid it had before absorbing. Pairs
-        involving an already merged instance are skipped.
+        involving an already merged instance are skipped. With the voxel broadphase only pairs
+        that share a cell are judged; the rest could never be accepted.
         """
         _, _, points_ins_ids = map_data
         objects, fused_objects = {}, {}
-        for i, instance1 in enumerate(objects_list):
+        candidates = self.fusion_strategy.candidate_pairs()
+        for instance1, partners in eager_partners(objects_list, candidates):
             if instance1.id in fused_objects:
                 continue
-            for instance2 in objects_list[i+1:]:
+            for instance2 in partners:
                 if instance2.id in fused_objects:
                     continue
                 elif self.fusion_strategy.same_instance(

@@ -10,7 +10,7 @@ from .criteria import (
 )
 from .voxel import VoxelGrid, VoxelSet
 from .strategy import FusionStrategy
-from .planner import collect_merge_pairs, group_merge_pairs
+from .planner import collect_merge_pairs, eager_partners, group_merge_pairs
 from .factory import create_fusion_strategy
 
 __all__ = [
@@ -26,6 +26,7 @@ __all__ = [
     "VoxelSet",
     "FusionStrategy",
     "collect_merge_pairs",
+    "eager_partners",
     "group_merge_pairs",
     "create_fusion_strategy",
 ]

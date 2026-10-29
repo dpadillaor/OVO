@@ -1,11 +1,34 @@
 """Pair selection for classic fusion: which instances end up merged, and into whom.
 
 Two policies share this module. The eager one lives in `ovo.py` because it mutates the map
-while it decides. The deferred one is here in full: it judges every pair against untouched
-geometry, then resolves the accepted pairs into groups that are applied afterwards.
+while it decides; only the choice of which pairs it judges is here (`eager_partners`). The
+deferred one is here in full: it judges every pair against untouched geometry, then resolves
+the accepted pairs into groups that are applied afterwards.
 """
 
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Set, Tuple
+
+
+def eager_partners(objects_list: Sequence, candidates: Optional[Set[Tuple[int, int]]]) -> Iterator[Tuple[object, List]]:
+    """Yield (instance, later instances to judge it against) in `objects_list` order.
+
+    With no broadphase (`candidates` None) that is every later instance, as the eager loop
+    always did. Otherwise only the later instances it shares a candidate pair with, still in
+    list order: a pair outside `candidates` can never be accepted, so skipping it changes no
+    merge, and the eager skip of already merged instances keeps working unchanged.
+    """
+    if candidates is None:
+        for i, instance in enumerate(objects_list):
+            yield instance, objects_list[i + 1:]
+        return
+
+    neighbours: Dict[int, Set[int]] = {}
+    for a, b in candidates:
+        neighbours.setdefault(a, set()).add(b)
+        neighbours.setdefault(b, set()).add(a)
+    for i, instance in enumerate(objects_list):
+        near = neighbours.get(instance.id)
+        yield instance, [other for other in objects_list[i + 1:] if near and other.id in near]
 
 
 def collect_merge_pairs(objects_list: Sequence, obj_pcds: Dict[int, list], strategy) -> List[Tuple[int, int]]:

@@ -11,6 +11,7 @@ from ovo.entities.fusion import (
     CentroidDistanceCriterion,
     PointOverlapOldCriterion,
     collect_merge_pairs,
+    eager_partners,
 )
 
 
@@ -75,6 +76,39 @@ class TestBroadphaseEqualsBruteForce:
         # candidate_pairs must never include a pair with an isolated instance (4 or 5)
         cands = strat.candidate_pairs()
         assert all(4 not in p and 5 not in p for p in cands)
+
+
+def _eager_fused(strategy, objects_list, obj_pcds, candidates):
+    """The `_fuse_eager` loop without the map side effects: {absorbed_id: survivor_id}."""
+    fused = {}
+    for a, partners in eager_partners(objects_list, candidates):
+        if a.id in fused:
+            continue
+        for b in partners:
+            if b.id not in fused and strategy.same_instance(a, b, obj_pcds[a.id], obj_pcds[b.id]):
+                fused[b.id] = a.id
+    return fused
+
+
+class TestEagerBroadphase:
+    def test_same_merges_as_brute_force(self):
+        objs = [SimpleNamespace(id=i) for i in (1, 2, 3, 4, 5)]
+        pcds = {1: _block(0.00), 2: _block(0.50), 3: _block(0.60), 4: _block(20.0), 5: _block(40.0)}
+        strat = FusionStrategy([VoxelOverlapCriterion(VoxelGrid(0.05))])
+        strat.prepare(objs, pcds)
+        bp = _eager_fused(strat, objs, pcds, strat.candidate_pairs())
+        bf = _eager_fused(strat, objs, pcds, None)
+        assert bp == bf and bp  # identical and non-trivial
+
+    def test_partners_keep_list_order_and_skip_far_instances(self):
+        objs = [SimpleNamespace(id=i) for i in (7, 3, 9)]
+        partners = {a.id: [b.id for b in bs] for a, bs in eager_partners(objs, {(3, 7), (7, 9)})}
+        assert partners == {7: [3, 9], 3: [], 9: []}
+
+    def test_no_candidates_means_every_later_instance(self):
+        objs = [SimpleNamespace(id=i) for i in (1, 2, 3)]
+        partners = {a.id: [b.id for b in bs] for a, bs in eager_partners(objs, None)}
+        assert partners == {1: [2, 3], 2: [3], 3: []}
 
 
 class TestGuardFallsBackToBruteForce:
