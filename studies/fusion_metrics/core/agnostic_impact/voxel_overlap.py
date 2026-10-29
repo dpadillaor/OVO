@@ -16,11 +16,11 @@ from itertools import combinations
 import numpy as np
 import torch
 
-from ovo.entities.fusion.voxel import VoxelSet
+from ovo.entities.fusion.voxel import VoxelGrid, VoxelSet
 
 
 def overlapping_pairs(ckpt_path: str | pathlib.Path, voxel_size: float = 0.05,
-                      th: float = 0.5, origin: float = 0.0) -> set[frozenset[int]]:
+                      th: float = 0.5) -> set[frozenset[int]]:
     """Instance-id pairs whose pre-fusion clouds overlap by voxel max-containment >= ``th``.
 
     Returns a set of ``frozenset({i, j})`` so lookup is order-independent.
@@ -30,12 +30,13 @@ def overlapping_pairs(ckpt_path: str | pathlib.Path, voxel_size: float = 0.05,
     xyz = torch.as_tensor(np.asarray(mp["xyz"], dtype=np.float32))
     obj = torch.as_tensor(np.asarray(mp["obj_ids"], dtype=np.int64).reshape(-1))
 
+    grid = VoxelGrid(voxel_size)
     index: dict[int, VoxelSet] = {}
     cell_to_ins: dict[int, set[int]] = {}
     for i in torch.unique(obj).tolist():
         if i < 0:
             continue
-        vi = VoxelSet.build(xyz[obj == i], voxel_size, origin)
+        vi = VoxelSet(xyz[obj == i], grid)
         index[i] = vi
         for c in vi.cells.tolist():
             cell_to_ins.setdefault(c, set()).add(i)

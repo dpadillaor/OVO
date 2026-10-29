@@ -17,6 +17,12 @@ _BIAS = 1 << (_BITS - 1)
 _MASK = (1 << _BITS) - 1
 
 
+def _pack(ijk: torch.Tensor) -> torch.Tensor:
+    """(N, 3) int64 cell coords -> (N,) int64 keys."""
+    biased = (ijk + _BIAS).clamp(0, _MASK)
+    return (biased[:, 0] << (2 * _BITS)) | (biased[:, 1] << _BITS) | biased[:, 2]
+
+
 @dataclass(frozen=True)
 class VoxelGrid:
     """An implicit, unbounded voxel grid: 3D space split into cubic cells of edge `size` (m),
@@ -45,24 +51,24 @@ class VoxelGrid:
 class VoxelSet:
     """The set of grid cells a point cloud occupies, as sorted unique int64 keys."""
 
-    def __init__(self, cells: torch.Tensor):
-        self.cells = cells
-
-    @classmethod
-    def build(cls, points: torch.Tensor, size: float, origin: float = 0.0) -> "VoxelSet":
-        """Quantize `points` to occupied cell keys on the grid (size, origin). Stays on device."""
+    def __init__(self, points: torch.Tensor, grid: VoxelGrid):
+        self.grid = grid
         if points.numel() == 0:
-            return cls(points.new_empty(0, dtype=torch.int64))
-        q = torch.floor((points - origin) / size).to(torch.int64) + _BIAS
-        q = q.clamp_(0, _MASK)
-        key = (q[:, 0] << (2 * _BITS)) | (q[:, 1] << _BITS) | q[:, 2]
-        return cls(torch.unique(key))
+            self.cells = points.new_empty(0, dtype=torch.int64)
+            return
+        origin = torch.as_tensor(grid.origin, dtype=points.dtype, device=points.device)
+        cell_ijk = torch.floor((points - origin) / grid.size).to(torch.int64)
+        # NOTE: density is dropped here: a cell counts once however many points fall in it.
+        # To keep it, `torch.unique(..., return_counts=True)` also returns points per cell.
+        self.cells = torch.unique(_pack(cell_ijk))
 
     def __len__(self) -> int:
         return int(self.cells.numel())
 
     def shared(self, other: "VoxelSet") -> int:
-        """Number of cells occupied by both indices (|A n B|)."""
+        """Number of cells occupied by both sets (|A n B|)."""
+        if self.grid != other.grid:
+            raise ValueError(f"cannot compare sets on different grids: {self.grid} vs {other.grid}")
         if len(self) == 0 or len(other) == 0:
             return 0
         return int(torch.isin(self.cells, other.cells).sum())

@@ -12,6 +12,7 @@ from .criteria import (
     VoxelOverlapCriterion,
 )
 from .strategy import FusionStrategy
+from .voxel import VoxelGrid
 
 
 _DEFAULT_CHAINS: Dict[str, List[str]] = {
@@ -46,10 +47,9 @@ def _build_criterion(name: str, config: Dict[str, Any], feature_attr: Optional[s
         return PointOverlapOldCriterion(config.get("th_points", 0.1))
     if name == "overlap_voxel":
         return VoxelOverlapCriterion(
-            config.get("voxel_size", 0.05),
+            VoxelGrid.from_cfg(config),
             config.get("voxel_th_geom", 0.5),
             config.get("voxel_th_sem", 0.2),
-            config.get("voxel_origin", 0.0),
         )
     raise ValueError(f"Unknown criterion: {name!r}. Valid: cooccurrence, centroid, aabb, cos_sim, overlap, overlap_old, overlap_voxel")
 

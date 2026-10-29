@@ -4,7 +4,7 @@ from typing import Tuple, Optional
 
 from ...utils.instance_utils import compute_pcd_overlap, compute_pcd_old_overlap, compute_centroid_distance
 from ...utils.cooccurrence_graph import CooccurrenceGraph
-from .voxel import VoxelSet
+from .voxel import VoxelGrid, VoxelSet
 
 import logging
 import torch
@@ -175,16 +175,15 @@ class VoxelOverlapCriterion(Criterion):
     """
     name = "overlap_voxel"
 
-    def __init__(self, voxel_size: float, th_geom: float = 0.5, th_sem: float = 0.2, origin: float = 0.0):
-        self.voxel_size = voxel_size
+    def __init__(self, grid: VoxelGrid, th_geom: float = 0.5, th_sem: float = 0.2):
+        self.grid = grid
         self.th_geom = th_geom
         self.th_sem = th_sem
-        self.origin = origin
         self._index = {}
 
     def prepare(self, objects_list, obj_pcds) -> None:
         self._index = {
-            inst.id: VoxelSet.build(obj_pcds[inst.id], self.voxel_size, self.origin)
+            inst.id: VoxelSet(obj_pcds[inst.id], self.grid)
             for inst in objects_list
         }
 

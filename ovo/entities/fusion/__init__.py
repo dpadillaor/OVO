@@ -8,7 +8,7 @@ from .criteria import (
     PointOverlapOldCriterion,
     VoxelOverlapCriterion,
 )
-from .voxel import VoxelSet
+from .voxel import VoxelGrid, VoxelSet
 from .strategy import FusionStrategy
 from .planner import collect_merge_pairs, group_merge_pairs
 from .factory import create_fusion_strategy
@@ -22,6 +22,7 @@ __all__ = [
     "PointOverlapCriterion",
     "PointOverlapOldCriterion",
     "VoxelOverlapCriterion",
+    "VoxelGrid",
     "VoxelSet",
     "FusionStrategy",
     "collect_merge_pairs",
