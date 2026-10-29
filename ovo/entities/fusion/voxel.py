@@ -6,6 +6,8 @@ integer cell key. Overlap is then integer-set intersection, not nearest-neighbou
 density collapses (many points in a cell count once) and there is no KD-tree, no tolerance.
 """
 
+from dataclasses import dataclass
+
 import torch
 
 # Bit layout: 21 bits per axis, biased so negative cell indices stay non-negative.
@@ -13,6 +15,31 @@ import torch
 _BITS = 21
 _BIAS = 1 << (_BITS - 1)
 _MASK = (1 << _BITS) - 1
+
+
+@dataclass(frozen=True)
+class VoxelGrid:
+    """An implicit, unbounded voxel grid: 3D space split into cubic cells of edge `size` (m),
+    with cell boundaries at `origin + k * size` along each axis (k any integer).
+
+    Nothing is allocated: cells exist only as keys of the sets built on it.
+    """
+    size: float
+    origin: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+    def __post_init__(self):
+        if self.size <= 0:
+            raise ValueError(f"voxel size must be > 0, got {self.size}")
+        if len(self.origin) != 3:
+            raise ValueError(f"voxel origin must have 3 values (x, y, z), got {self.origin}")
+
+    @classmethod
+    def from_cfg(cls, cfg: dict) -> "VoxelGrid":
+        """Build from the fusion config (`voxel_size`, `voxel_origin` as a 3-item list)."""
+        size = float(cfg.get("voxel_size", 0.05))
+        x, y, z = cfg.get("voxel_origin", (0.0, 0.0, 0.0))
+        origin = (float(x), float(y), float(z))
+        return cls(size, origin)
 
 
 class VoxelSet:
