@@ -1,26 +1,32 @@
-"""Sparse voxel index for geometric overlap between instances.
+"""Point clouds as sets of occupied voxel cells, for fast geometric overlap.
 
-An instance's cloud is quantized to the set of occupied cells on a grid shared by every
-instance (same size, same origin), so two clouds share a voxel iff they produce the same
-integer cell key. Overlap is then integer-set intersection, not nearest-neighbour search:
-density collapses (many points in a cell count once) and there is no KD-tree, no tolerance.
+- VoxelGrid: the cell layout (edge size and origin). Pure description, nothing allocated.
+- VoxelSet: the cells one cloud occupies on a grid, stored as unique int64 keys.
+
+Each cell (i, j, k) is packed into a single int64 key (21 bits per axis), so a set is a
+flat 1D tensor and torch.unique / torch.isin do all the work, on GPU too. Two clouds on the
+same grid occupy the same cell iff they produce the same key, so overlap is the intersection
+of their key sets. Density collapses: many points in a cell count once.
 """
 
 from dataclasses import dataclass
 
 import torch
 
-# Bit layout: 21 bits per axis, biased so negative cell indices stay non-negative.
-# Range +/-2^20 cells per axis (>=50 km at 5 cm), which no real scene approaches.
-_BITS = 21
-_BIAS = 1 << (_BITS - 1)
-_MASK = (1 << _BITS) - 1
+# Key encoding used by _pack. Each axis covers +/-_AXIS_OFFSET cells around the grid origin,
+# i.e. +/-_AXIS_OFFSET * grid.size metres (about +/-52 km at 5 cm).
+_AXIS_BITS = 21                         # bits per axis; 3 * 21 = 63, so the int64 sign bit stays 0
+_AXIS_OFFSET = 1 << (_AXIS_BITS - 1)    # half the axis range: shifts cells -2^20..2^20-1 to 0..2^21-1
+_AXIS_MAX = (1 << _AXIS_BITS) - 1       # largest offset value one axis can hold (21 ones in binary)
 
 
 def _pack(ijk: torch.Tensor) -> torch.Tensor:
-    """(N, 3) int64 cell coords -> (N,) int64 keys."""
-    biased = (ijk + _BIAS).clamp(0, _MASK)
-    return (biased[:, 0] << (2 * _BITS)) | (biased[:, 1] << _BITS) | biased[:, 2]
+    """Pack (N, 3) int64 cell coords into (N,) int64 keys: i in the high bits, then j, then k.
+
+    Out-of-range coords are clamped to the edge cell, not rejected.
+    """
+    offset_ijk = (ijk + _AXIS_OFFSET).clamp(0, _AXIS_MAX)
+    return (offset_ijk[:, 0] << (2 * _AXIS_BITS)) | (offset_ijk[:, 1] << _AXIS_BITS) | offset_ijk[:, 2]
 
 
 @dataclass(frozen=True)
