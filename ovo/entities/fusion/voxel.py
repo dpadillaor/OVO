@@ -78,3 +78,15 @@ class VoxelSet:
         if len(self) == 0 or len(other) == 0:
             return 0
         return int(torch.isin(self.cells, other.cells).sum())
+
+    def containment(self, other: "VoxelSet") -> float:
+        """Larger containment of the two sets, in [0, 1]. 0 if either set is empty.
+
+        `shared` is the same count from either side, so dividing it by the smaller set gives the
+        larger containment: a small cloud lying inside a bigger one scores 1.
+        """
+        # NOTE: if density were taken into account (cells weighted by point count), the shared
+        # weight would differ per side, so both containments would have to be computed to keep the max.
+        shared = self.shared(other)  # first, so a grid mismatch raises even on empty sets
+        smaller = min(len(self), len(other))
+        return shared / smaller if smaller else 0.0

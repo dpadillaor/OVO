@@ -39,6 +39,13 @@ class TestVoxelSet:
         assert len(idx) == 0
         assert idx.shared(VoxelSet(_pts([[0, 0, 0]]), VoxelGrid(0.05))) == 0
 
+    def test_containment_is_the_larger_one_and_order_independent(self):
+        grid = VoxelGrid(0.05)
+        big = VoxelSet(_pts([[x / 100, 0.0, 0.0] for x in range(0, 50)]), grid)       # cells 0..9
+        fragment = VoxelSet(_pts([[x / 100, 0.0, 0.0] for x in range(10, 20)]), grid)  # cells 2..3
+        assert big.containment(fragment) == fragment.containment(big) == 1.0
+        assert big.containment(VoxelSet(torch.empty(0, 3), grid)) == 0.0
+
     def test_sets_on_different_grids_cannot_be_compared(self):
         a = VoxelSet(_pts([[0.0, 0.0, 0.0]]), VoxelGrid(0.05))
         b = VoxelSet(_pts([[0.0, 0.0, 0.0]]), VoxelGrid(0.10))

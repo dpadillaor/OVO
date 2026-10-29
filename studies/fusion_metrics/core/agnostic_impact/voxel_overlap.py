@@ -48,7 +48,6 @@ def overlapping_pairs(ckpt_path: str | pathlib.Path, voxel_size: float = 0.05,
 
     out: set[frozenset[int]] = set()
     for a, b in candidates:
-        denom = min(len(index[a]), len(index[b]))
-        if denom and index[a].shared(index[b]) / denom >= th:
+        if index[a].containment(index[b]) >= th:
             out.add(frozenset((a, b)))
     return out

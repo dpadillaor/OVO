@@ -219,8 +219,7 @@ class VoxelOverlapCriterion(Criterion):
 
     def check(self, i1, i2, p1, p2, ctx):
         voxels1, voxels2 = self._voxels_by_instance[i1.id], self._voxels_by_instance[i2.id]
-        denom = min(len(voxels1), len(voxels2))
-        overlap = voxels1.shared(voxels2) / denom if denom else 0.0
+        overlap = voxels1.containment(voxels2)
         ctx["p_dist"] = float(overlap)
         cos_sim = ctx.get("cos_sim")
         centroid_dist = ctx.get("centroid_dist")
