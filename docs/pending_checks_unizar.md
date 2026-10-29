@@ -12,7 +12,24 @@ experimentos). Marcar al comprobar y borrar cuando ya no aporten.
       ```
       En local solo aparece leído en `ovo/entities/fusion/factory.py` con default `0.0`.
       Si sale vacío, se puede quitar `origin` de `VoxelGrid`.
+      **Ojo:** antes era un escalar y ahora `VoxelGrid.from_cfg` espera una lista de 3
+      (`[x, y, z]`). Si algún config tiene `voxel_origin: 0.0`, peta al arrancar: pasarlo a lista.
 - [ ] **Pasar los tests de voxel** antes de mergear la rama a `study/contest-realtime-online`:
       ```bash
       conda run -n ovo2 python -m pytest tests/unit/test_fusion_voxel.py tests/unit/test_fusion_broadphase.py tests/unit/test_fusion_planner.py tests/unit/test_fusion_geometry_prepare.py
+      ```
+      En local (Windows, torch CPU, `open3d` simulado) ya pasan los 29. Falta repetirlo en `ovo2`
+      con el `open3d` real.
+- [ ] **Mismo resultado que antes del refactor, en GPU.** El refactor no debe cambiar ninguna
+      decisión de fusión. Repetir un mismo replay de fusión con `overlap_voxel` en la cadena
+      (`fusion_criteria`) en `c6ef2f6` (antes del refactor) y en `refactor/voxel-set`, y comparar
+      las decisiones (`fusion_decisions_eval.csv` / verdicts): tienen que salir idénticas.
+      En local (CPU) ya se comprobó con nubes aleatorias (varios `size`/`origin`, negativos,
+      float64, fuera de rango) que el código viejo y el nuevo dan las mismas celdas y el mismo
+      `shared`. Falta CUDA y datos reales.
+- [ ] **Eval con `--voxel-overlap`.** `overlapping_pairs` ya no acepta `origin`. Correr
+      `studies/fusion_metrics` con `--voxel-overlap` sobre un checkpoint y comprobar que da los
+      mismos pares que en `c6ef2f6`. Buscar también si algún script lo llamaba con `origin=`:
+      ```bash
+      grep -rn "overlapping_pairs" scripts studies
       ```
