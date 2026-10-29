@@ -1,6 +1,38 @@
+from dataclasses import dataclass
+
 import open3d as o3d
 import torch
 import numpy as np
+
+from ..entities.voxel import VoxelSet
+
+
+@dataclass(frozen=True)
+class VoxelFusionThresholds:
+    """Thresholds for deciding whether two instances are the same, by voxel overlap."""
+    min_cos_sim: float = 0.81
+    strong_overlap: float = 0.5
+    weak_overlap: float = 0.2
+
+    @classmethod
+    def from_cfg(cls, cfg: dict) -> "VoxelFusionThresholds":
+        """Build from the `semantic` config section (`th_cossim`, `voxel_th_geom`, `voxel_th_sem`)."""
+        return cls(
+            min_cos_sim=float(cfg.get("th_cossim", 0.81)),
+            strong_overlap=float(cfg.get("voxel_th_geom", 0.5)),
+            weak_overlap=float(cfg.get("voxel_th_sem", 0.2)),
+        )
+
+
+def same_instance_by_voxel(instance1, instance2, voxels1: VoxelSet, voxels2: VoxelSet, th: VoxelFusionThresholds) -> bool:
+    """Same as `same_instance`, but geometry is voxel overlap and there is no centroid check."""
+    cos_sim = torch.nn.functional.cosine_similarity(instance1.clip_feature[0], instance2.clip_feature[0], dim=0).item()
+    if cos_sim < th.min_cos_sim:
+        return False
+
+    overlap = voxels1.containment(voxels2)
+    return overlap > th.strong_overlap or (cos_sim > 0.9 and overlap > th.weak_overlap)
+
 
 def same_instance(instance1, instance2, points_centroid1, points_centroid2, th_centroid, th_cossim, th_points):
     ## Check centroids
