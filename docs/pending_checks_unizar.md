@@ -23,7 +23,9 @@ experimentos). Marcar al comprobar y borrar cuando ya no aporten.
 - [ ] **Mismo resultado que antes del refactor, en GPU.** El refactor no debe cambiar ninguna
       decisión de fusión. Repetir un mismo replay de fusión con `overlap_voxel` en la cadena
       (`fusion_criteria`) en `c6ef2f6` (antes del refactor) y en `refactor/voxel-set`, y comparar
-      las decisiones (`fusion_decisions_eval.csv` / verdicts): tienen que salir idénticas.
+      las decisiones (`fusion_decisions_eval.csv` / verdicts): las fusiones aceptadas tienen que
+      salir idénticas. Ojo: desde el broadphase en eager (ver abajo) habrá menos filas `REJECTED`,
+      porque las parejas sin celda compartida ya no se juzgan.
       En local (CPU) ya se comprobó con nubes aleatorias (varios `size`/`origin`, negativos,
       float64, fuera de rango) que el código viejo y el nuevo dan las mismas celdas y el mismo
       `shared`. Falta CUDA y datos reales.
@@ -33,3 +35,9 @@ experimentos). Marcar al comprobar y borrar cuando ya no aporten.
       ```bash
       grep -rn "overlapping_pairs" scripts studies
       ```
+- [ ] **Broadphase también en eager.** Antes solo `deferred_fusion: true` usaba el broadphase;
+      `_fuse_eager` comparaba todas las parejas aunque la cadena fuera `[cos_sim, overlap_voxel]`.
+      Comprobar en un replay eager con voxel: mismas fusiones que antes del arreglo, menos
+      `n_pairs_evaluated` y menor `t_fusion`. Los tiempos de runs eager+voxel antiguos se midieron
+      sin broadphase: no compararlos tal cual con los nuevos. Mirar qué `deferred_fusion` y
+      `fusion_criteria` tenían los runs con voxel ya hechos.
