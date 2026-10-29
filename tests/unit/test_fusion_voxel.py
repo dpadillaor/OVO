@@ -4,39 +4,39 @@ from types import SimpleNamespace
 
 import torch
 
-from ovo.entities.fusion import VoxelIndex, VoxelOverlapCriterion
+from ovo.entities.fusion import VoxelSet, VoxelOverlapCriterion
 
 
 def _pts(coords):
     return torch.tensor(coords, dtype=torch.float32)
 
 
-class TestVoxelIndex:
+class TestVoxelSet:
     def test_points_in_the_same_cube_collapse_to_one_cell(self):
         # three points within the same 0.1 m cube
-        idx = VoxelIndex.build(_pts([[0.01, 0.01, 0.01], [0.05, 0.02, 0.09], [0.09, 0.09, 0.01]]), size=0.1)
+        idx = VoxelSet.build(_pts([[0.01, 0.01, 0.01], [0.05, 0.02, 0.09], [0.09, 0.09, 0.01]]), size=0.1)
         assert len(idx) == 1
 
     def test_shared_grid_makes_the_same_cube_the_same_key(self):
-        a = VoxelIndex.build(_pts([[1.02, 0.51, -0.21]]), size=0.05)
-        b = VoxelIndex.build(_pts([[1.04, 0.53, -0.23]]), size=0.05)  # 2 cm away, same cube
+        a = VoxelSet.build(_pts([[1.02, 0.51, -0.21]]), size=0.05)
+        b = VoxelSet.build(_pts([[1.04, 0.53, -0.23]]), size=0.05)  # 2 cm away, same cube
         assert a.shared(b) == 1
 
     def test_adjacent_cubes_do_not_share(self):
-        a = VoxelIndex.build(_pts([[0.02, 0.0, 0.0]]), size=0.05)
-        b = VoxelIndex.build(_pts([[0.08, 0.0, 0.0]]), size=0.05)  # next cube over
+        a = VoxelSet.build(_pts([[0.02, 0.0, 0.0]]), size=0.05)
+        b = VoxelSet.build(_pts([[0.08, 0.0, 0.0]]), size=0.05)  # next cube over
         assert a.shared(b) == 0
 
     def test_negative_coordinates_pack_without_collision(self):
-        a = VoxelIndex.build(_pts([[-1.23, -0.5, -2.0]]), size=0.05)
-        b = VoxelIndex.build(_pts([[5.0, 3.0, 1.5]]), size=0.05)
+        a = VoxelSet.build(_pts([[-1.23, -0.5, -2.0]]), size=0.05)
+        b = VoxelSet.build(_pts([[5.0, 3.0, 1.5]]), size=0.05)
         assert a.shared(b) == 0
         assert len(a) == 1 and len(b) == 1
 
     def test_empty_cloud_is_empty(self):
-        idx = VoxelIndex.build(torch.empty(0, 3), size=0.05)
+        idx = VoxelSet.build(torch.empty(0, 3), size=0.05)
         assert len(idx) == 0
-        assert idx.shared(VoxelIndex.build(_pts([[0, 0, 0]]), size=0.05)) == 0
+        assert idx.shared(VoxelSet.build(_pts([[0, 0, 0]]), size=0.05)) == 0
 
 
 def _instances(*ids):

@@ -15,14 +15,14 @@ _BIAS = 1 << (_BITS - 1)
 _MASK = (1 << _BITS) - 1
 
 
-class VoxelIndex:
+class VoxelSet:
     """The set of grid cells a point cloud occupies, as sorted unique int64 keys."""
 
     def __init__(self, cells: torch.Tensor):
         self.cells = cells
 
     @classmethod
-    def build(cls, points: torch.Tensor, size: float, origin: float = 0.0) -> "VoxelIndex":
+    def build(cls, points: torch.Tensor, size: float, origin: float = 0.0) -> "VoxelSet":
         """Quantize `points` to occupied cell keys on the grid (size, origin). Stays on device."""
         if points.numel() == 0:
             return cls(points.new_empty(0, dtype=torch.int64))
@@ -34,7 +34,7 @@ class VoxelIndex:
     def __len__(self) -> int:
         return int(self.cells.numel())
 
-    def shared(self, other: "VoxelIndex") -> int:
+    def shared(self, other: "VoxelSet") -> int:
         """Number of cells occupied by both indices (|A n B|)."""
         if len(self) == 0 or len(other) == 0:
             return 0

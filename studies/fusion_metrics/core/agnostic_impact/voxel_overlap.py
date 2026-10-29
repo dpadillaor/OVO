@@ -1,7 +1,7 @@
 """Voxel-overlap pair filter.
 
 Decides which instance pairs *physically superpose* from the pre-fusion
-checkpoint, using the real fusion ``VoxelIndex`` (same quantization as the
+checkpoint, using the real fusion ``VoxelSet`` (same quantization as the
 ``overlap_voxel`` criterion). A cell->instances broadphase enumerates only the
 pairs that share a cell, then overlap = ``shared / min(|cells_a|, |cells_b|)``
 (max-containment: a fragment fully inside a bigger instance scores ~1). The
@@ -16,7 +16,7 @@ from itertools import combinations
 import numpy as np
 import torch
 
-from ovo.entities.fusion.voxel import VoxelIndex
+from ovo.entities.fusion.voxel import VoxelSet
 
 
 def overlapping_pairs(ckpt_path: str | pathlib.Path, voxel_size: float = 0.05,
@@ -30,12 +30,12 @@ def overlapping_pairs(ckpt_path: str | pathlib.Path, voxel_size: float = 0.05,
     xyz = torch.as_tensor(np.asarray(mp["xyz"], dtype=np.float32))
     obj = torch.as_tensor(np.asarray(mp["obj_ids"], dtype=np.int64).reshape(-1))
 
-    index: dict[int, VoxelIndex] = {}
+    index: dict[int, VoxelSet] = {}
     cell_to_ins: dict[int, set[int]] = {}
     for i in torch.unique(obj).tolist():
         if i < 0:
             continue
-        vi = VoxelIndex.build(xyz[obj == i], voxel_size, origin)
+        vi = VoxelSet.build(xyz[obj == i], voxel_size, origin)
         index[i] = vi
         for c in vi.cells.tolist():
             cell_to_ins.setdefault(c, set()).add(i)

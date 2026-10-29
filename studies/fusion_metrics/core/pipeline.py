@@ -220,7 +220,7 @@ def evaluate_scene(exp_path: pathlib.Path, scene: str, ckpt: str | None = None,
               f"projection: {sorted(skipped_objects)}")
 
     # Voxel-overlap restriction: keep only pairs whose pre-fusion clouds physically
-    # superpose (real fusion VoxelIndex). Scores the decision where it matters
+    # superpose (real fusion VoxelSet). Scores the decision where it matters
     # (overlapping instances), not the mostly-trivial separate universe. Verdicts and
     # the eval CSV are filtered; the AP impact below stays over ALL merges (it measures
     # the real post-fusion map, independent of which pairs we score).
