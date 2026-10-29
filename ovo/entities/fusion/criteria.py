@@ -179,10 +179,10 @@ class VoxelOverlapCriterion(Criterion):
         self.grid = grid
         self.th_geom = th_geom
         self.th_sem = th_sem
-        self._index = {}
+        self._voxels_by_instance = {}
 
     def prepare(self, objects_list, obj_pcds) -> None:
-        self._index = {
+        self._voxels_by_instance = {
             inst.id: VoxelSet(obj_pcds[inst.id], self.grid)
             for inst in objects_list
         }
@@ -192,14 +192,14 @@ class VoxelOverlapCriterion(Criterion):
 
         A pair that shares no cell has zero overlap, so this criterion can never accept it;
         enumerating only shared-cell pairs is therefore lossless and replaces the O(N^2) loop.
-        Built from the cells already in `_index`: concatenate every (cell, instance), sort by
-        cell, and within each run of equal cells emit all instance pairs.
+        Built from the cells already in `_voxels_by_instance`: concatenate every (cell, instance),
+        sort by cell, and within each run of equal cells emit all instance pairs.
         """
         keys, ids = [], []
-        for inst_id, idx in self._index.items():
-            if len(idx):
-                keys.append(idx.cells)
-                ids.append(torch.full_like(idx.cells, inst_id))
+        for inst_id, voxels in self._voxels_by_instance.items():
+            if len(voxels):
+                keys.append(voxels.cells)
+                ids.append(torch.full_like(voxels.cells, inst_id))
         if not keys:
             return set()
         keys = torch.cat(keys)
@@ -218,19 +218,19 @@ class VoxelOverlapCriterion(Criterion):
         return pairs
 
     def check(self, i1, i2, p1, p2, ctx):
-        a, b = self._index[i1.id], self._index[i2.id]
-        denom = min(len(a), len(b))
-        vox = a.shared(b) / denom if denom else 0.0
-        ctx["p_dist"] = float(vox)
+        voxels1, voxels2 = self._voxels_by_instance[i1.id], self._voxels_by_instance[i2.id]
+        denom = min(len(voxels1), len(voxels2))
+        overlap = voxels1.shared(voxels2) / denom if denom else 0.0
+        ctx["p_dist"] = float(overlap)
         cos_sim = ctx.get("cos_sim")
         centroid_dist = ctx.get("centroid_dist")
         shared_kfs = ctx.get("shared_kfs")
 
-        geom = vox > self.th_geom  # rama A: solape geométrico fuerte
-        sem = cos_sim is not None and cos_sim > 0.9 and vox > self.th_sem  # rama B: semántica + solape débil
+        geom = overlap > self.th_geom  # rama A: solape geométrico fuerte
+        sem = cos_sim is not None and cos_sim > 0.9 and overlap > self.th_sem  # rama B: semántica + solape débil
         if geom or sem:
             mode = "A" if geom and not sem else "B" if sem and not geom else "AB"
-            logger.debug("ACCEPTED i1=%s i2=%s | mode=%s cos_sim=%s centroid_dist=%s vox=%.3f (overlap_voxel)", i1.id, i2.id, mode, cos_sim, centroid_dist, vox)
-            return True, {"result": "ACCEPTED", "accept_mode": mode, "i1": i1.id, "i2": i2.id, "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(vox), "shared_kfs": shared_kfs}
-        logger.debug("REJECTED i1=%s i2=%s | overlap_voxel: vox=%.3f (cos_sim=%s centroid_dist=%s)", i1.id, i2.id, vox, cos_sim, centroid_dist)
-        return False, {"result": "REJECTED", "i1": i1.id, "i2": i2.id, "reason": "overlap_voxel", "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(vox), "shared_kfs": shared_kfs}
+            logger.debug("ACCEPTED i1=%s i2=%s | mode=%s cos_sim=%s centroid_dist=%s vox=%.3f (overlap_voxel)", i1.id, i2.id, mode, cos_sim, centroid_dist, overlap)
+            return True, {"result": "ACCEPTED", "accept_mode": mode, "i1": i1.id, "i2": i2.id, "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(overlap), "shared_kfs": shared_kfs}
+        logger.debug("REJECTED i1=%s i2=%s | overlap_voxel: vox=%.3f (cos_sim=%s centroid_dist=%s)", i1.id, i2.id, overlap, cos_sim, centroid_dist)
+        return False, {"result": "REJECTED", "i1": i1.id, "i2": i2.id, "reason": "overlap_voxel", "centroid_dist": centroid_dist, "cos_sim": cos_sim, "p_dist": float(overlap), "shared_kfs": shared_kfs}
