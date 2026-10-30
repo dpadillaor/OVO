@@ -41,3 +41,16 @@ experimentos). Marcar al comprobar y borrar cuando ya no aporten.
       `n_pairs_evaluated` y menor `t_fusion`. Los tiempos de runs eager+voxel antiguos se midieron
       sin broadphase: no compararlos tal cual con los nuevos. Mirar qué `deferred_fusion` y
       `fusion_criteria` tenían los runs con voxel ya hechos.
+- [ ] **Tabla plana de celdas en GPU (decidir antes de abrir la PR de voxel).** Hoy el broadphase
+      encuentra las parejas y luego cada una vuelve a calcular su `shared` con un `isin` (una espera
+      a la GPU por pareja). La alternativa ordena todas las celdas una vez y saca el `shared` de
+      todas las parejas en la misma pasada. Correr:
+      ```bash
+      conda run -n ovo2 python scripts/bench_voxel_pair_table.py --device cuda
+      ```
+      El script ya comprueba que los dos métodos dan las mismas parejas, el mismo `shared` y las
+      mismas fusiones. En local (CPU) fue así en todos los casos, y la tabla salió 2-9x más rápida
+      (más cuanto más instancias: 187 ms frente a 21 ms con 500). Si en GPU también gana, cambiar
+      el broadphase del fork a la tabla y llevar esa versión a la PR. Mirar además cuántas parejas
+      candidatas por pasada salen en un run real (`n_pairs_evaluated`), que es lo que decide si
+      compensa.
