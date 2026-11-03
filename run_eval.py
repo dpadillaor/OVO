@@ -14,7 +14,7 @@ import shutil
 
 from ovo.utils import io_utils, gen_utils, eval_utils
 from ovo import layout
-from ovo.eval import benchmarks, predictions
+from ovo.eval import benchmarks, instances, predictions
 from ovo.entities.ovomapping import OVOSemMap
 from ovo.entities.ovo import OVO
 
@@ -179,6 +179,13 @@ def main(args):
         else:
             gt_path = Path(input_path).parent / "semantic_gt"
         eval_utils.eval_semantics(experiment_path / dataset_info["dataset"], gt_path, scenes, dataset_info, ignore_background=args.ignore_background)
+
+    if args.eval_instances:
+        result = instances.evaluate_experiment(
+            layout.ExperimentLayout(experiment_path), scenes,
+            benchmarks.for_dataset(args.dataset_name), layout.instance_gt_dir(args.dataset_name),
+        )
+        print("Instance AP:", instances.nan_to_none(result["all"]))
         
 
 if __name__ == "__main__":
@@ -192,6 +199,7 @@ if __name__ == "__main__":
     parser.add_argument('--run', action='store_true', help="If set, compute the final metrics, after running OVO and segmenting.")
     parser.add_argument('--segment', action='store_true', help="If set, use the reconstructed scene to segment the gt point-cloud, after running OVO.")
     parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--eval_instances', action='store_true', help="If set, compute instance AP (same as `python -m ovo eval instances`), after segmenting.")
     parser.add_argument('--ignore_background', action='store_true',help="If set, does not use background ids from eval_info to compute metrics.")
     args = parser.parse_args()
     main(args)
