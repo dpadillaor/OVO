@@ -54,3 +54,11 @@ experimentos). Marcar al comprobar y borrar cuando ya no aporten.
       el broadphase del fork a la tabla y llevar esa versión a la PR. Mirar además cuántas parejas
       candidatas por pasada salen en un run real (`n_pairs_evaluated`), que es lo que decide si
       compensa.
+- [ ] **`owners` en `shared_cells`: `full_like` + `cat` frente a `repeat_interleave`.** Hoy se
+      crea un `full_like` por set y se concatenan (N+1 llamadas a la GPU). La alternativa:
+      ```python
+      lengths = torch.tensor([len(v) for v in sets.values()], device=cells.device)
+      owners = torch.repeat_interleave(torch.arange(n_sets, device=cells.device), lengths)
+      ```
+      da el mismo tensor con 2-3 llamadas. Medir en GPU con unos cientos de instancias; si no se
+      nota, dejar la versión actual, que se lee más directa.
