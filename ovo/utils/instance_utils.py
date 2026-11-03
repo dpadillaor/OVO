@@ -4,8 +4,6 @@ import open3d as o3d
 import torch
 import numpy as np
 
-from ..entities.voxel import VoxelSet
-
 
 @dataclass(frozen=True)
 class VoxelFusionThresholds:
@@ -24,13 +22,12 @@ class VoxelFusionThresholds:
         )
 
 
-def same_instance_by_voxel(instance1, instance2, voxels1: VoxelSet, voxels2: VoxelSet, th: VoxelFusionThresholds) -> bool:
-    """Same as `same_instance`, but geometry is voxel overlap and there is no centroid check."""
+def same_instance_by_overlap(instance1, instance2, overlap: float, th: VoxelFusionThresholds) -> bool:
+    """Same as `same_instance`, given their voxel overlap (containment) instead of their points,
+    and with no centroid check."""
     cos_sim = torch.nn.functional.cosine_similarity(instance1.clip_feature[0], instance2.clip_feature[0], dim=0).item()
     if cos_sim < th.min_cos_sim:
         return False
-
-    overlap = voxels1.containment(voxels2)
     return overlap > th.strong_overlap or (cos_sim > 0.9 and overlap > th.weak_overlap)
 
 

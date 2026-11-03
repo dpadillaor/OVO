@@ -10,6 +10,7 @@ of their key sets. Density collapses: many points in a cell count once.
 """
 
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import torch
 
@@ -27,6 +28,19 @@ def _pack(ijk: torch.Tensor) -> torch.Tensor:
     """
     offset_ijk = (ijk + _AXIS_OFFSET).clamp(0, _AXIS_MAX)
     return (offset_ijk[:, 0] << (2 * _AXIS_BITS)) | (offset_ijk[:, 1] << _AXIS_BITS) | offset_ijk[:, 2]
+
+
+def _containment(n_shared: int, size1: int, size2: int) -> float:
+    """Larger containment of two sets, in [0, 1], from their shared cells and sizes. 0 if either
+    set is empty.
+
+    `shared` is the same count from either side, so dividing it by the smaller set gives the
+    larger containment: a small cloud lying inside a bigger one scores 1.
+    """
+    # NOTE: if density were taken into account (cells weighted by point count), the shared
+    # weight would differ per side, so both containments would have to be computed to keep the max.
+    smaller = min(size1, size2)
+    return n_shared / smaller if smaller else 0.0
 
 
 @dataclass(frozen=True)
@@ -80,13 +94,84 @@ class VoxelSet:
         return int(torch.isin(self.cells, other.cells).sum())
 
     def containment(self, other: "VoxelSet") -> float:
-        """Larger containment of the two sets, in [0, 1]. 0 if either set is empty.
+        """Larger containment of the two sets, in [0, 1] (see `_containment`)."""
+        return _containment(self.shared(other), len(self), len(other))
 
-        `shared` is the same count from either side, so dividing it by the smaller set gives the
-        larger containment: a small cloud lying inside a bigger one scores 1.
-        """
-        # NOTE: if density were taken into account (cells weighted by point count), the shared
-        # weight would differ per side, so both containments would have to be computed to keep the max.
-        shared = self.shared(other)  # first, so a grid mismatch raises even on empty sets
-        smaller = min(len(self), len(other))
-        return shared / smaller if smaller else 0.0
+
+class OverlapPair(NamedTuple):
+    """Two sets that share cells, `first` before `second` in the dict, and their containment."""
+    first: int
+    second: int
+    overlap: float
+
+
+def overlapping_pairs(sets: dict[int, VoxelSet]) -> list[OverlapPair]:
+    """An `OverlapPair` for every pair of sets sharing at least one cell, in the order a double
+    loop over `sets` would visit them.
+
+    A pair missing from the result shares no cell, so its overlap is 0. One sort of all cells
+    replaces calling `containment` on every pair.
+    """
+    if not sets: return []
+    keys = list(sets)
+    cells, owners = _flatten(sets)                                   # every cell, and the set it came from
+    owners, groups = _group_by_cell(cells, owners)                   # equal cells together, numbered
+    pairs = _count_shared_pairs(owners, groups, len(keys))           # owner pairs, by position
+    return [OverlapPair(keys[p.first], keys[p.second],
+                        _containment(p.n_shared, len(sets[keys[p.first]]), len(sets[keys[p.second]])))
+            for p in pairs]
+
+
+class _SharedPair(NamedTuple):
+    """Two set positions sharing cells, `first` < `second`, and how many cells they share."""
+    first: int
+    second: int
+    n_shared: int
+
+
+def _flatten(sets: dict[int, VoxelSet]) -> tuple[torch.Tensor, torch.Tensor]:
+    """All cells of all sets in one tensor, `cells`, and alongside it `owners`: for each cell, the
+    position (0, 1, 2...) of the set it came from. cells[i] belongs to set owners[i].
+
+    Positions follow the dict order, so sorting by them later gives double-loop order.
+    """
+    cells = torch.cat([voxels.cells for voxels in sets.values()])
+    owners = torch.cat([torch.full_like(voxels.cells, pos) for pos, voxels in enumerate(sets.values())])
+    return cells, owners
+
+
+def _group_by_cell(cells: torch.Tensor, owners: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Sort by cell, so equal cells sit next to each other, and number each cell: `groups[i]` is
+    the same for all entries of one cell. Returns `owners` in that order, and `groups`.
+
+    cells [12, 40, 12, 13] -> sorted [12, 12, 13, 40] -> groups [0, 0, 1, 2]
+    """
+    order = torch.argsort(cells)
+    _, groups = torch.unique_consecutive(cells[order], return_inverse=True)
+    return owners[order], groups
+
+
+def _count_shared_pairs(owners: torch.Tensor, groups: torch.Tensor, n_sets: int) -> list[_SharedPair]:
+    """A `_SharedPair` of owner positions for every pair sharing at least one cell, sorted by
+    (first, second), which is the double-loop order.
+
+    Two entries in the same group are one cell shared by their two owners. Each entry is paired
+    with the one `gap` places ahead, for growing `gap`, while some group is still that long.
+    A set holds each cell once, so the two owners of a pair are always different.
+    """
+    pair_codes = []
+    gap = 1
+    while gap < len(groups):
+        in_same_group = groups[gap:] == groups[:-gap]
+        if not bool(in_same_group.any()):
+            break
+        a, b = owners[:-gap][in_same_group], owners[gap:][in_same_group]
+        pair_codes.append(torch.minimum(a, b) * n_sets + torch.maximum(a, b))  # one integer per pair
+        gap += 1
+    if not pair_codes:
+        return []
+
+    # each code appears once per shared cell, so counting codes gives the shared cells per pair
+    codes, counts = torch.unique(torch.cat(pair_codes), return_counts=True)
+    return [_SharedPair(*divmod(code, n_sets), n_shared=count)  # divmod undoes `first * n_sets + second`
+            for code, count in zip(codes.tolist(), counts.tolist())]
