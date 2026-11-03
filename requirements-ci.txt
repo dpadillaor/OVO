@@ -1,8 +1,18 @@
-# Minimal CPU-only deps for the unit tests run in CI (.github/workflows/tests.yml).
-# Versions follow the conda setup in ReadMe.md; torch comes from the CPU wheel index.
+# CPU-only deps for the unit tests run in CI (.github/workflows/tests.yml): what the ovo modules
+# import, without the git submodules (perception_models, SAM 2) and without a GPU.
+# Versions follow the conda setup in ReadMe.md; torch and torchvision come from the CPU wheel index.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu
+torchvision==0.20.1+cpu
 numpy==2.4.*
 open3d==0.19.0
+open_clip_torch==2.32.0
+opencv-python-headless==4.11.*
+imageio
+matplotlib
+plyfile
+psutil
 pyyaml
+tqdm
+wandb
 pytest
