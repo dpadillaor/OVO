@@ -162,8 +162,7 @@ class OVOSemMap():
                             torch.cuda.synchronize()
                             t_lc_i = time.time()
                             map_data = self.slam_backbone.get_map()
-                            kfs = self.slam_backbone.get_kfs()
-                            updated_points_ins_ids, fusion, fusion_seconds = self.ovo.update_map(map_data, kfs)
+                            updated_points_ins_ids, fusion, fusion_seconds = self.ovo.update_map(map_data)
                             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
                             self.fusion_log.write(frame_id, fusion)
                             # whole step (extract clouds, judge, apply) and judging alone

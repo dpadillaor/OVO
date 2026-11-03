@@ -13,6 +13,7 @@ Scene, one point per voxel of the default 5 cm grid, plus two background points 
 
 from collections import deque
 
+import numpy as np
 import pytest
 import torch
 
@@ -72,7 +73,7 @@ def decided(report):
 
 def test_update_map_returns_ids_report_and_time(scene):
     ovo, map_data, _, _ = scene
-    points_ins_ids, report, seconds = ovo.update_map(map_data, kfs=[0, 1, 2, 3])
+    points_ins_ids, report, seconds = ovo.update_map(map_data)
     assert isinstance(points_ins_ids, torch.Tensor)
     assert points_ins_ids.shape == map_data[2].shape
     assert seconds >= report.seconds >= 0
@@ -80,7 +81,7 @@ def test_update_map_returns_ids_report_and_time(scene):
 
 def test_update_map_merges_one_pair_and_rejects_the_others(scene):
     ovo, map_data, _, _ = scene
-    _, report, _ = ovo.update_map(map_data, kfs=[0, 1, 2, 3])
+    _, report, _ = ovo.update_map(map_data)
 
     assert report.merges == [(10, 20)]
     decisions = decided(report)
@@ -96,7 +97,7 @@ def test_update_map_merges_one_pair_and_rejects_the_others(scene):
 def test_update_map_drops_absorbed_and_removed_instances(scene):
     ovo, map_data, _, calls = scene
     before = map_data[2].clone()
-    points_ins_ids, _, _ = ovo.update_map(map_data, kfs=[0, 1, 2, 3])
+    points_ins_ids, _, _ = ovo.update_map(map_data)
 
     assert sorted(ovo.objects) == [10, 30, 40]
     assert 20 not in points_ins_ids
@@ -109,7 +110,7 @@ def test_update_map_drops_absorbed_and_removed_instances(scene):
 def test_update_map_survivor_absorbs_points_and_keyframes(scene):
     ovo, map_data, _, _ = scene
     absorbed_points = list(ovo.objects[20].points_ids)
-    ovo.update_map(map_data, kfs=[0, 1, 2, 3])
+    ovo.update_map(map_data)
 
     survivor = ovo.objects[10]
     assert set(absorbed_points) <= set(survivor.points_ids)
@@ -118,7 +119,7 @@ def test_update_map_survivor_absorbs_points_and_keyframes(scene):
 
 def test_update_map_moves_descriptors_of_absorbed_to_survivor(scene):
     ovo, map_data, descriptors, _ = scene
-    ovo.update_map(map_data, kfs=[0, 1, 2, 3])
+    ovo.update_map(map_data)
 
     ins_descriptors = ovo.keyframes["ins_descriptors"]
     assert all(20 not in by_ins for by_ins in ins_descriptors.values())
@@ -127,12 +128,47 @@ def test_update_map_moves_descriptors_of_absorbed_to_survivor(scene):
     assert ins_descriptors[2] == {40: descriptors[40]}
 
 
-def test_update_map_forgets_deleted_keyframes(scene):
-    ovo, map_data, _, _ = scene
-    ovo.update_map(map_data, kfs=[0, 1, 2])
+def test_update_map_keeps_keyframes_whose_frame_is_not_a_slam_keyframe(scene):
+    # Semantic keyframes are indexed 0, 1, 2, 3 but were segmented at frames 0, 10, 20, 30, which
+    # need not be SLAM keyframes: none of them may be forgotten or have its frame id overwritten.
+    ovo, map_data, descriptors, _ = scene
+    ovo.keyframes["frame_id"] = [0, 10, 20, 30]
+    ovo.update_map(map_data)
 
-    assert 3 not in ovo.keyframes["ins_descriptors"]
-    assert ovo.keyframes["frame_id"] == [0, 1, 2, "Deleted"]
+    assert ovo.keyframes["frame_id"] == [0, 10, 20, 30]
+    assert set(ovo.keyframes["ins_descriptors"]) == {0, 1, 2, 3}
+    assert ovo.keyframes["ins_descriptors"][2] == {40: descriptors[40]}
+
+
+def test_update_map_drops_the_descriptors_of_removed_instances(scene):
+    ovo, map_data, _, _ = scene
+    assert 50 in ovo.keyframes["ins_descriptors"][3]
+    ovo.update_map(map_data)
+
+    assert 50 not in ovo.objects
+    assert all(50 not in by_ins for by_ins in ovo.keyframes["ins_descriptors"].values())
+    assert ovo.keyframes["ins_descriptors"][3] == {}  # the keyframe itself stays
+
+
+def test_update_map_survives_a_checkpoint_round_trip(scene):
+    # capture_dict + restore_dict keep frame ids as numbers, so a later update_map still keeps
+    # every keyframe's descriptors.
+    ovo, map_data, _, _ = scene
+    ovo.device = "cpu"
+    ovo.keyframes["frame_id"] = [0, 10, 20, 30]
+    ovo.keyframes["ins_maps"] = [np.zeros((2, 2), dtype=np.int32) for _ in range(4)]
+    ovo.update_map(map_data)
+
+    restored = OVO.__new__(OVO)
+    restored.device = "cpu"
+    restored.objects = {}
+    restored.keyframes = {"ins_descriptors": {}, "frame_id": [], "ins_maps": []}
+    restored.restore_dict(ovo.capture_dict(debug_info=True), debug_info=True)
+
+    assert [int(f) for f in restored.keyframes["frame_id"]] == [0, 10, 20, 30]
+    assert np.issubdtype(np.asarray(restored.keyframes["frame_id"]).dtype, np.integer)
+    kept = {kf: set(by_ins) for kf, by_ins in restored.keyframes["ins_descriptors"].items() if by_ins}
+    assert kept == {kf: set(by_ins) for kf, by_ins in ovo.keyframes["ins_descriptors"].items() if by_ins}
 
 
 def test_fuse_instances_applies_the_pipeline_merges(scene):
