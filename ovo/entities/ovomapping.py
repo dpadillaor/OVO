@@ -17,16 +17,20 @@ from .visualizer import stream_pcd
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
+SLAM_MODULES = ("vanilla", "orbslam3", "gaussian_slam")
+
+
 def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Tensor) -> VanillaMapper | WrapperGaussianSLAM:
-    backbone = config["slam"].get("slam_module","vanilla")
+    backbone = config["slam"].get("slam_module", "vanilla")
+    if backbone == "vanilla":
+        return VanillaMapper(config, cam_intrinsics)
+    if backbone == "orbslam3":
+        from ..slam.orbslam import WrapperORBSLAM
+        return WrapperORBSLAM(config, cam_intrinsics, world_ref=torch.from_numpy(dataset[0][3]))
     if backbone == "gaussian_slam":
         from ..slam.gaussian_slam import WrapperGaussianSLAM
         return WrapperGaussianSLAM(config, dataset)
-    elif backbone.startswith("orbslam"):
-        from ..slam.orbslam import WrapperORBSLAM
-        return WrapperORBSLAM(config, cam_intrinsics, world_ref=torch.from_numpy(dataset[0][3]))
-    else:
-        return VanillaMapper(config, cam_intrinsics)
+    raise ValueError(f"slam.slam_module: unknown {backbone!r}; valid: {list(SLAM_MODULES)}")
 
 class OVOSemMap():
     """OVOSemMap is a class responsible for managing the semantic mapping process using the OVO framework. It initializes
@@ -149,7 +153,7 @@ class OVOSemMap():
                     if estimated_c2w is None or missing_depth :
                         continue
                     t_lc = 0
-                    if frame_id % self.map_every == 0 or self.config["slam"]["slam_module"] == "orbslam2":
+                    if frame_id % self.map_every == 0 or self.config["slam"]["slam_module"] == "orbslam3":
                         self.slam_backbone.map(frame_data, estimated_c2w)
                         if self.slam_backbone.map_updated:
                             torch.cuda.synchronize()

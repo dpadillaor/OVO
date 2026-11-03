@@ -7,15 +7,15 @@ data:
 seed: 0
 slam:
   config_path: data/working/configs/slam
-  slam_module: vanilla #orbslam #gaussian_slam #
-  use_viewer: False # only used with orbslam
-  close_loops: True # only used with orbslam
+  slam_module: vanilla # vanilla | orbslam3 | gaussian_slam
+  use_viewer: False # only used with orbslam3
+  close_loops: True # only used with orbslam3
   save_estimated_cam: True
 vis:
   stream: False
   show_stream: False # this is going to be ignored if stream is false
 mapping:
-  map_every: 5 # ignored if slam.slam_module == orbslam2
+  map_every: 5 # ignored if slam.slam_module == orbslam3 (maps every frame)
 debug: True
 debug_info: True
 semantic:
