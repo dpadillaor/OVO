@@ -13,6 +13,8 @@ import os
 import shutil
 
 from ovo.utils import io_utils, gen_utils, eval_utils
+from ovo import layout
+from ovo.eval import benchmarks, predictions
 from ovo.entities.ovomapping import OVOSemMap
 from ovo.entities.ovo import OVO
 
@@ -51,11 +53,24 @@ def compute_scene_labels(scene_path: Path, dataset_name: str, scene_name: str, d
     
     map_id_to_idx = {id: i for i, id in enumerate(ovo.objects.keys())}
     mesh_semantic_labels = instances_info["classes"][np.vectorize(map_id_to_idx.get)(mesh_instance_labels)]
-    instances_info["masks"] = mesh_instances_masks.int().numpy()
 
     print(f"Writing prediction to {pred_path}!")
     io_utils.write_labels(pred_path, mesh_semantic_labels)
-    io_utils.write_instances(scene_path.parent, scene_name, instances_info)
+
+    # Instances are classified against the benchmark's own list (objects only, no wall/floor),
+    # which is what the instance GT and the evaluator index into.
+    benchmark = benchmarks.for_dataset(dataset_name)
+    instance_info = ovo.classify_instances(list(benchmark.class_names))
+    # One mask per instance that reached the mesh, in matched_instances_ids order: pick the
+    # class and score of that same instance, not of the i-th instance in the map.
+    rows = [map_id_to_idx[int(i)] for i in matched_instances_ids]
+    instance_preds = predictions.InstancePredictions(
+        masks=mesh_instances_masks.numpy(),
+        classes=instance_info["classes"][rows],
+        scores=instance_info["conf"][rows],
+        class_names=benchmark.class_names,
+    )
+    predictions.write(layout.ExperimentLayout(scene_path.parent).instance_pred, scene_name, instance_preds, benchmark.name)
 
     ovo.cpu()
     del ovo
