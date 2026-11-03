@@ -3,9 +3,6 @@ from torchvision.transforms import Resize, Normalize, CenterCrop, Compose
 import open_clip
 import torch
 
-import core.vision_encoder.pe as pe
-import core.vision_encoder.transforms as transforms
-
 
 def siglip_cosine_similarity(txt_embeds:torch.Tensor, img_embed: torch.Tensor, logit_scale:torch.Tensor, logit_bias:float) -> torch.Tensor:
     p = txt_embeds.to(img_embed.dtype) 
@@ -88,6 +85,9 @@ def load_clip_model(model_card: str, use_half: bool) -> Tuple[Any, Any, Compose,
 
 
 def load_perception_encoder(model_card: str, ckpt_path = None) -> Tuple[Any, Any, Compose, str]:
+    # perception_models is a git submodule: import it only when a Perception Encoder is requested.
+    import core.vision_encoder.pe as pe
+    import core.vision_encoder.transforms as transforms
 
     if "Core" in model_card:
         model = pe.CLIP.from_config(model_card, pretrained=True, checkpoint_path=str(ckpt_path / f"data/input/ckpts/pe/{model_card}.pt") if ckpt_path else None).cuda()
