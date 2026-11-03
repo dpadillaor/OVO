@@ -28,17 +28,8 @@ class OVO:
 
         config["sam"]["multi_crop"] = False if config["clip"]["embed_type"] == "vanilla" else True
         self.cam_intrinsics = cam_intrinsics
-        self.config = config
-        self.logger = logger
-        self.debug_info = config.get("debug_info", False)
-        self.device = device
-        self.n_top_views = config["clip"].get("k_top_views", 0)
-        Instance3D.n_top_kf = self.n_top_views
-        mv_fusion = config["clip"].get("fusion","l1_medoid")
-        ckpt = config["clip"].get("mv_fuser_ckpt")
-            
-        Instance3D.set_fusion(mv_fusion, ckpt)
-        
+        self._init_state(config, logger, device)
+
         # For backward compatibility
         if "mask_res" in config["sam"] and "mask_res" not in config["clip"]:
             config["clip"]["mask_res"] = config["sam"]["mask_res"]
@@ -48,25 +39,46 @@ class OVO:
             self.mask_generator = MaskGenerator(config["sam"], scene_name, device=device)
         else:
             self.mask_generator = None
+
+        if config.get("verbose", True):
+            print('Semantic config')
+            pprint.PrettyPrinter().pprint(config)
+
+
+    @classmethod
+    def for_fusion(cls, config: Dict[str, Any], device: str = "cpu") -> "OVO":
+        """An OVO that can only re-fuse a restored map (`update_map`): no CLIP, no SAM, no logger.
+        Used to replay a fusion from a checkpoint (ovo.replay)."""
+        ovo = cls.__new__(cls)
+        ovo.cam_intrinsics = None
+        ovo._init_state(config, None, device)
+        ovo.clip_generator = None
+        ovo.mask_generator = None
+        return ovo
+
+    def _init_state(self, config: Dict[str, Any], logger: Logger | None, device: str) -> None:
+        """Everything but the models: config, empty map state and the fusion pipeline."""
+        self.config = config
+        self.logger = logger
+        self.debug_info = config.get("debug_info", False)
+        self.device = device
+        self.n_top_views = config["clip"].get("k_top_views", 0)
+        Instance3D.n_top_kf = self.n_top_views
+        Instance3D.set_fusion(config["clip"].get("fusion", "l1_medoid"), config["clip"].get("mv_fuser_ckpt"))
         self.keyframes = {
             "ins_descriptors": dict(),
             "frame_id": list(),
             "ins_maps": list(),
         }
         self.keyframes_queue = deque([])
-        self.objects=dict()
+        self.objects = dict()
         self._time_cache = []
-        
+
         self.next_ins_id = 0
         self.kf_id = 0
 
         # Instance fusion on map updates (YAML `semantic.instance_fusion`, see fusion/config.py)
         self.fusion = FusionPipeline(FusionCfg.from_dict(config.get("instance_fusion")))
-
-        if config.get("verbose", True):
-            print('Semantic config')
-            pprint.PrettyPrinter().pprint(config)
-
 
     def to(self, device: str) -> None:
         """
