@@ -362,20 +362,15 @@ class OVO:
                     )
                 self._time_cache = []
     
-    def update_map(self, map_data, kfs):
+    def update_map(self, map_data):
+        """Re-fuse the semantic map after the SLAM moved it (loop closure, global correction).
+
+        Keyframe descriptors are kept even when the SLAM prunes a keyframe: a pruned keyframe is
+        redundant, not wrong, so what CLIP saw in that image is still a valid view of the instance.
+        """
         # 0. clean the queue
         self.complete_semantic_info()
         points_3d, _, points_ins_ids = map_data
-
-        # 0.1 Remove deleted_kfs : 
-        deleted_kfs = []
-        for i, kf in enumerate(self.keyframes["frame_id"]):
-            if kf not in kfs:
-                deleted_kfs.append(kf)
-                if kf in self.keyframes["ins_descriptors"]: # Not all Keyframes will have descriptors associated
-                    self.keyframes["ins_descriptors"].pop(kf)
-                self.keyframes["frame_id"][i] = "Deleted" #deleting from self.keyframes["frame_id"] would require a checkpoint refactor to change it from list to dict
-                # self.keyframes["ins_maps"] # This variable is for Debug, better to not remove it
 
         # 1. remove 3D instances that are not in pcd_obj_ids, despite some instances having been detected with > than 100 points, the deletion of Keyframes, can reduce their support to 1 or 2 points. TODO: We should 1) recompute the support of this instances by projecting the full pcd into them or 2) just remove them.
         objects_list = []
@@ -386,6 +381,11 @@ class OVO:
                 objects_list.append(self.objects[ins_id])
             else:
                 objects_to_del.append(self.objects[ins_id])
+        # their keyframe descriptors go with them
+        deleted_ids = {obj.id for obj in objects_to_del}
+        for by_ins in self.keyframes["ins_descriptors"].values():
+            for ins_id in deleted_ids & by_ins.keys():
+                del by_ins[ins_id]
         # 2. Fuse 3D instances that fulfill a condition.
         objects, fused_objects, points_ins_ids, fusion, fusion_seconds = self._fuse_instances(objects_list, map_data)
         print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
