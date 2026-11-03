@@ -495,7 +495,7 @@ class OVO:
 
         sim_map = self.query(classes, template)
         instances_classes = torch.argmax(sim_map,dim=1)
-        max_conf = torch.gather(sim_map, -1, instances_classes[:,None]).squeeze()
+        max_conf = torch.gather(sim_map, -1, instances_classes[:,None]).squeeze(-1)
         instances_classes[max_conf <=th] = -1
         max_conf[max_conf<=th] = 0
         instances_info = {"classes": instances_classes.cpu().numpy(), "conf":max_conf.cpu().numpy()}
