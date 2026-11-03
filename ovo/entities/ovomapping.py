@@ -11,6 +11,7 @@ import gc
 from .logger import Logger
 from .fusion import FusionLog
 from .. import layout
+from ..replay.checkpoint import Checkpointer, mode_from_config as checkpoint_mode
 from .ovo import OVO
 from .datasets import get_dataset
 from .visualizer import stream_pcd
@@ -62,6 +63,7 @@ class OVOSemMap():
 
         self.logger = Logger(self.output_path,os.getpid(), config["use_wandb"])   
         self.fusion_log = FusionLog(layout.fusion_decisions(self.output_path))
+        self.checkpointer = Checkpointer(checkpoint_mode(config), self.output_path)
         self.dataset = get_dataset(config["dataset_name"])({**config["data"], **config["cam"]})     
 
         cam_intrinsics =  torch.tensor(self.dataset.intrinsics.astype(np.float32), device=self.device)
@@ -161,6 +163,7 @@ class OVOSemMap():
                         if self.slam_backbone.map_updated:
                             torch.cuda.synchronize()
                             t_lc_i = time.time()
+                            self.checkpointer.save(frame_id, self.slam_backbone, self.ovo, self.config)
                             map_data = self.slam_backbone.get_map()
                             updated_points_ins_ids, fusion, fusion_seconds = self.ovo.update_map(map_data)
                             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
