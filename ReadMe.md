@@ -105,6 +105,11 @@ python -m ovo eval instances --dataset Replica --experiment ovo_mapping [--scene
 ```
 By default every scene with predictions is evaluated. The results (AP, AP_50, AP_25, class-aware with head/common/tail splits and class-agnostic, global and per scene) are written to `data/output/<dataset_name>/<experiment_name>/instance_ap.json`; undefined metrics are `null`.
 
+### Fusion decisions
+Every map update judges which instances are the same object and fuses them. Each run writes `data/output/<dataset_name>/<experiment_name>/<scene>/fusion/fusion_decisions.csv`, one row per judged pair: `frame_id,first,second,accepted,reason,mode,cos_sim,overlap` plus one column per gate (`aabb`, `centroid`). `reason` is who decided (a gate name, `cos_sim` or `overlap`) and `mode` the accept branch (`strong`, `weak` or `both`). An empty cell is a value that was not needed to decide (an earlier step rejected the pair) or a gate that is off. Pairs the apply policy skipped have no row, and no file means no pair was judged. With the default `apply: greedy` each accepted row is one merge; with `apply: chained` the final merges follow from the accepted rows (A~B and B~C fuse A, B and C).
+
+The time of each fusion step goes to `logger/t_fusion.log` (whole step: extract the clouds, judge, apply) and `logger/t_fusion_judge.log` (judging alone), one line per map update.
+
 ## Changelog:
 - 13, January, 2026 - Added implementation using [TextRegion](https://github.com/avaxiao/TextRegion) with the [Perception Encoder](https://github.com/facebookresearch/perception_models) as descriptor. Performance in Replica goes up to 35.7% IoU and 57% Acc (from from 27.0% IoU and 39.1% Acc reported in the paper). 
 - 11, January, 2026 - Update conda environment to work with Python 3.11 and Numpy 2.4.
