@@ -113,6 +113,13 @@ Every map update judges which instances are the same object and fuses them. Each
 
 The time of each fusion step goes to `logger/t_fusion.log` (whole step: extract the clouds, judge, apply) and `logger/t_fusion_judge.log` (judging alone), one line per map update.
 
+### Replay a fusion
+Set `replay.checkpoints` to `last` (or `all`) to save each scene's state right before a fusion in `<scene>/fusion/pre_fusion_<frame>.ckpt`. That fusion can then be re-run alone, without SLAM or models, with other `semantic.instance_fusion` parameters (a YAML shaped like that block, which replaces it whole):
+```
+python -m ovo replay --dataset Replica --experiment ovo_mapping --name strict --fusion strict.yaml [--scenes office0 [--frame 1990]]
+```
+By default every scene with checkpoints is replayed from its last one. The output, `data/output/<dataset_name>/<experiment_name>/replays/<name>/`, is laid out like an experiment: evaluate it with `--experiment_name ovo_mapping/replays/strict --segment --eval_instances` in `run_eval.py`, or `python -m ovo eval instances --experiment ovo_mapping/replays/strict` after segmenting.
+
 ## Changelog:
 - 13, January, 2026 - Added implementation using [TextRegion](https://github.com/avaxiao/TextRegion) with the [Perception Encoder](https://github.com/facebookresearch/perception_models) as descriptor. Performance in Replica goes up to 35.7% IoU and 57% Acc (from from 27.0% IoU and 39.1% Acc reported in the paper). 
 - 11, January, 2026 - Update conda environment to work with Python 3.11 and Numpy 2.4.

@@ -25,6 +25,8 @@ vis:
   show_stream: False # this is going to be ignored if stream is false
 mapping:
   map_every: 5 # ignored if slam.slam_module == orbslam3 (maps every frame)
+replay:
+  checkpoints: off # save the state before each fusion to re-run it with `python -m ovo replay`: off | last (only the last fusion's) | all
 debug: True
 debug_info: True
 semantic:

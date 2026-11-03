@@ -3,9 +3,12 @@
     data/output/{dataset}/{experiment}/
         {scene}/                 one OVO run (config.yaml, ovo_map.ckpt, logger/, ...)
             fusion/fusion_decisions.csv   one row per pair judged by instance fusion
+            fusion/pre_fusion_{frame:05d}.ckpt   state right before a fusion (ovo.replay.checkpoint)
             simulation.json               SimulatedSLAM only: the jumps and corrections that happened
         instance_pred/           instance predictions on the GT mesh (ovo.eval.predictions)
         instance_ap.json         instance AP, global and per scene (ovo.eval.instances)
+        replays/{name}/          a fusion re-run from the scenes' checkpoints (ovo.replay), laid
+                                 out like an experiment: {scene}/, instance_pred/, instance_ap.json
 
     data/input/Datasets/{dataset}/instance_gt/{scene}.txt   instance GT, one id per mesh vertex
 """
@@ -36,9 +39,20 @@ class ExperimentLayout:
     def instance_ap(self) -> Path:
         return self.root / "instance_ap.json"
 
+    def replay(self, name: str) -> "ExperimentLayout":
+        return ExperimentLayout(self.root / "replays" / name)
+
+
+def fusion_dir(scene_dir: Path) -> Path:
+    return Path(scene_dir) / "fusion"
+
 
 def fusion_decisions(scene_dir: Path) -> Path:
-    return Path(scene_dir) / "fusion" / "fusion_decisions.csv"
+    return fusion_dir(scene_dir) / "fusion_decisions.csv"
+
+
+def pre_fusion_checkpoint(scene_dir: Path, frame_id: int) -> Path:
+    return fusion_dir(scene_dir) / f"pre_fusion_{frame_id:05d}.ckpt"
 
 
 def simulation(scene_dir: Path) -> Path:
