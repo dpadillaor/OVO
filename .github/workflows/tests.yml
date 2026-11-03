@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # No submodules: the CPU tests only import lightweight ovo modules.
+        # No submodules: the CPU tests need neither perception_models nor SAM 2.
 
       - uses: actions/setup-python@v5
         with:
