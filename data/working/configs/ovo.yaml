@@ -51,3 +51,15 @@ semantic:
     mv_fuser: False #True #
     mv_fuser_ckpt: "20250725_1200"
   kf_queue_delay: 10
+  instance_fusion:              # which instances are the same object (ovo/entities/fusion/)
+    gates: []                   # optional vetoes, e.g. [{centroid: {max_dist: 1.5}}]
+    overlap:
+      method: voxel             # voxel | point
+      voxel: {size: 0.05, origin: [0, 0, 0]}
+      point: {max_dist: 0.1}    # m
+    accept:
+      min_cos: 0.81             # below this, never the same
+      strong: 0.5               # overlap enough on its own
+      weak: 0.2                 # overlap enough if cos_sim > weak_min_cos
+      weak_min_cos: 0.9
+    apply: greedy               # greedy | chained
