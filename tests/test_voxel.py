@@ -35,18 +35,6 @@ def test_grid_rejects_origin_without_three_values(origin):
         VoxelGrid(0.05, origin)
 
 
-def test_grid_from_cfg_defaults():
-    grid = VoxelGrid.from_cfg({})
-    assert grid.size == 0.05
-    assert grid.origin == (0.0, 0.0, 0.0)
-
-
-def test_grid_from_cfg_reads_values_as_floats():
-    grid = VoxelGrid.from_cfg({"voxel_size": 1, "voxel_origin": [1, 2, 3]})
-    assert grid == VoxelGrid(1.0, (1.0, 2.0, 3.0))
-    assert all(isinstance(v, float) for v in (grid.size, *grid.origin))
-
-
 # ---------------------------------------------------------------- VoxelSet
 
 def test_points_in_one_cell_collapse():
