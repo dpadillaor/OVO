@@ -4,10 +4,7 @@ import open3d as o3d
 import numpy as np
 import plyfile
 import torch
-import math
-import json
 import yaml
-import os
 
 
 def load_config(path: str, default_path: str = None, inherit: bool = True) -> Dict[str, Any]:
@@ -123,65 +120,6 @@ def load_replica_scene(scene_name: str, data_path: str, dataset_info: Dict[str, 
     scene_point_cloud = o3d.io.read_point_cloud(str(mesh_path))
     pcd = torch.tensor(np.array(scene_point_cloud.points))
     return gt_labels, pcd
-
-def rle_encode(mask: np.ndarray) -> Dict[str, Any]:
-    """Encode RLE (Run-length-encode) from 1D binary mask.
-
-    Args:
-        mask (np.ndarray): 1D binary mask
-    Returns:
-        rle (dict): encoded RLE
-    """
-    length = mask.shape[0]
-    mask = np.concatenate([[0], mask, [0]])
-    runs = np.where(mask[1:] != mask[:-1])[0] + 1
-    runs[1::2] -= runs[::2]
-    counts = ' '.join(str(x) for x in runs)
-    rle = dict(length=length, counts=counts)
-    return rle
-
-def rle_decode(rle: Dict[str, Any]) -> np.ndarray:
-    """Decode rle to get binary mask.
-
-    Args:
-        rle (dict): rle of encoded mask
-    Returns:
-        mask (np.ndarray): decoded mask
-    """
-    length = rle['length']
-    counts = rle['counts']
-    s = counts.split()
-    starts, nums = [np.asarray(x, dtype=np.int32) for x in (s[0:][::2], s[1:][::2])]
-    starts -= 1
-    ends = starts + nums
-    mask = np.zeros(length, dtype=np.uint8)
-    for lo, hi in zip(starts, ends):
-        mask[lo:hi] = 1
-    return mask
-
-def write_instances(experiment_path: str,scene_name: str, instances_info: Dict[str, Any]) -> None:
-    save_path = os.path.join(experiment_path, "instance_pred")
-    os.makedirs(save_path, exist_ok=True)
-    
-    rel_path = "./predicted_masks/"
-    os.makedirs(os.path.join(save_path, rel_path), exist_ok=True)
-    n_instances = len(instances_info["masks"])
-    n_digits = math.trunc(math.log(n_instances,10)) +1
-    lines_to_write = []
-    for i in range(n_instances):
-        mask = instances_info["masks"][i]
-        label = instances_info["classes"][i]
-        conf = instances_info["conf"][i]
-
-        mask_file = os.path.join(rel_path, f"{scene_name}_{str(i).zfill(n_digits)}.json")
-        with open(os.path.join(save_path,mask_file), "w") as f:
-            rle = rle_encode(mask)
-            json.dump(rle, f)
-
-        lines_to_write.append(f"{mask_file} {int(label)} {conf:.4f}")
-
-    with open(os.path.join(save_path, f"{scene_name}.txt"), "w") as f:
-            f.write('\n'.join(lines_to_write))
 
 def write_labels(output_file: str, pcd_labels: np.ndarray) -> None:
     n_vtx = pcd_labels.shape[0]
