@@ -122,3 +122,21 @@ python scripts/scannet_preprocess.py --data_path /<ScanNet_data_path>/  --link_p
 ```
     ln -s /<ScanNet_data_path>/data/val/ /<ovo_path/data/input/Datasets/ScanNet
 ```
+
+### Instance GT (instance AP)
+Instance AP (`--eval_instances`, `python -m ovo eval instances`) reads one file per scene from
+`data/input/Datasets/<dataset_name>/instance_gt/<scene>.txt`: one integer per vertex of the GT mesh
+(the same mesh `--segment` projects onto, in the same order), `class_id * 1000 + k` for the k-th
+instance of class `class_id`, and `0` for void.
+* Replica: the 48 object classes of `ovo/eval/benchmarks/replica.py`.
+* ScanNet: ScanNet200 class ids (`ovo/eval/benchmarks/scannet200.py`), also when running with the default ScanNet20 `eval_info.yaml`.
+
+The files are in commit `b2c3448` of https://github.com/tberriel/OVO (`ins_eval_example/replica_gt` and `ins_eval_example/scannet200_gt`). To extract them into place:
+```
+cd /<ovo_abs_path>/
+git fetch https://github.com/tberriel/OVO.git b2c3448e9ea99e6441ad01808d7ad915f42e17f6
+mkdir -p data/input/Datasets/Replica/instance_gt data/input/Datasets/ScanNet/instance_gt
+git archive b2c3448 ins_eval_example/replica_gt | tar -x --strip-components=2 -C data/input/Datasets/Replica/instance_gt
+git archive b2c3448 ins_eval_example/scannet200_gt | tar -x --strip-components=2 -C data/input/Datasets/ScanNet/instance_gt
+```
+A single file can also be read with `git show b2c3448:ins_eval_example/replica_gt/office0.txt`.

@@ -80,6 +80,7 @@ To run OVO, and compute evaluation metrics use `run_eval.py`. Running flags are:
 * `--run` If set, run OVO on specified scenes
 * `--segment` If set, use the reconstructed scene to segment the gt point-cloud, after running OVO.
 * `--eval` If set, compute the final metrics, after runing OVO and segmenting.
+* `--eval_instances` If set, compute instance AP (class-aware and class-agnostic), after segmenting. Needs the instance GT described in the <a href="./data/input/ReadMe.md">data instructions</a>.
 * `--dataset_info_file`: file that stores dataset info. By default is `eval_info.yaml`, to evaluate scannet200 set as `eval_info_200.yaml`.
 * `--scenes`: List of scenes from given dataset to run. If `--scenes_list` is set, this flag will be ignored.
 * `--scenes_list`: Path to a txt containing a scene name on each line. If set, `--scenes` is ignored. If neither `--scenes` nor `--scenes_list` are set, the scene list will be loaded from `data/working/config/<dataset_name>/<dataset_info_file>`
@@ -96,6 +97,13 @@ OVO configuration can be modified in `data/working/configs/ovo.yaml`. To speedup
     ```
     python run_eval.py --dataset_name ScanNet --experiment_name ovo_mapping --run --segment --eval --scenes scene0011_00
     ```
+
+### Instance AP
+`--segment` writes the instance predictions to `data/output/<dataset_name>/<experiment_name>/instance_pred/`. Instance AP can then be computed again without re-running OVO:
+```
+python -m ovo eval instances --dataset Replica --experiment ovo_mapping [--scenes office0 room0]
+```
+By default every scene with predictions is evaluated. The results (AP, AP_50, AP_25, class-aware with head/common/tail splits and class-agnostic, global and per scene) are written to `data/output/<dataset_name>/<experiment_name>/instance_ap.json`; undefined metrics are `null`.
 
 ## Changelog:
 - 13, January, 2026 - Added implementation using [TextRegion](https://github.com/avaxiao/TextRegion) with the [Perception Encoder](https://github.com/facebookresearch/perception_models) as descriptor. Performance in Replica goes up to 35.7% IoU and 57% Acc (from from 27.0% IoU and 39.1% Acc reported in the paper). 
