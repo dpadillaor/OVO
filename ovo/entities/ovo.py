@@ -10,6 +10,7 @@ from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
 from .instance3d import Instance3D
 from .logger import Logger
+from .voxel import VoxelGrid, VoxelSet, overlapping_pairs
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -60,9 +61,8 @@ class OVO:
         self.kf_id = 0
 
         # Sem loop-closure parameters
-        self.th_centroid = config.get("th_centroid", 1.5)
-        self.th_cossim = config.get("th_cossim", 0.81)
-        self.th_points = config.get("th_points", 0.1)
+        self.voxel_grid = VoxelGrid.from_cfg(config)
+        self.voxel_th = instance_utils.VoxelFusionThresholds.from_cfg(config)
 
         if config.get("verbose", True):
             print('Semantic config')
@@ -387,26 +387,8 @@ class OVO:
                 objects_list.append(self.objects[ins_id])
             else:
                 objects_to_del.append(self.objects[ins_id])
-        # 2. Fuse 3D instances that fulfill a condition. 
-        # TODO: optimize brute-force approach (compare all instances to each-other)
-        #precompute pointcloud
-        obj_pcds = {}
-        for instance in objects_list:
-            obj_pcd = points_3d[points_ins_ids == instance.id]
-            obj_pcds[instance.id] = [obj_pcd, obj_pcd.mean(axis=0)]
-
-        objects = {}
-        fused_objects = {}
-        for i, instance1 in enumerate(objects_list):
-            if instance1.id in fused_objects:
-                continue
-            for instance2 in objects_list[i+1:]:
-                if instance2.id in fused_objects:
-                    continue
-                elif instance_utils.same_instance(instance1, instance2, obj_pcds[instance1.id], obj_pcds[instance2.id], self.th_centroid, self.th_cossim, self.th_points):
-                    instance1, points_ins_ids = instance_utils.fuse_instances(instance1, instance2, map_data)
-                    fused_objects[instance2.id] = instance1.id
-            objects[instance1.id] = instance1
+        # 2. Fuse 3D instances that fulfill a condition.
+        objects, fused_objects, points_ins_ids = self._fuse_instances(objects_list, map_data)
         print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
         # 3. Updated saved info
         for id2, id1 in fused_objects.items():
@@ -421,8 +403,34 @@ class OVO:
         self.objects = objects
         # 4. Update object descriptors
         self.update_objects_clip()
-        return  points_ins_ids 
-    
+        return  points_ins_ids
+
+    def _fuse_instances(self, objects_list: List[Instance3D], map_data) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor]:
+        """Fuse the instances in `objects_list` that `same_instance_by_overlap` judges to be the same.
+
+        Only pairs sharing a voxel are judged (any other pair has no overlap and is never fused),
+        in the order the full double loop over `objects_list` would judge them, so the fusions are
+        the same as comparing every pair.
+        Returns:
+            - objects: surviving instances, {id: Instance3D}.
+            - fused_objects: {absorbed_id: survivor_id}.
+            - points_ins_ids: per-point instance ids, updated with the fusions.
+        """
+        points_3d, _, points_ins_ids = map_data
+        # precompute each instance's voxels once, in objects_list order
+        obj_voxels = {instance.id: VoxelSet(points_3d[points_ins_ids == instance.id], self.voxel_grid) for instance in objects_list}
+        by_id = {instance.id: instance for instance in objects_list}
+
+        fused_objects = {}
+        for id1, id2, overlap in overlapping_pairs(obj_voxels):
+            if id1 in fused_objects or id2 in fused_objects:
+                continue
+            if instance_utils.same_instance_by_overlap(by_id[id1], by_id[id2], overlap, self.voxel_th):
+                by_id[id1], points_ins_ids = instance_utils.fuse_instances(by_id[id1], by_id[id2], map_data)
+                fused_objects[id2] = id1
+        objects = {ins_id: instance for ins_id, instance in by_id.items() if ins_id not in fused_objects}
+        return objects, fused_objects, points_ins_ids
+
     @profil
     def _extract_clip(self, image: torch.Tensor, binary_maps: torch.Tensor) -> List[Any]:
         """Profiled call to self.clip_generator.extract_clip. Computes a CLIP vector for each mask of the segmented image.
