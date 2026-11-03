@@ -17,7 +17,7 @@ from .visualizer import stream_pcd
 from ..slam.vanilla_mapper import VanillaMapper
 from ..utils import io_utils
 
-SLAM_MODULES = ("vanilla", "orbslam3", "gaussian_slam")
+SLAM_MODULES = ("vanilla", "orbslam3", "gaussian_slam", "simulated")
 
 
 def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Tensor) -> VanillaMapper | WrapperGaussianSLAM:
@@ -30,6 +30,9 @@ def get_slam_backbone(config: Dict[str, Any], dataset, cam_intrinsics: torch.Ten
     if backbone == "gaussian_slam":
         from ..slam.gaussian_slam import WrapperGaussianSLAM
         return WrapperGaussianSLAM(config, dataset)
+    if backbone == "simulated":
+        from ..slam.simulated import SimulatedSLAM
+        return SimulatedSLAM(config, cam_intrinsics, n_frames=len(dataset))
     raise ValueError(f"slam.slam_module: unknown {backbone!r}; valid: {list(SLAM_MODULES)}")
 
 class OVOSemMap():
