@@ -7,10 +7,19 @@ data:
 seed: 0
 slam:
   config_path: data/working/configs/slam
-  slam_module: vanilla # vanilla | orbslam3 | gaussian_slam
+  slam_module: vanilla # vanilla | orbslam3 | gaussian_slam | simulated
   use_viewer: False # only used with orbslam3
-  close_loops: True # only used with orbslam3
+  close_loops: True # orbslam3: close loops; simulated: run the corrections (always a final one, after which poses are GT)
   save_estimated_cam: True
+  simulated: # only used with simulated: GT poses plus controlled errors (ovo/slam/simulated)
+    keyframes:
+      dist: 0.1 # metres moved since the last keyframe to take a new one
+      rot_deg: 5.0 # or degrees turned
+    drift: null # per-frame error that accumulates, e.g. {translation_std: 0.01, rotation_std_deg: 0.5, seed: 42}
+    jumps: [] # sudden pose errors, e.g. [{at_frame: 300, translation: [0, 0, -0.1], rotation: [5, 0, 0]}]
+    jump_seed: 42 # draws the random direction of jumps given as a single number
+    correction:
+      at_frames: [] # extra corrections (simulated loop closures) besides the one at the end
 vis:
   stream: False
   show_stream: False # this is going to be ignored if stream is false

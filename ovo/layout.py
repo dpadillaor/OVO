@@ -3,6 +3,7 @@
     data/output/{dataset}/{experiment}/
         {scene}/                 one OVO run (config.yaml, ovo_map.ckpt, logger/, ...)
             fusion/fusion_decisions.csv   one row per pair judged by instance fusion
+            simulation.json               SimulatedSLAM only: the jumps and corrections that happened
         instance_pred/           instance predictions on the GT mesh (ovo.eval.predictions)
         instance_ap.json         instance AP, global and per scene (ovo.eval.instances)
 
@@ -38,6 +39,10 @@ class ExperimentLayout:
 
 def fusion_decisions(scene_dir: Path) -> Path:
     return Path(scene_dir) / "fusion" / "fusion_decisions.csv"
+
+
+def simulation(scene_dir: Path) -> Path:
+    return Path(scene_dir) / "simulation.json"
 
 
 def instance_gt_dir(dataset: str) -> Path:

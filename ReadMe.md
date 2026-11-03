@@ -70,6 +70,9 @@ After that run the script `build.sh` to build the *ORB-SLAM3* and the python bin
 Finally, copy the decoded ORB vocabulary from the installation folder,`ORB_SLAM3/Vocabulary/ORBvoc.txt`, to `data/working/config/slam/orbslam3/vocabulary`.
 
 
+### Simulated SLAM (no install)
+`slam.slam_module: simulated` runs on the dataset's GT poses with controlled drift, jumps and corrections (simulated loop closures), configured in the `slam.simulated` block of `data/working/configs/ovo.yaml`.
+
 ## Data
 See <a href="./data/input/ReadMe.md">data instructions</a>.
 
