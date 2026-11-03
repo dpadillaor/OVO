@@ -12,7 +12,7 @@ class Logger:
         (self.output_path / "logger").mkdir(exist_ok=True, parents=True)
         (self.output_path / "logger" / "segment_vis").mkdir(exist_ok=True, parents=True)
         stat_keys = [
-            "frame_id", "t_sam", "t_obj","n_obj", "n_matches", "t_up", "t_seg",   "t_clip", "avg_fps", "ram", "vram", "spf"]
+            "frame_id", "t_sam", "t_obj","n_obj", "n_matches", "t_up", "t_seg",   "t_clip", "t_fusion", "t_fusion_judge", "avg_fps", "ram", "vram", "spf"]
         
         self.stats ={key: [] for key in stat_keys}
         self.python_process = psutil.Process(pid)

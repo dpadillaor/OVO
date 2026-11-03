@@ -10,7 +10,7 @@ from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
 from .instance3d import Instance3D
 from .logger import Logger
-from .fusion import FusionCfg, FusionPipeline
+from .fusion import FusionCfg, FusionPipeline, FusionReport
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -387,7 +387,7 @@ class OVO:
             else:
                 objects_to_del.append(self.objects[ins_id])
         # 2. Fuse 3D instances that fulfill a condition.
-        objects, fused_objects, points_ins_ids = self._fuse_instances(objects_list, map_data)
+        objects, fused_objects, points_ins_ids, fusion, fusion_seconds = self._fuse_instances(objects_list, map_data)
         print(f"Semantic Map update: removed {len(objects_to_del)}, fused {len(fused_objects)} instances")
         # 3. Updated saved info
         for id2, id1 in fused_objects.items():
@@ -402,9 +402,9 @@ class OVO:
         self.objects = objects
         # 4. Update object descriptors
         self.update_objects_clip()
-        return  points_ins_ids
+        return points_ins_ids, fusion, fusion_seconds
 
-    def _fuse_instances(self, objects_list: List[Instance3D], map_data) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor]:
+    def _fuse_instances(self, objects_list: List[Instance3D], map_data) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor, FusionReport, float]:
         """Fuse the instances in `objects_list` that the fusion pipeline judges to be the same.
 
         The pipeline judges the pairs with pre-merge geometry and descriptors and returns the
@@ -413,8 +413,13 @@ class OVO:
             - objects: surviving instances, {id: Instance3D}.
             - fused_objects: {absorbed_id: survivor_id}.
             - points_ins_ids: per-point instance ids, updated with the fusions.
+            - report: what the pipeline judged and decided (see FusionReport).
+            - seconds: wall time of the whole step (extract each cloud, judge, apply).
         """
         points_3d, _, points_ins_ids = map_data
+        if points_3d.is_cuda:
+            torch.cuda.synchronize()
+        t0 = time.perf_counter()
         pcds = {instance.id: points_3d[points_ins_ids == instance.id] for instance in objects_list}
         report = self.fusion.run(objects_list, pcds)
 
@@ -424,7 +429,9 @@ class OVO:
             by_id[survivor], points_ins_ids = instance_utils.fuse_instances(by_id[survivor], by_id[absorbed], map_data)
             fused_objects[absorbed] = survivor
         objects = {ins_id: instance for ins_id, instance in by_id.items() if ins_id not in fused_objects}
-        return objects, fused_objects, points_ins_ids
+        if points_3d.is_cuda:
+            torch.cuda.synchronize()
+        return objects, fused_objects, points_ins_ids, report, time.perf_counter() - t0
 
     @profil
     def _extract_clip(self, image: torch.Tensor, binary_maps: torch.Tensor) -> List[Any]:

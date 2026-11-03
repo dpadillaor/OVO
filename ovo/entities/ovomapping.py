@@ -9,6 +9,8 @@ import os
 import gc
 
 from .logger import Logger
+from .fusion import FusionLog
+from .. import layout
 from .ovo import OVO
 from .datasets import get_dataset
 from .visualizer import stream_pcd
@@ -52,6 +54,7 @@ class OVOSemMap():
             self.track_every = config["tracking"].get("track_every", 1)
 
         self.logger = Logger(self.output_path,os.getpid(), config["use_wandb"])   
+        self.fusion_log = FusionLog(layout.fusion_decisions(self.output_path))
         self.dataset = get_dataset(config["dataset_name"])({**config["data"], **config["cam"]})     
 
         cam_intrinsics =  torch.tensor(self.dataset.intrinsics.astype(np.float32), device=self.device)
@@ -153,9 +156,11 @@ class OVOSemMap():
                             t_lc_i = time.time()
                             map_data = self.slam_backbone.get_map()
                             kfs = self.slam_backbone.get_kfs()
-                            updated_points_ins_ids = self.ovo.update_map(map_data, kfs)
-                            if updated_points_ins_ids is not None:
-                               self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+                            updated_points_ins_ids, fusion, fusion_seconds = self.ovo.update_map(map_data, kfs)
+                            self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
+                            self.fusion_log.write(frame_id, fusion)
+                            # whole step (extract clouds, judge, apply) and judging alone
+                            self.logger.log_ovo_stats({"t_fusion": fusion_seconds, "t_fusion_judge": fusion.seconds})
                             self.slam_backbone.map_updated = False
                             torch.cuda.synchronize()
                             t_lc = time.time() - t_lc_i
