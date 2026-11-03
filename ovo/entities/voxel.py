@@ -59,14 +59,6 @@ class VoxelGrid:
         if len(self.origin) != 3:
             raise ValueError(f"voxel origin must have 3 values (x, y, z), got {self.origin}")
 
-    @classmethod
-    def from_cfg(cls, cfg: dict) -> "VoxelGrid":
-        """Build from the fusion config (`voxel_size`, `voxel_origin` as a 3-item list)."""
-        size = float(cfg.get("voxel_size", 0.05))
-        x, y, z = cfg.get("voxel_origin", (0.0, 0.0, 0.0))
-        origin = (float(x), float(y), float(z))
-        return cls(size, origin)
-
 
 class VoxelSet:
     """The set of grid cells a point cloud occupies, as sorted unique int64 keys."""
