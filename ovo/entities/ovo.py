@@ -10,7 +10,7 @@ from .clip_generator import CLIPGenerator
 from .mask_generator import MaskGenerator
 from .instance3d import Instance3D
 from .logger import Logger
-from .voxel import VoxelGrid, VoxelSet, overlapping_pairs
+from .fusion import FusionCfg, FusionPipeline
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -60,9 +60,8 @@ class OVO:
         self.next_ins_id = 0
         self.kf_id = 0
 
-        # Sem loop-closure parameters
-        self.voxel_grid = VoxelGrid.from_cfg(config)
-        self.voxel_th = instance_utils.VoxelFusionThresholds.from_cfg(config)
+        # Instance fusion on map updates (YAML `semantic.instance_fusion`, see fusion/config.py)
+        self.fusion = FusionPipeline(FusionCfg.from_dict(config.get("instance_fusion")))
 
         if config.get("verbose", True):
             print('Semantic config')
@@ -406,28 +405,24 @@ class OVO:
         return  points_ins_ids
 
     def _fuse_instances(self, objects_list: List[Instance3D], map_data) -> Tuple[Dict[int, Instance3D], Dict[int, int], torch.Tensor]:
-        """Fuse the instances in `objects_list` that `same_instance_by_overlap` judges to be the same.
+        """Fuse the instances in `objects_list` that the fusion pipeline judges to be the same.
 
-        Only pairs sharing a voxel are judged (any other pair has no overlap and is never fused),
-        in the order the full double loop over `objects_list` would judge them, so the fusions are
-        the same as comparing every pair.
+        The pipeline judges the pairs with pre-merge geometry and descriptors and returns the
+        merges in the order to apply them; this method only applies them.
         Returns:
             - objects: surviving instances, {id: Instance3D}.
             - fused_objects: {absorbed_id: survivor_id}.
             - points_ins_ids: per-point instance ids, updated with the fusions.
         """
         points_3d, _, points_ins_ids = map_data
-        # precompute each instance's voxels once, in objects_list order
-        obj_voxels = {instance.id: VoxelSet(points_3d[points_ins_ids == instance.id], self.voxel_grid) for instance in objects_list}
-        by_id = {instance.id: instance for instance in objects_list}
+        pcds = {instance.id: points_3d[points_ins_ids == instance.id] for instance in objects_list}
+        report = self.fusion.run(objects_list, pcds)
 
+        by_id = {instance.id: instance for instance in objects_list}
         fused_objects = {}
-        for id1, id2, overlap in overlapping_pairs(obj_voxels):
-            if id1 in fused_objects or id2 in fused_objects:
-                continue
-            if instance_utils.same_instance_by_overlap(by_id[id1], by_id[id2], overlap, self.voxel_th):
-                by_id[id1], points_ins_ids = instance_utils.fuse_instances(by_id[id1], by_id[id2], map_data)
-                fused_objects[id2] = id1
+        for survivor, absorbed in report.merges:
+            by_id[survivor], points_ins_ids = instance_utils.fuse_instances(by_id[survivor], by_id[absorbed], map_data)
+            fused_objects[absorbed] = survivor
         objects = {ins_id: instance for ins_id, instance in by_id.items() if ins_id not in fused_objects}
         return objects, fused_objects, points_ins_ids
 
