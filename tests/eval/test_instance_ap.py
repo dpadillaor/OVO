@@ -184,3 +184,30 @@ def test_mask_length_mismatch_raises():
         class_ap({"s": bad})
     with pytest.raises(ValueError, match="vertices"):
         agnostic_ap({"s": bad})
+
+
+# ---------- match_agnostic ----------
+
+MATCH_GT = gt((3000, 0, 200), (3001, 200, 400), (7000, 400, 600), (3002, 800, 850), (5000, 850, 1000))
+MATCH_PREDS = [
+    (mask(0, 200), A, 1.0),  # claims 3000
+    (mask(0, 150), A, 1.0),  # IoU 0.75 with 3000, already claimed: false positive
+    (mask(150, 300), A, 1.0),  # IoU 0.4 with 3001, at most: false positive
+    (mask(600, 800), A, 1.0),  # all void: ignored
+]
+
+
+def test_match_agnostic_claims_counts_and_gt_set():
+    m = instance_ap.match_agnostic(scan(MATCH_GT, MATCH_PREDS), CLASS_IDS, 0.5)
+    # 3002 is below MIN_REGION_SIZE and 5000 is not a benchmark class: neither counts
+    assert m.pred_of_gt == {3000: 0, 3001: None, 7000: None}
+    assert (m.matched, m.missed, m.spurious) == (1, 2, 2)
+
+
+def test_match_agnostic_agrees_with_ap_50():
+    s = scan(MATCH_GT, MATCH_PREDS)
+    m = instance_ap.match_agnostic(s, CLASS_IDS, 0.5)
+    # equal scores: one point on the PR curve, AP = recall * (precision + 1) / 2
+    precision, recall = m.matched / (m.matched + m.spurious), m.matched / (m.matched + m.missed)
+    assert agnostic_ap({"s": s})["AP_50"] == pytest.approx(recall * (precision + 1) / 2)
+    assert recall * (precision + 1) / 2 == pytest.approx(2 / 9)

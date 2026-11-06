@@ -57,9 +57,45 @@ def evaluate(
 def evaluate_agnostic(scans: Mapping[str, Scan], class_ids: tuple[int, ...]) -> dict[str, float]:
     """Class-agnostic AP: one class for every GT instance and prediction, and all scores equal,
     so only the masks are judged."""
-    id_to_label = {cid: "object" for cid in class_ids}
-    aps = _ap_table(scans, class_ids, ("object",), id_to_label, lambda c: "object", np.ones_like)
+    aps = _ap_table(scans, class_ids, *_agnostic(class_ids))
     return _summary(aps)
+
+
+@dataclass(frozen=True)
+class Matching:
+    """Which prediction claims each GT instance at one IoU threshold, as the AP counts it."""
+
+    pred_of_gt: dict[int, int | None]  # every GT id the AP counts -> index of its mask, or None
+    spurious: int  # predictions the AP counts as false positives
+
+    @property
+    def matched(self) -> int:
+        return sum(p is not None for p in self.pred_of_gt.values())
+
+    @property
+    def missed(self) -> int:
+        return len(self.pred_of_gt) - self.matched
+
+
+def match_agnostic(scan: Scan, class_ids: tuple[int, ...], overlap_th: float = 0.5) -> Matching:
+    """The class-agnostic matching of ``evaluate_agnostic`` for one scan at one threshold: same
+    GT filtering (benchmark classes, ``MIN_REGION_SIZE``, void) and same rule (the highest IoU
+    above ``overlap_th`` claims the GT; other predictions are false positives unless they
+    mostly cover ignored vertices).
+
+        m = match_agnostic(scan, REPLICA.class_ids)
+        m.pred_of_gt   # {3001: 0, 3002: None, ...}
+    """
+    labels, id_to_label, pred_label, scores_of = _agnostic(class_ids)
+    gt_by_label, pred_by_label = _match_scan(0, scan, class_ids, labels, id_to_label, pred_label, scores_of(scan.scores))
+    m = _match_label(gt_by_label["object"], pred_by_label["object"], overlap_th, set())
+    pred_of_gt = {gt["instance_id"]: None if key is None else key[1] for gt, key in zip(m.gts, m.claimed)}
+    return Matching(pred_of_gt, int(np.count_nonzero(m.y_true == 0)))
+
+
+def _agnostic(class_ids):
+    """labels, id_to_label, pred_label, scores_of for one class and equal scores."""
+    return ("object",), {cid: "object" for cid in class_ids}, lambda c: "object", np.ones_like
 
 
 _IS_25 = np.isclose(OVERLAPS, 0.25)
@@ -151,58 +187,71 @@ def _label_ap(matches, label, overlap_th, visited) -> float:
     has_gt = has_pred = False
 
     for gt_by_label, pred_by_label in matches:
-        preds = pred_by_label[label]
-        gts = [g for g in gt_by_label[label] if g["instance_id"] >= 1000 and g["vert_count"] >= MIN_REGION_SIZE]
-        has_gt |= bool(gts)
-        has_pred |= bool(preds)
-
-        cur_true = np.ones(len(gts))
-        cur_score = np.full(len(gts), -np.inf)
-        cur_match = np.zeros(len(gts), dtype=bool)
-        for gi, gt in enumerate(gts):
-            found = False
-            for pred in sorted(gt["matched_pred"], key=lambda p: _iou(gt, p, p["intersection"]), reverse=True):
-                if pred["key"] in visited:
-                    continue
-                if _iou(gt, pred, pred["intersection"]) > overlap_th:
-                    conf = pred["confidence"]
-                    if cur_match[gi]:
-                        # a second prediction for a matched GT: the lower score is a false positive
-                        cur_score[gi], low = max(cur_score[gi], conf), min(cur_score[gi], conf)
-                        cur_true = np.append(cur_true, 0)
-                        cur_score = np.append(cur_score, low)
-                        cur_match = np.append(cur_match, True)
-                    else:
-                        found = True
-                        cur_match[gi] = True
-                        cur_score[gi] = conf
-                        visited.add(pred["key"])
-            if not found:
-                hard_false_negatives += 1
-        cur_true, cur_score = cur_true[cur_match], cur_score[cur_match]
-
-        # unmatched predictions are false positives unless they mostly cover ignored vertices
-        for pred in preds:
-            if any(_iou(gt, pred, gt["intersection"]) > overlap_th for gt in pred["matched_gt"]):
-                continue
-            ignored = pred["void_intersection"]
-            for gt in pred["matched_gt"]:
-                if gt["instance_id"] < 1000:
-                    ignored += gt["intersection"]
-                if gt["vert_count"] < MIN_REGION_SIZE:
-                    ignored += gt["intersection"]
-            if float(ignored) / pred["vert_count"] <= overlap_th:
-                cur_true = np.append(cur_true, 0)
-                cur_score = np.append(cur_score, pred["confidence"])
-
-        y_true.append(cur_true)
-        y_score.append(cur_score)
+        m = _match_label(gt_by_label[label], pred_by_label[label], overlap_th, visited)
+        has_gt |= bool(m.gts)
+        has_pred |= bool(pred_by_label[label])
+        hard_false_negatives += m.claimed.count(None)
+        y_true.append(m.y_true)
+        y_score.append(m.y_score)
 
     if not has_gt:
         return float("nan")
     if not has_pred:
         return 0.0
     return _average_precision(np.concatenate(y_true), np.concatenate(y_score), hard_false_negatives)
+
+
+@dataclass
+class _LabelMatch:
+    gts: list  # GT instances that count, in order
+    claimed: list  # per GT: key of the prediction that claims it, or None (a hard false negative)
+    y_true: np.ndarray  # per counted prediction: 1 true positive, 0 false positive
+    y_score: np.ndarray
+
+
+def _match_label(gt_list, preds, overlap_th, visited) -> _LabelMatch:
+    """Match one scan's GT instances and predictions of one label at one threshold.
+    Predictions claimed here are added to ``visited``."""
+    gts = [g for g in gt_list if g["instance_id"] >= 1000 and g["vert_count"] >= MIN_REGION_SIZE]
+    claimed = [None] * len(gts)
+
+    cur_true = np.ones(len(gts))
+    cur_score = np.full(len(gts), -np.inf)
+    cur_match = np.zeros(len(gts), dtype=bool)
+    for gi, gt in enumerate(gts):
+        for pred in sorted(gt["matched_pred"], key=lambda p: _iou(gt, p, p["intersection"]), reverse=True):
+            if pred["key"] in visited:
+                continue
+            if _iou(gt, pred, pred["intersection"]) > overlap_th:
+                conf = pred["confidence"]
+                if cur_match[gi]:
+                    # a second prediction for a matched GT: the lower score is a false positive
+                    cur_score[gi], low = max(cur_score[gi], conf), min(cur_score[gi], conf)
+                    cur_true = np.append(cur_true, 0)
+                    cur_score = np.append(cur_score, low)
+                    cur_match = np.append(cur_match, True)
+                else:
+                    claimed[gi] = pred["key"]
+                    cur_match[gi] = True
+                    cur_score[gi] = conf
+                    visited.add(pred["key"])
+    cur_true, cur_score = cur_true[cur_match], cur_score[cur_match]
+
+    # unmatched predictions are false positives unless they mostly cover ignored vertices
+    for pred in preds:
+        if any(_iou(gt, pred, gt["intersection"]) > overlap_th for gt in pred["matched_gt"]):
+            continue
+        ignored = pred["void_intersection"]
+        for gt in pred["matched_gt"]:
+            if gt["instance_id"] < 1000:
+                ignored += gt["intersection"]
+            if gt["vert_count"] < MIN_REGION_SIZE:
+                ignored += gt["intersection"]
+        if float(ignored) / pred["vert_count"] <= overlap_th:
+            cur_true = np.append(cur_true, 0)
+            cur_score = np.append(cur_score, pred["confidence"])
+
+    return _LabelMatch(gts, claimed, cur_true, cur_score)
 
 
 def _average_precision(y_true, y_score, hard_false_negatives) -> float:
