@@ -4,7 +4,6 @@ from matplotlib.colors import LogNorm
 from scipy.spatial import KDTree
 from pathlib import Path
 import matplotlib.pyplot as plt
-import seaborn as sn # seaborn is changing matplotlib configuration to automatically open graphs without calling plt.imshow()
 import pandas as pd
 import numpy as np
 import torch 
@@ -64,6 +63,9 @@ def plot_metrics(iou_values: np.ndarray, acc_values: np.ndarray, labels: List, o
     plt.close()
 
 def plot_confmat(confmat: np.ndarray, labels: List, output_path: Path, save: bool = True) -> None:
+    # seaborn only for this plot: importing it changes matplotlib's configuration, and it is
+    # not needed to project labels on a mesh (match_labels_to_vtx)
+    import seaborn as sn
     n =len(labels)
     fig, axs = plt.subplots(figsize=(0.32*n,0.28*n)) #16,14
     axs.set_title(f"Confusion matrix.")    
