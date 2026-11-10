@@ -154,7 +154,7 @@ class OVO:
             return None
 
         last_id = self.next_ins_id
-        matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids = self._match_and_track_instances(frame_data[1:], map_data, c2w, seg_maps, binary_maps)
+        matched_ins_ids, binary_maps, n_matched_points, updated_ponts_ins_ids = self._match_and_track_instances(frame_data[1:], map_data, c2w, seg_maps, binary_maps, frame_id)
             
         # Save keyframe information
         self.keyframes_queue.append([matched_ins_ids, binary_maps, image, self.kf_id])
@@ -190,7 +190,7 @@ class OVO:
         return self.mask_generator.get_masks(image, frame_id)
     
     @profil
-    def _match_and_track_instances(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor) -> Tuple[List[int], torch.Tensor, int]:
+    def _match_and_track_instances(self, frame_data: Tuple[int, np.ndarray, np.ndarray, Tuple[float, float, int]], map_data: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], c2w: torch.Tensor, seg_map: torch.Tensor, binary_maps: torch.Tensor, frame_id: int) -> Tuple[List[int], torch.Tensor, int]:
         """ For the current frame (1) computes using SAM for each level i \in M, a set of segmentation maps; (2) track segmentation maps between frames projecting 3D points and associating the map to 3D instances, if 3D points don't have an associated 3D instance, create a new; (3) associate 3D points without an instance id to matched instances; (4) fuse 2D segments associated to the same 3D instance. 
 
         Args:
@@ -205,6 +205,7 @@ class OVO:
             - c2w: (torch.Tensor): camera to world 3D transform.
             - seg_map (torch.Tensor): The segmentation maps on self.device with shape (H, W).
             - binary_maps (torch.Tensor): Tensor of shape (N, H, W) on self.device, where each pixel will have a value of 1 if it belongs to the nth segmentation mask, or 0 otherwise.
+            - frame_id (int): current frame id, stored in the instances it creates.
         Update: 
             - points_ins_ids (torch.Tensor): updated ids of 3D instances associated to each 3d point with current keyframe segmentation.
         Return:
@@ -233,7 +234,7 @@ class OVO:
         matched_seg_idxs = seg_map[matches[:,1], matches[:,0]]
 
         frustum_points_ids, frustum_points_ins_ids = points_ids[frustum_mask], points_ins_ids[frustum_mask]
-        frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, seg_map, self.config["track_th"], kf_id)
+        frustum_points_ins_ids, matched_ins_info = self._track_objects(frustum_points_ids, frustum_points_ins_ids, matched_points_idxs, matched_seg_idxs, seg_map, self.config["track_th"], kf_id, frame_id)
         matched_ins_ids, binary_maps = self._fuse_masks_with_same_ins_id(binary_maps, matched_ins_info, kf_id)
 
         updated_ponts_ins_ids = points_ins_ids.clone()
@@ -248,7 +249,7 @@ class OVO:
 
         return matched_ins_ids, binary_maps, len(matched_points_idxs), updated_ponts_ins_ids
             
-    def _track_objects(self, points_ids: torch.Tensor, points_ins_ids: torch.Tensor, matched_points_idxs: torch.Tensor, matched_seg_idxs: torch.Tensor, seg_map: torch.Tensor, track_th: float, kf_id: int) -> tuple[torch.Tensor, Dict[int, List[Tuple[int, int]]]]:
+    def _track_objects(self, points_ids: torch.Tensor, points_ins_ids: torch.Tensor, matched_points_idxs: torch.Tensor, matched_seg_idxs: torch.Tensor, seg_map: torch.Tensor, track_th: float, kf_id: int, frame_id: int) -> tuple[torch.Tensor, Dict[int, List[Tuple[int, int]]]]:
         """  We project 3D points and match with segmentation maps. Then we assign to each segmentation map the id of the 3D instance associated with the majority of points projected into it. If the set points don't have an object assigned, a new object is created and assigned to them. Points without an object assigned get assigned the segmentation map's instance.
         Args:
             - points_ids (torch.Tensor): ids to identify 3D points in case their order changes, or any of them is pruned, between keyframes.
@@ -257,6 +258,7 @@ class OVO:
             - matched_seg_idxs (torch.Tensor): (N) tensor of the indexes of the segmentation map matched to each of N 3D points. 
             - seg_map (torch.Tensor): (H,W) tensor where each pixel stores the idx of the corresponding mask.
             - kf_id (int): current keyframe id.
+            - frame_id (int): current frame id, stored in the instances it creates.
         Return:
             - points_ins_ids (torch.Tensor): ids of 3D instances associated to each element of points_ids.
             - matched_ins_info (Dict[int, List[Tuple[int, int]]]]): Hash map storing for each observed 3D instance, a list of (matched mask index, mask area).
@@ -283,7 +285,8 @@ class OVO:
                     map_ins_id = self.next_ins_id
                     self.next_ins_id +=1
                     #assigned points do not change obj id
-                    self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, points_ids=unassigned_points_ids, mask_area=mask_area)
+                    self.objects[map_ins_id] = Instance3D(map_ins_id, kf_id=kf_id, points_ids=unassigned_points_ids, mask_area=mask_area,
+                                                          created_at_frame=frame_id)
                     matched_ins_info[map_ins_id]=[(map_idx, mask_area)]
 
                 if map_ins_id > -1:

@@ -34,6 +34,7 @@ class Instance3D:
         kf_id (int, optional): Keyframe ID where the instance has been observed. Defaults to None.
         points_ids (List[int], optional): A list of point IDs associated with the object. Defaults to None.
         mask_area (int, optional): The area of the first mask associated with the object. Defaults to 0.
+        created_at_frame (int, optional): Frame whose segmentation created the instance. Defaults to None.
         n_top_kf (int, optional): The number of top keyframes to keep. Defaults to -1.
 
     Attributes:
@@ -45,12 +46,16 @@ class Instance3D:
         to_update (bool): Flag indicating if the object descriptor needs to be updated.
         n_top_kf (int): The number of top keyframes to keep. If 0 all keyframes are used.
         top_kf (list): A Heap of top keyframes ordered by their mask area.
+        created_at_frame (int | None): Frame whose segmentation created the instance; after a fusion,
+            the earliest of the fused instances.
     """
     n_top_kf: int = 0 
     mv_fusion = l1_medoid
 
-    def __init__(self, id: int, kf_id: int | None = None, points_ids: List[int] = None, mask_area: int = 0):
+    def __init__(self, id: int, kf_id: int | None = None, points_ids: List[int] = None, mask_area: int = 0,
+                 *, created_at_frame: int | None = None):
         self.id = id
+        self.created_at_frame = created_at_frame
         self.clip_feature = None
         self.clip_feature_kf = None
         self.kfs_ids = []
@@ -199,6 +204,7 @@ class Instance3D:
         obj_dict = {
             f"ins3d_{self.id}_clip_feature": self.clip_feature,
             f"ins3d_{self.id}_clip_feature_kf": self.clip_feature_kf,
+            f"ins3d_{self.id}_created_at_frame": self.created_at_frame,
         }
 
         if debug_info:
@@ -219,6 +225,7 @@ class Instance3D:
         """
         self.clip_feature = obj_dict[f"ins3d_{self.id}_clip_feature"]
         self.clip_feature_kf = obj_dict.get(f"ins3d_{self.id}_clip_feature_kf", None)
+        self.created_at_frame = obj_dict.get(f"ins3d_{self.id}_created_at_frame", None)
         self.to_update=self.clip_feature is None
         if debug_info:
             self.kfs_ids = obj_dict[f"ins3d_{self.id}_keyframes_ids"].tolist()
