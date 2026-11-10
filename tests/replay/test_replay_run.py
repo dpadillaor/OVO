@@ -104,6 +104,27 @@ def test_output_files_and_config(tmp_path):
     assert "frame_id" not in ckpt["ovo_map_params"]  # saved as a run with debug off
 
 
+@pytest.mark.parametrize("fusion, steps", [
+    (None, ["cos_sim", "overlap"]),
+    ({"gates": [{"aabb": {}}, {"centroid": {}}]}, ["aabb", "centroid", "cos_sim", "overlap"])])
+def test_the_step_times_of_the_replayed_fusion_are_written(tmp_path, fusion, steps):
+    run_dir, out_dir = tmp_path / "run", tmp_path / "replay"
+    _original_run(run_dir, frame=120)
+    path = layout.fusion_timings(out_dir)
+    path.parent.mkdir(parents=True)
+    path.write_text("left by an earlier replay\n")
+
+    replay_scene(layout.pre_fusion_checkpoint(run_dir, 120), out_dir, fusion=fusion, device="cpu")
+
+    assert path.read_text().splitlines()[0] == "frame_id,step,prepare_s,pairs_s"
+    rows = _rows(path)
+    assert [r["step"] for r in rows] == ["extract", *steps, "apply"]
+    assert {r["frame_id"] for r in rows} == {"120"}
+    assert all(float(r["prepare_s"]) >= 0 for r in rows)
+    assert [r["pairs_s"] == "" for r in rows] == [True] + [False] * len(steps) + [True]
+    assert all(float(r["pairs_s"]) >= 0 for r in rows[1:-1])
+
+
 def test_an_invalid_fusion_writes_nothing(tmp_path):
     run_dir, out_dir = tmp_path / "run", tmp_path / "replay"
     _original_run(run_dir)

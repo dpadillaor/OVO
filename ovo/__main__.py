@@ -3,6 +3,8 @@
     python -m ovo eval instances --dataset Replica --experiment my_exp [--scenes office0 room0]
     python -m ovo eval fusion --dataset Replica --experiment my_exp[/replays/aabb]
                               [--scenes office0 [--frame 1990]]
+    python -m ovo eval report --dataset Replica --experiment my_exp [--scenes office0 [--frame 1990]]
+                              [--out report.csv]
     python -m ovo replay --dataset Replica --experiment my_exp --name aabb [--fusion aabb.yaml]
                          [--scenes office0 [--frame 1990]]
 
@@ -34,6 +36,16 @@ def _eval_fusion(args) -> None:
         print(f"Written to {out}")
 
 
+def _eval_report(args) -> None:
+    from ovo.eval.fusion import report
+
+    rows = report.report_experiment(args.dataset, args.experiment, args.scenes, args.frame)
+    print(report.render(rows))
+    if args.out:
+        report.write_csv(rows, args.out)
+        print(f"Written to {args.out}")
+
+
 def _replay(args) -> None:
     from ovo.replay.run import replay_experiment
     from ovo.utils import io_utils
@@ -59,6 +71,13 @@ def main(argv=None) -> None:
     fus.add_argument("--scenes", nargs="+", default=None, help="default: every scene with fusion decisions")
     fus.add_argument("--frame", type=int, default=None, help="fusion frame (one scene only); default: the last checkpoint")
     fus.set_defaults(run=_eval_fusion)
+    tim = evaluate.add_parser("report", help="time of each fusion step next to what it decided (needs `eval fusion`)")
+    tim.add_argument("--dataset", required=True)
+    tim.add_argument("--experiment", required=True, help="an experiment or a replay ({experiment}/replays/{name})")
+    tim.add_argument("--scenes", nargs="+", default=None, help="default: every scene with an evaluated fusion")
+    tim.add_argument("--frame", type=int, default=None, help="fusion frame (one scene only); default: every evaluated one")
+    tim.add_argument("--out", default=None, help="also write the table as CSV here")
+    tim.set_defaults(run=_eval_report)
 
     rep = commands.add_parser("replay", help="re-run the fusion of an experiment from its pre-fusion checkpoints")
     rep.add_argument("--dataset", required=True)

@@ -113,6 +113,8 @@ Every map update judges which instances are the same object and fuses them. Each
 
 The time of each fusion step goes to `logger/t_fusion.log` (whole step: extract the clouds, judge, apply) and `logger/t_fusion_judge.log` (judging alone), one line per map update.
 
+Each run also writes `<scene>/fusion/fusion_timings.csv`, `frame_id,step,prepare_s,pairs_s`, one row per map update and step. The steps, in the order they run: `extract` (the point cloud of each instance), the gates in config order, `cos_sim`, `overlap` and `apply` (the merges). `prepare_s` is paid once per fusion (with `overlap: voxel` it computes every overlap, so a pair is a lookup), `pairs_s` is summed over the pairs that reached the step, empty for `extract` and `apply`. Unlike the decisions log, a map update that judged no pair still has its rows.
+
 ### Replay a fusion
 Set `replay.checkpoints` to `last` (or `all`) to save each scene's state right before a fusion in `<scene>/fusion/pre_fusion_<frame>.ckpt`. That fusion can then be re-run alone, without SLAM or models, with other `semantic.instance_fusion` parameters (a YAML shaped like that block, which replaces it whole):
 ```
@@ -135,6 +137,12 @@ By default the last checkpointed fusion of every scene with fusion decisions is 
 Drift epochs: a run with the simulated SLAM writes `<scene>/simulation.json`, and each jump or correction in it starts a new epoch (epoch k: the frames after k events; an event at a frame already counts for that frame). An instance belongs to the epoch of the frame that created it (a fused instance, of the earliest of its parts). A replay takes the epochs of the run it was replayed from.
 
 Every input is checked before anything is written: a missing one, or a decisions log that does not belong to the checkpoint, is an error.
+
+Where the time of the evaluated fusions went, next to what each step decided:
+```
+python -m ovo eval report --dataset Replica --experiment ovo_mapping [--scenes office0 [--frame 1990]] [--out report.csv]
+```
+It only reads `eval_<frame>/` and `fusion_timings.csv`. By default every evaluated fusion of every scene is reported (`--frame`: one of them, one scene only), one row per fusion and step, `scene,frame_id,step,in,reject,FN,TN,prepare_s,pairs_s,ms_pair`, then a `TOTAL` row per step summed over all of them. `in` and `reject` count every judged pair that reached the step and that it stopped (unscored pairs too: they cost time), `FN` and `TN` the scored pairs it stopped (as in `summary.json`), `ms_pair` is `pairs_s / in` in milliseconds (in `TOTAL`, from the sums). The table is printed rounded; `--out` also writes it as CSV, every decimal kept. A replay is reported with `--experiment ovo_mapping/replays/strict`. A run older than the timings, or timings whose steps are not those of the evaluated fusion, is an error.
 
 ## Changelog:
 - 13, January, 2026 - Added implementation using [TextRegion](https://github.com/avaxiao/TextRegion) with the [Perception Encoder](https://github.com/facebookresearch/perception_models) as descriptor. Performance in Replica goes up to 35.7% IoU and 57% Acc (from from 27.0% IoU and 39.1% Acc reported in the paper). 

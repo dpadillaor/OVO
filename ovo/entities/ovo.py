@@ -11,6 +11,7 @@ from .mask_generator import MaskGenerator
 from .instance3d import Instance3D
 from .logger import Logger
 from .fusion import FusionCfg, FusionPipeline, FusionReport
+from .fusion.timing import StepTime, preparing
 
 class OVO:
     """ Initialize CLIP and SAM backbones, with a given configuration, and logger.
@@ -428,24 +429,28 @@ class OVO:
             - objects: surviving instances, {id: Instance3D}.
             - fused_objects: {absorbed_id: survivor_id}.
             - points_ins_ids: per-point instance ids, updated with the fusions.
-            - report: what the pipeline judged and decided (see FusionReport).
+            - report: what the pipeline judged and decided (see FusionReport), with the time of
+              each step, here extract and apply included (ovo.entities.fusion.timing).
             - seconds: wall time of the whole step (extract each cloud, judge, apply).
         """
         points_3d, _, points_ins_ids = map_data
-        if points_3d.is_cuda:
-            torch.cuda.synchronize()
+        sync = points_3d.is_cuda
+        extract, apply = StepTime(), StepTime()
+        if sync:
+            torch.cuda.synchronize()  # earlier GPU work is not the fusion's
         t0 = time.perf_counter()
-        pcds = {instance.id: points_3d[points_ins_ids == instance.id] for instance in objects_list}
+        with preparing(extract, sync):
+            pcds = {instance.id: points_3d[points_ins_ids == instance.id] for instance in objects_list}
         report = self.fusion.run(objects_list, pcds)
 
-        by_id = {instance.id: instance for instance in objects_list}
-        fused_objects = {}
-        for survivor, absorbed in report.merges:
-            by_id[survivor], points_ins_ids = instance_utils.fuse_instances(by_id[survivor], by_id[absorbed], map_data)
-            fused_objects[absorbed] = survivor
-        objects = {ins_id: instance for ins_id, instance in by_id.items() if ins_id not in fused_objects}
-        if points_3d.is_cuda:
-            torch.cuda.synchronize()
+        with preparing(apply, sync):
+            by_id = {instance.id: instance for instance in objects_list}
+            fused_objects = {}
+            for survivor, absorbed in report.merges:
+                by_id[survivor], points_ins_ids = instance_utils.fuse_instances(by_id[survivor], by_id[absorbed], map_data)
+                fused_objects[absorbed] = survivor
+            objects = {ins_id: instance for ins_id, instance in by_id.items() if ins_id not in fused_objects}
+        report.steps = {"extract": extract, **report.steps, "apply": apply}
         return objects, fused_objects, points_ins_ids, report, time.perf_counter() - t0
 
     @profil

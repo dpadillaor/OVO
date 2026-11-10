@@ -9,7 +9,7 @@ import os
 import gc
 
 from .logger import Logger
-from .fusion import FusionLog
+from .fusion import FusionLog, TimingLog
 from .. import layout
 from ..replay.checkpoint import Checkpointer, mode_from_config as checkpoint_mode
 from .ovo import OVO
@@ -63,6 +63,7 @@ class OVOSemMap():
 
         self.logger = Logger(self.output_path,os.getpid(), config["use_wandb"])   
         self.fusion_log = FusionLog(layout.fusion_decisions(self.output_path))
+        self.timing_log = TimingLog(layout.fusion_timings(self.output_path))
         self.checkpointer = Checkpointer(checkpoint_mode(config), self.output_path)
         self.dataset = get_dataset(config["dataset_name"])({**config["data"], **config["cam"]})     
 
@@ -168,6 +169,7 @@ class OVOSemMap():
                             updated_points_ins_ids, fusion, fusion_seconds = self.ovo.update_map(map_data)
                             self.slam_backbone.update_pcd_obj_ids(updated_points_ins_ids)
                             self.fusion_log.write(frame_id, fusion)
+                            self.timing_log.write(frame_id, fusion.steps)
                             # whole step (extract clouds, judge, apply) and judging alone
                             self.logger.log_ovo_stats({"t_fusion": fusion_seconds, "t_fusion_judge": fusion.seconds})
                             self.slam_backbone.map_updated = False

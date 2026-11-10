@@ -194,3 +194,59 @@ def test_fuse_instances_without_merges_changes_nothing(scene):
     assert len(report.decisions) > 0
     assert sorted(objects) == [10, 30, 40]
     assert torch.equal(points_ins_ids, before)
+
+
+# ---------------------------------------------------------------- step times
+
+@pytest.mark.parametrize("gates, expected", [
+    ([], []), ([{"centroid": {"max_dist": 1.0}}], ["centroid"]),
+    ([{"aabb": {}}, {"centroid": {}}], ["aabb", "centroid"])])
+def test_fuse_instances_times_extract_the_pipeline_steps_and_apply(scene, gates, expected):
+    ovo, map_data, _, _ = scene
+    ovo.fusion = FusionPipeline(FusionCfg.from_dict({"gates": gates}))
+    in_map = [ovo.objects[i] for i in (10, 20, 30, 40)]
+    _, _, _, report, seconds = ovo._fuse_instances(in_map, map_data)
+
+    assert list(report.steps) == ["extract", *expected, "cos_sim", "overlap", "apply"]
+    assert report.steps["extract"].pairs_s is None and report.steps["apply"].pairs_s is None
+    assert all(t.pairs_s is not None for name, t in report.steps.items() if name not in ("extract", "apply"))
+    assert all(t.prepare_s >= 0 and (t.pairs_s or 0) >= 0 for t in report.steps.values())
+    spent = sum(t.prepare_s + (t.pairs_s or 0) for t in report.steps.values())
+    assert spent <= seconds + 1e-9  # disjoint parts of the step (1e-9: float rounding)
+    judge = sum(t.prepare_s + (t.pairs_s or 0) for n, t in report.steps.items() if n not in ("extract", "apply"))
+    assert judge <= report.seconds + 1e-9
+
+
+def test_update_map_reports_the_step_times(scene):
+    ovo, map_data, _, _ = scene
+    _, report, seconds = ovo.update_map(map_data)
+    assert list(report.steps) == ["extract", "cos_sim", "overlap", "apply"]
+    assert sum(t.prepare_s + (t.pairs_s or 0) for t in report.steps.values()) <= seconds + 1e-9
+
+
+def test_extract_and_apply_time_their_own_work(scene, monkeypatch):
+    """Under a fake clock: extracting costs 1 per cloud (indexing the map points), each merge 100, the pipeline 10000."""
+    from ovo.entities.fusion import timing
+    from ovo.utils import instance_utils
+
+    ovo, map_data, _, _ = scene
+    now = [0.0]
+    monkeypatch.setattr(timing.time, "perf_counter", lambda: now[0])
+    points_3d, ids, points_ins_ids = map_data
+
+    class CostlyPoints(torch.Tensor):
+        def __getitem__(self, mask):
+            now[0] += 1.0
+            return torch.Tensor.__getitem__(self.as_subclass(torch.Tensor), mask)
+
+    fuse = instance_utils.fuse_instances
+    monkeypatch.setattr(instance_utils, "fuse_instances",
+                        lambda *a: (now.__setitem__(0, now[0] + 100.0), fuse(*a))[1])
+    run = ovo.fusion.run
+    monkeypatch.setattr(ovo.fusion, "run", lambda *a: (now.__setitem__(0, now[0] + 10000.0), run(*a))[1])
+
+    in_map = [ovo.objects[i] for i in (10, 20, 30, 40)]
+    _, _, _, report, seconds = ovo._fuse_instances(in_map, (points_3d.as_subclass(CostlyPoints), ids, points_ins_ids))
+    assert report.steps["extract"].prepare_s == 4.0
+    assert report.steps["apply"].prepare_s == 100.0 * len(report.merges) == 100.0
+    assert seconds == 4.0 + 10000.0 + 100.0

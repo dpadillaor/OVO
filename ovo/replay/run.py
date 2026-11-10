@@ -8,6 +8,7 @@ Output, laid out like an experiment so it is evaluated like one:
     {experiment}/replays/{name}/{scene}/
         config.yaml           the run's config with the new fusion, plus `replayed_from`
         fusion/fusion_decisions.csv
+        fusion/fusion_timings.csv
         ovo_map.ckpt          map and instances after the fusion (as a run with debug off)
         logger/               t_fusion, t_fusion_judge
 """
@@ -21,6 +22,7 @@ import torch
 from .. import layout
 from ..entities.fusion import FusionCfg
 from ..entities.fusion.log import FusionLog
+from ..entities.fusion.timing import TimingLog
 from ..entities.logger import Logger
 from ..entities.ovo import OVO
 from ..utils import io_utils
@@ -56,6 +58,7 @@ def replay_scene(ckpt_path: Path, out_dir: Path, fusion: Optional[dict] = None, 
     out_dir.mkdir(parents=True, exist_ok=True)
     io_utils.save_dict_to_yaml(config, "config.yaml", directory=out_dir)
     FusionLog(layout.fusion_decisions(out_dir)).write(frame_id, report)
+    TimingLog(layout.fusion_timings(out_dir)).write(frame_id, report.steps)
     logger = Logger(out_dir)
     logger.log_ovo_stats({"t_fusion": seconds, "t_fusion_judge": report.seconds})
     logger.write_stats()
