@@ -1,6 +1,8 @@
 """Command line: ``python -m ovo <command> ...``.
 
     python -m ovo eval instances --dataset Replica --experiment my_exp [--scenes office0 room0]
+    python -m ovo eval fusion --dataset Replica --experiment my_exp[/replays/aabb]
+                              [--scenes office0 [--frame 1990]]
     python -m ovo replay --dataset Replica --experiment my_exp --name aabb [--fusion aabb.yaml]
                          [--scenes office0 [--frame 1990]]
 
@@ -25,6 +27,13 @@ def _eval_instances(args) -> None:
     print(f"Written to {exp.instance_ap}")
 
 
+def _eval_fusion(args) -> None:
+    from ovo.eval.fusion.run import evaluate_experiment
+
+    for out in evaluate_experiment(args.dataset, args.experiment, args.scenes, args.frame):
+        print(f"Written to {out}")
+
+
 def _replay(args) -> None:
     from ovo.replay.run import replay_experiment
     from ovo.utils import io_utils
@@ -44,6 +53,12 @@ def main(argv=None) -> None:
     ins.add_argument("--experiment", required=True)
     ins.add_argument("--scenes", nargs="+", default=None, help="default: every scene with predictions")
     ins.set_defaults(run=_eval_instances)
+    fus = evaluate.add_parser("fusion", help="one fusion step against the GT: decisions, cascade, agnostic AP")
+    fus.add_argument("--dataset", required=True, help="Replica only")
+    fus.add_argument("--experiment", required=True, help="an experiment or a replay ({experiment}/replays/{name})")
+    fus.add_argument("--scenes", nargs="+", default=None, help="default: every scene with fusion decisions")
+    fus.add_argument("--frame", type=int, default=None, help="fusion frame (one scene only); default: the last checkpoint")
+    fus.set_defaults(run=_eval_fusion)
 
     rep = commands.add_parser("replay", help="re-run the fusion of an experiment from its pre-fusion checkpoints")
     rep.add_argument("--dataset", required=True)
