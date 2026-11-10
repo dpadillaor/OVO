@@ -2,6 +2,8 @@
 
 For each candidate pair, cheapest first, stopping as soon as the pair is rejected:
     policy (still worth judging?) -> gates -> semantics -> overlap -> accept rule
+
+The report also holds the time of each of those steps (timing.py).
 """
 
 import time
@@ -15,6 +17,7 @@ from .config import FusionCfg
 from .gates import build_gate
 from .overlap import build_overlap
 from .rule import accept, similar_enough
+from .timing import StepTime, preparing
 
 
 @dataclass
@@ -36,6 +39,7 @@ class FusionReport:
     decisions: list[Decision]           # pairs actually judged, in double-loop order
     merges: list[tuple[int, int]]       # (survivor, absorbed), in the order to apply them
     seconds: float
+    steps: dict[str, StepTime] = field(default_factory=dict)  # time per step (see timing.py)
 
 
 class FusionPipeline:
@@ -47,40 +51,53 @@ class FusionPipeline:
         if cfg.apply not in POLICIES:
             raise ValueError(f"instance_fusion.apply must be one of {sorted(POLICIES)}, got {cfg.apply!r}")
         self.policy = POLICIES[cfg.apply]
+        self.steps = [g.name for g in self.gates] + ["cos_sim", "overlap"]  # the order a pair goes through
 
     def run(self, instances: list, pcds: dict[int, torch.Tensor]) -> FusionReport:
         t0 = time.perf_counter()
+        sync = any(p.is_cuda for p in pcds.values())
+        steps = {name: StepTime(pairs_s=0.0) for name in self.steps}
         order = [inst.id for inst in instances]
-        features = {inst.id: getattr(inst, self.feature_attr)[0] for inst in instances}
-        self.overlap.prepare(order, pcds)
+        with preparing(steps["cos_sim"], sync):
+            features = {inst.id: getattr(inst, self.feature_attr)[0] for inst in instances}
+        with preparing(steps["overlap"], sync):
+            self.overlap.prepare(order, pcds)
+            candidates = self.overlap.candidates()
         for gate in self.gates:
-            gate.prepare(instances, pcds)
+            with preparing(steps[gate.name], sync):
+                gate.prepare(instances, pcds)
         policy = self.policy(order)
 
         decisions = []
-        for a, b in self.overlap.candidates():
+        for a, b in candidates:
             if not policy.should_judge(a, b):
                 continue  # the outcome can no longer change: measure nothing
             d = Decision(a, b)
             decisions.append(d)
-            if self._judge(d, features[a], features[b]):
+            if self._judge(d, features[a], features[b], steps):
                 policy.on_accept(a, b)
 
-        return FusionReport(decisions, policy.merges(), time.perf_counter() - t0)
+        return FusionReport(decisions, policy.merges(), time.perf_counter() - t0, steps)
 
-    def _judge(self, d: Decision, feat_a: torch.Tensor, feat_b: torch.Tensor) -> bool:
+    def _judge(self, d: Decision, feat_a: torch.Tensor, feat_b: torch.Tensor, steps: dict[str, StepTime]) -> bool:
         for gate in self.gates:
+            t = time.perf_counter()
             ok, d.gate_values[gate.name] = gate.check(d.first, d.second)
+            steps[gate.name].pairs_s += time.perf_counter() - t
             if not ok:
                 d.reason = gate.name
                 return False
 
+        t = time.perf_counter()
         d.cos_sim = torch.nn.functional.cosine_similarity(feat_a, feat_b, dim=0).item()
+        steps["cos_sim"].pairs_s += time.perf_counter() - t
         if not similar_enough(d.cos_sim, self.cfg.accept):
             d.reason = "cos_sim"
             return False
 
+        t = time.perf_counter()
         d.overlap = self.overlap.measure(d.first, d.second)
+        steps["overlap"].pairs_s += time.perf_counter() - t
         d.mode = accept(d.overlap, d.cos_sim, self.cfg.accept)
         d.accepted = d.mode is not None
         return d.accepted

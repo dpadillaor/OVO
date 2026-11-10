@@ -113,6 +113,8 @@ Every map update judges which instances are the same object and fuses them. Each
 
 The time of each fusion step goes to `logger/t_fusion.log` (whole step: extract the clouds, judge, apply) and `logger/t_fusion_judge.log` (judging alone), one line per map update.
 
+Each run also writes `<scene>/fusion/fusion_timings.csv`, `frame_id,step,prepare_s,pairs_s`, one row per map update and step. The steps, in the order they run: `extract` (the point cloud of each instance), the gates in config order, `cos_sim`, `overlap` and `apply` (the merges). `prepare_s` is paid once per fusion (with `overlap: voxel` it computes every overlap, so a pair is a lookup), `pairs_s` is summed over the pairs that reached the step, empty for `extract` and `apply`. Unlike the decisions log, a map update that judged no pair still has its rows.
+
 ### Replay a fusion
 Set `replay.checkpoints` to `last` (or `all`) to save each scene's state right before a fusion in `<scene>/fusion/pre_fusion_<frame>.ckpt`. That fusion can then be re-run alone, without SLAM or models, with other `semantic.instance_fusion` parameters (a YAML shaped like that block, which replaces it whole):
 ```

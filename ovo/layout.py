@@ -3,6 +3,7 @@
     data/output/{dataset}/{experiment}/
         {scene}/                 one OVO run (config.yaml, ovo_map.ckpt, logger/, ...)
             fusion/fusion_decisions.csv   one row per pair judged by instance fusion
+            fusion/fusion_timings.csv     time of each fusion step (ovo.entities.fusion.timing)
             fusion/pre_fusion_{frame:05d}.ckpt   state right before a fusion (ovo.replay.checkpoint)
             fusion/eval_{frame:05d}/      that fusion against the GT (ovo.eval.fusion):
                 decisions_eval.csv, summary.json, instance_stats.csv
@@ -52,6 +53,10 @@ def fusion_dir(scene_dir: Path) -> Path:
 
 def fusion_decisions(scene_dir: Path) -> Path:
     return fusion_dir(scene_dir) / "fusion_decisions.csv"
+
+
+def fusion_timings(scene_dir: Path) -> Path:
+    return fusion_dir(scene_dir) / "fusion_timings.csv"
 
 
 def pre_fusion_checkpoint(scene_dir: Path, frame_id: int) -> Path:
