@@ -138,6 +138,12 @@ Drift epochs: a run with the simulated SLAM writes `<scene>/simulation.json`, an
 
 Every input is checked before anything is written: a missing one, or a decisions log that does not belong to the checkpoint, is an error.
 
+Where the time of the evaluated fusions went, next to what each step decided:
+```
+python -m ovo eval report --dataset Replica --experiment ovo_mapping [--scenes office0 [--frame 1990]] [--out report.csv]
+```
+It only reads `eval_<frame>/` and `fusion_timings.csv`. By default every evaluated fusion of every scene is reported (`--frame`: one of them, one scene only), one row per fusion and step, `scene,frame_id,step,in,reject,FN,TN,prepare_s,pairs_s,ms_pair`, then a `TOTAL` row per step summed over all of them. `in` and `reject` count every judged pair that reached the step and that it stopped (unscored pairs too: they cost time), `FN` and `TN` the scored pairs it stopped (as in `summary.json`), `ms_pair` is `pairs_s / in` in milliseconds (in `TOTAL`, from the sums). The table is printed rounded; `--out` also writes it as CSV, every decimal kept. A replay is reported with `--experiment ovo_mapping/replays/strict`. A run older than the timings, or timings whose steps are not those of the evaluated fusion, is an error.
+
 ## Changelog:
 - 13, January, 2026 - Added implementation using [TextRegion](https://github.com/avaxiao/TextRegion) with the [Perception Encoder](https://github.com/facebookresearch/perception_models) as descriptor. Performance in Replica goes up to 35.7% IoU and 57% Acc (from from 27.0% IoU and 39.1% Acc reported in the paper). 
 - 11, January, 2026 - Update conda environment to work with Python 3.11 and Numpy 2.4.
