@@ -44,6 +44,16 @@ def test_a_pair_the_policy_would_skip_means_a_foreign_log():
     assert decisions.merges(rows[:1], "greedy", [4, 7, 9]) == [(4, 9)]
 
 
+@pytest.mark.parametrize("apply", ["greedy", "chained"])
+@pytest.mark.parametrize("accepted", ["True", "False"])
+def test_an_instance_paired_with_itself_means_a_foreign_log(apply, accepted):
+    """The pipeline never pairs an instance with itself; greedy would judge (5, 5), and an
+    accepted one made groups() loop forever."""
+    rows = decisions.parse(CSV.split("\n")[0] + f"\n1,5,5,{accepted},overlap,strong,,,,\n").rows
+    with pytest.raises(ValueError, match="with itself"):
+        decisions.merges(rows, apply, [5, 6])
+
+
 def test_an_instance_outside_the_map_means_a_foreign_log():
     rows = decisions.parse(CSV).at_frame(120)
     with pytest.raises(ValueError, match=r"\[4\], not in the pre-fusion map"):

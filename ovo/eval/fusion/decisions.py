@@ -66,8 +66,9 @@ def _row(cells: dict[str, str]) -> Row:
 def merges(rows: list[Row], apply: str, order: list[int]) -> list[tuple[int, int]]:
     """(survivor, absorbed) as the fusion applied them. `order` is the instance order the pipeline
     ran with (its survivor under `chained` is the earliest instance). Raises ValueError when the
-    rows could not come from that fusion: an instance outside `order`, or a pair the policy would
-    not have judged (e.g. under `greedy`, an instance absorbed twice)."""
+    rows could not come from that fusion: an instance outside `order`, an instance paired with
+    itself, or a pair the policy would not have judged (e.g. under `greedy`, an instance absorbed
+    twice)."""
     known = set(order)
     policy = POLICIES[apply](order)
     for r in rows:
@@ -75,6 +76,9 @@ def merges(rows: list[Row], apply: str, order: list[int]) -> list[tuple[int, int
         if missing:
             raise ValueError(f"frame {r.frame_id}: pair ({r.first}, {r.second}) has {missing}, not in the "
                              f"pre-fusion map: the decisions do not belong to this checkpoint")
+        if r.first == r.second:
+            raise ValueError(f"frame {r.frame_id}: pair ({r.first}, {r.second}) pairs an instance with itself: "
+                             f"the decisions do not belong to this fusion")
         if not policy.should_judge(r.first, r.second):
             raise ValueError(f"frame {r.frame_id}: pair ({r.first}, {r.second}) would not have been judged "
                              f"by '{apply}': the decisions do not belong to this fusion")
