@@ -3,13 +3,14 @@
 import io
 
 import numpy as np
+import pytest
 import torch
 
 from ovo.entities.ovo import OVO
 from ovo.replay import state
 from replay_fakes import config, scene
 
-FIELDS = ("clip_feature", "clip_feature_kf", "kfs_ids", "points_ids", "top_kf", "to_update")
+FIELDS = ("clip_feature", "clip_feature_kf", "kfs_ids", "points_ids", "top_kf", "to_update", "created_at_frame")
 
 
 def _equal(a, b) -> bool:
@@ -54,6 +55,10 @@ def _varied_scene():
     ovo.objects[30].clip_feature = None                # never described yet
     ovo.objects[30].to_update = True
     ovo.objects[40].top_kf = [(120, 2), (80, 5)]
+    ovo.objects[10].created_at_frame = 0
+    ovo.objects[20].created_at_frame = 15
+    ovo.objects[40].created_at_frame = np.int64(7)     # from a restored ovo_map.ckpt
+    # 30, 50: None, unknown (an OVO restored from an old ovo_map.ckpt)
     ovo.keyframes["frame_id"] = [0, 10, 20, 30]
     return ovo, map_data
 
@@ -61,6 +66,20 @@ def _varied_scene():
 def test_round_trip_through_disk_restores_every_field_and_descriptor():
     ovo, _ = _varied_scene()
     _assert_same_state(ovo, _restored(_through_disk(state.capture(ovo))))
+
+
+def test_created_at_frame_round_trips_known_and_unknown():
+    ovo, _ = _varied_scene()
+    other = _restored(_through_disk(state.capture(ovo)))
+    assert {i: o.created_at_frame for i, o in other.objects.items()} == {10: 0, 20: 15, 30: None, 40: 7, 50: None}
+
+
+def test_restore_of_a_capture_without_created_at_frame_raises():
+    ovo, _ = _varied_scene()
+    captured = state.capture(ovo)
+    del captured["objects"][20]["created_at_frame"]
+    with pytest.raises(KeyError, match="created_at_frame"):
+        _restored(captured)
 
 
 def test_restored_state_is_independent_of_the_captured_ovo():

@@ -120,6 +120,8 @@ python -m ovo replay --dataset Replica --experiment ovo_mapping --name strict --
 ```
 By default every scene with checkpoints is replayed from its last one. The output, `data/output/<dataset_name>/<experiment_name>/replays/<name>/`, is laid out like an experiment: evaluate it with `--experiment_name ovo_mapping/replays/strict --segment --eval_instances` in `run_eval.py`, or `python -m ovo eval instances --experiment ovo_mapping/replays/strict` after segmenting.
 
+A checkpoint saved by an older version (another checkpoint format) is not read: re-run the scene to save it again.
+
 ### Evaluate a fusion
 A fusion step can be scored against the instance GT (Replica only: it needs the GT mesh `data/input/Datasets/Replica/<scene>_mesh.ply`). It reads the step's pre-fusion checkpoint, so the run needs `replay.checkpoints: last` (or `all`):
 ```

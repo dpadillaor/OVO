@@ -50,7 +50,7 @@ def _run_scene(scene_dir, vertices):
     path = layout.pre_fusion_checkpoint(scene_dir, 100)
     path.parent.mkdir(parents=True)
     torch.save({  # the format of ovo.replay.checkpoint, with only what the evaluation reads
-        "format": 1,
+        "format": 2,
         "frame_id": 100,
         "config": {"semantic": {"instance_fusion": {"apply": "greedy"}}},
         "map": {"xyz": torch.tensor(xyz), "obj_ids": torch.tensor(obj_ids).unsqueeze(-1)},
