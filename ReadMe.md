@@ -120,6 +120,18 @@ python -m ovo replay --dataset Replica --experiment ovo_mapping --name strict --
 ```
 By default every scene with checkpoints is replayed from its last one. The output, `data/output/<dataset_name>/<experiment_name>/replays/<name>/`, is laid out like an experiment: evaluate it with `--experiment_name ovo_mapping/replays/strict --segment --eval_instances` in `run_eval.py`, or `python -m ovo eval instances --experiment ovo_mapping/replays/strict` after segmenting.
 
+### Evaluate a fusion
+A fusion step can be scored against the instance GT (Replica only: it needs the GT mesh `data/input/Datasets/Replica/<scene>_mesh.ply`). It reads the step's pre-fusion checkpoint, so the run needs `replay.checkpoints: last` (or `all`):
+```
+python -m ovo eval fusion --dataset Replica --experiment ovo_mapping [--scenes office0 [--frame 1990]]
+```
+By default the last checkpointed fusion of every scene with fusion decisions is evaluated; `--frame` picks another one (one scene only). A replay is evaluated the same way, with `--experiment ovo_mapping/replays/strict`. The pre-fusion map is projected on the GT mesh, and each instance takes the GT instance that covers most of it (any labelled one, walls included). A pair is the same object when both take the same GT instance: merged and same is `TP`, merged and different `FP`, kept apart and same `FN`, kept apart and different `TN`. The output goes to `<scene>/fusion/eval_<frame>/`:
+- `decisions_eval.csv`: the step's rows of `fusion_decisions.csv` plus `gt_first, gt_second, same_object, verdict`. These cells are empty when an instance does not reach the mesh.
+- `summary.json`: instances before and after, the verdict counts with precision, recall and F1, and the same counts at each step of the pipeline (gates, `cos_sim`, `overlap`, the last one split by accept mode). It also has the class-agnostic AP before and after the fusion (the AP of `eval instances`) and the `instance_fusion` block that was used.
+- `instance_stats.csv`: one row per GT instance the AP counts: best IoU and coverage before and after, `change` (`improved`, `worsened`, `unchanged`), `match_50` (`KEPT`, `LOST`, `GAINED`, `UNMATCHED` at IoU 0.5), the matching instance before and after, and the extra fragments it had before.
+
+Every input is checked before anything is written: a missing one, or a decisions log that does not belong to the checkpoint, is an error.
+
 ## Changelog:
 - 13, January, 2026 - Added implementation using [TextRegion](https://github.com/avaxiao/TextRegion) with the [Perception Encoder](https://github.com/facebookresearch/perception_models) as descriptor. Performance in Replica goes up to 35.7% IoU and 57% Acc (from from 27.0% IoU and 39.1% Acc reported in the paper). 
 - 11, January, 2026 - Update conda environment to work with Python 3.11 and Numpy 2.4.
