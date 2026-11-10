@@ -1,8 +1,10 @@
 """Were the fusion's decisions right? Each judged pair against the GT, positive = merge.
 
-The dominant GT of an instance is the GT instance covering most of its mask; GT ids of classes
-outside the benchmark (and 0) are void, as in ovo.eval.instance_ap, and never dominate. Ties go
-to the smallest id. Two instances are the same object when they share a dominant GT.
+The dominant GT of an instance is the GT instance covering most of its mask. Every GT instance
+counts, also those of classes outside the AP benchmark (wall, floor...): the question is whether two
+instances are the same physical object, and the GT tells two walls apart. Only id 0 (unlabelled) is
+void and never dominates. Ties go to the smallest id. Two instances are the same object when they
+share a dominant GT.
 
     accepted, same object       TP      accepted, different     FP
     rejected, same object       FN      rejected, different     TN
@@ -36,9 +38,9 @@ class Scored:
         return "FN" if self.same_object else "TN"
 
 
-def dominant_gt(masks: np.ndarray, ids: np.ndarray, gt_ids: np.ndarray, class_ids: tuple[int, ...]) -> dict[int, Optional[int]]:
+def dominant_gt(masks: np.ndarray, ids: np.ndarray, gt_ids: np.ndarray) -> dict[int, Optional[int]]:
     """{instance id: dominant GT id, or None when its mask covers only void}."""
-    valid = np.isin(gt_ids // 1000, class_ids)
+    valid = gt_ids > 0
     out = {}
     for ins_id, mask in zip(ids, masks):
         under = gt_ids[mask & valid]

@@ -2,7 +2,7 @@
 
 The scene of test_fusion_impact.py, on a mesh whose vertices lie on a line, one map point per
 vertex (so the projection gives back the point labels), plus instance 5, whose two points are far
-from every vertex. Fusion of frame 100: 1~2 accepted (a chair in two halves), 2~3 rejected on
+from every vertex. Fusion of frame 100: 1~2 accepted (a chair in two halves), 1~3 rejected on
 cos_sim (chair vs table), 3~4 rejected on overlap (4 is on void), 1~5 rejected on cos_sim.
 """
 
@@ -26,7 +26,7 @@ V = 500
 SCENE = "office0"
 HEADER = "frame_id,first,second,accepted,reason,mode,cos_sim,overlap,aabb,centroid\n"
 FRAME_100 = """100,1,2,True,overlap,strong,0.93,0.71,,
-100,2,3,False,cos_sim,,0.40,,,
+100,1,3,False,cos_sim,,0.40,,,
 100,3,4,False,overlap,,0.90,0.05,,
 100,1,5,False,cos_sim,,0.10,,,
 """

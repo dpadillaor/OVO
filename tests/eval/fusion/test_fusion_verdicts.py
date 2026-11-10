@@ -6,20 +6,26 @@ import pytest
 from ovo.eval.fusion import decisions, verdicts
 from ovo.eval.fusion.verdicts import Scored
 
-CLASS_IDS = (3, 7)
-#                 v0    v1    v2    v3    v4    v5    v6
-GT = np.array([3001, 3001, 3002, 7001, 5001, 5001, 0])  # 5xxx: not a benchmark class (void)
+#                 v0    v1    v2    v3    v4    v5    v6    v7
+GT = np.array([3001, 3001, 3002, 7001, 5001, 5001, 0, 0])  # 5xxx: a class outside the benchmark (wall)
 
 
-def test_dominant_gt_ignores_void_and_breaks_ties_by_id():
+def test_dominant_gt_counts_every_labelled_instance_and_breaks_ties_by_id():
     masks = np.array([
-        [1, 1, 1, 0, 0, 0, 0],  # 3001 x2, 3002 x1
-        [0, 0, 0, 1, 1, 1, 1],  # 7001 x1 beats two void classes and 0
-        [0, 0, 1, 1, 0, 0, 0],  # tie 3002 / 7001 -> 3002
-        [0, 0, 0, 0, 1, 1, 1],  # only void
+        [1, 1, 1, 0, 0, 0, 0, 0],  # 3001 x2, 3002 x1
+        [0, 0, 0, 1, 1, 1, 1, 1],  # 5001 x2 beats 7001 x1; 0 (x2) is void, not a candidate
+        [0, 0, 1, 1, 0, 0, 0, 0],  # tie 3002 / 7001 -> 3002
+        [0, 0, 0, 0, 0, 0, 1, 1],  # only void
     ], dtype=bool)
-    assert verdicts.dominant_gt(masks, np.array([10, 20, 30, 40]), GT, CLASS_IDS) == {
-        10: 3001, 20: 7001, 30: 3002, 40: None}
+    assert verdicts.dominant_gt(masks, np.array([10, 20, 30, 40]), GT) == {
+        10: 3001, 20: 5001, 30: 3002, 40: None}
+
+
+def test_two_pieces_of_a_wall_are_the_same_object():
+    """Outside the AP benchmark is not void: fusing two halves of one wall is right."""
+    masks = np.array([[0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0]], dtype=bool)
+    dominant = verdicts.dominant_gt(masks, np.array([1, 2]), GT)
+    assert verdicts.score(_row(1, 2, True, mode="strong"), dominant).verdict == "TP"
 
 
 def _row(first, second, accepted, reason="overlap", mode=None):

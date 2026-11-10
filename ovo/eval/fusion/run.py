@@ -132,7 +132,7 @@ def evaluate_scene(job: Job, benchmark: benchmarks.InstanceBenchmark) -> Path:
 
     masks, ids = projection.project(xyz, obj_ids, vertices)
     merges = decisions.merges(rows, cfg.apply, order)
-    dominant = verdicts.dominant_gt(masks, ids, gt_ids, benchmark.class_ids)
+    dominant = verdicts.dominant_gt(masks, ids, gt_ids)
     scored = [verdicts.score(r, dominant) for r in rows]
     judged = [s for s in scored if s is not None]
     steps = [g.name for g in cfg.gates] + ["cos_sim", "overlap"]

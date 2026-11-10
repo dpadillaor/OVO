@@ -6,8 +6,9 @@ and the merges they produced.
     groups(merges(rows, "greedy", order))   # {survivor: [survivor, absorbed, ...]}
 
 Each row keeps the CSV cells as read, so they can be written back unchanged, next to the fields
-the evaluation needs. The merges are recomputed with the run's own apply policy over the accepted
-rows, in log order: the same calls the pipeline made, so the same survivors.
+the evaluation needs. The merges are recomputed with the run's own apply policy over the rows, in
+log order: the same calls the pipeline made, so the same survivors. The pipeline only logs pairs
+the policy let it judge, so a row the policy would have skipped means the log is not this fusion's.
 """
 
 import csv
@@ -64,9 +65,19 @@ def _row(cells: dict[str, str]) -> Row:
 
 def merges(rows: list[Row], apply: str, order: list[int]) -> list[tuple[int, int]]:
     """(survivor, absorbed) as the fusion applied them. `order` is the instance order the pipeline
-    ran with; only `chained` reads it (its survivor is the earliest instance)."""
+    ran with (its survivor under `chained` is the earliest instance). Raises ValueError when the
+    rows could not come from that fusion: an instance outside `order`, or a pair the policy would
+    not have judged (e.g. under `greedy`, an instance absorbed twice)."""
+    known = set(order)
     policy = POLICIES[apply](order)
     for r in rows:
+        missing = sorted({r.first, r.second} - known)
+        if missing:
+            raise ValueError(f"frame {r.frame_id}: pair ({r.first}, {r.second}) has {missing}, not in the "
+                             f"pre-fusion map: the decisions do not belong to this checkpoint")
+        if not policy.should_judge(r.first, r.second):
+            raise ValueError(f"frame {r.frame_id}: pair ({r.first}, {r.second}) would not have been judged "
+                             f"by '{apply}': the decisions do not belong to this fusion")
         if r.accepted:
             policy.on_accept(r.first, r.second)
     return policy.merges()

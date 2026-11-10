@@ -36,6 +36,20 @@ def test_chained_survivor_is_the_earliest_instance():
     assert decisions.groups(merges) == {3: [3, 2, 1]}
 
 
+def test_a_pair_the_policy_would_skip_means_a_foreign_log():
+    """Under greedy, 9 is absorbed by 4, so the pipeline never judges (7, 9)."""
+    rows = decisions.parse(CSV.split("\n")[0] + "\n1,4,9,True,overlap,strong,,,,\n1,7,9,False,cos_sim,,,,,\n").rows
+    with pytest.raises(ValueError, match="would not have been judged"):
+        decisions.merges(rows, "greedy", [4, 7, 9])
+    assert decisions.merges(rows[:1], "greedy", [4, 7, 9]) == [(4, 9)]
+
+
+def test_an_instance_outside_the_map_means_a_foreign_log():
+    rows = decisions.parse(CSV).at_frame(120)
+    with pytest.raises(ValueError, match=r"\[4\], not in the pre-fusion map"):
+        decisions.merges(rows, "chained", [1, 2, 3])
+
+
 def test_bad_accepted_cell_raises():
     with pytest.raises(ValueError, match="accepted"):
         decisions.parse(CSV.replace("True", "yes", 1))
