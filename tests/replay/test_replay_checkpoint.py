@@ -118,6 +118,23 @@ def test_load_rejects_another_format(tmp_path):
         checkpoint.load(path)
 
 
+def test_load_rejects_a_format_1_checkpoint_and_says_to_re_run(tmp_path):
+    """Format 1 (before created_at_frame) cannot be upgraded: the frames are not in it."""
+    assert checkpoint.FORMAT == 2
+    path = tmp_path / "pre_fusion_00001.ckpt"
+    torch.save({"format": 1, "frame_id": 1}, path)
+    with pytest.raises(ValueError, match=r"format 1, expected 2; re-run the scene with replay.checkpoints"):
+        checkpoint.load(path)
+
+
+def test_saved_instances_carry_created_at_frame(tmp_path):
+    ovo, _, slam = scene()
+    ovo.objects[10].created_at_frame, ovo.objects[20].created_at_frame = 5, 12
+    checkpoint.Checkpointer("all", tmp_path).save(120, slam, ovo, config())
+    objects = checkpoint.load(layout.pre_fusion_checkpoint(tmp_path, 120))["ovo"]["objects"]
+    assert {i: o["created_at_frame"] for i, o in objects.items()} == {10: 5, 20: 12, 30: None, 40: None, 50: None}
+
+
 def test_available(tmp_path):
     assert checkpoint.available(tmp_path / "missing") == {}
     fusion = layout.fusion_dir(tmp_path)

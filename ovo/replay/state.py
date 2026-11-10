@@ -5,7 +5,7 @@ recomputes them from. It needs no model, no images and no instance maps, so this
 smaller than `OVO.capture_dict(debug_info=True)`.
 
     {"objects":     {ins_id: {"clip_feature", "clip_feature_kf", "kfs_ids", "points_ids",
-                              "top_kf", "to_update"}},
+                              "top_kf", "to_update", "created_at_frame"}},
      "descriptors": {kf_index: {ins_id: tensor}},
      "frame_ids":   [frame of semantic keyframe 0, 1, ...]}
 """
@@ -42,11 +42,12 @@ def _export(obj: Instance3D) -> dict[str, Any]:
         "points_ids": list(obj.points_ids),
         "top_kf": list(obj.top_kf),
         "to_update": obj.to_update,
+        "created_at_frame": obj.created_at_frame,
     }
 
 
 def _import(ins_id: int, fields: dict[str, Any]) -> Instance3D:
-    obj = Instance3D(ins_id)
+    obj = Instance3D(ins_id, created_at_frame=fields["created_at_frame"])
     obj.clip_feature = fields["clip_feature"]
     obj.clip_feature_kf = fields["clip_feature_kf"]
     obj.kfs_ids = list(fields["kfs_ids"])

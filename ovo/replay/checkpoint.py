@@ -6,7 +6,7 @@ YAML `replay.checkpoints`:
     all    one per fusion
 
 File `{scene}/fusion/pre_fusion_{frame:05d}.ckpt` (ovo.layout.pre_fusion_checkpoint), a dict:
-    {"format": 1,
+    {"format": 2,
      "frame_id": frame of the fusion,
      "config": the run's config,
      "map": slam_backbone.get_map_dict() (xyz, ids, obj_ids, max_id, color),
@@ -24,7 +24,7 @@ import torch
 from .. import layout
 from . import state
 
-FORMAT = 1
+FORMAT = 2  # 2: each instance has created_at_frame
 MODES = ("off", "last", "all")
 
 
@@ -78,7 +78,8 @@ class Checkpointer:
 def load(path: Path) -> dict[str, Any]:
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     if ckpt.get("format") != FORMAT:
-        raise ValueError(f"{path}: checkpoint format {ckpt.get('format')!r}, expected {FORMAT}")
+        raise ValueError(f"{path}: checkpoint format {ckpt.get('format')!r}, expected {FORMAT}; "
+                         "re-run the scene with replay.checkpoints to save it again")
     return ckpt
 
 

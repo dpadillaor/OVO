@@ -54,6 +54,20 @@ def test_same_fusion_repeats_the_run_exactly(tmp_path):
         assert replayed.objects[ins_id].clip_feature_kf == obj.clip_feature_kf
 
 
+def test_replayed_map_keeps_the_earliest_creation_frame_of_a_fusion(tmp_path):
+    """10 absorbs 20, born before it: the fused 10 is as old as 20, in the replay's ovo_map.ckpt too."""
+    run_dir, out_dir = tmp_path / "run", tmp_path / "replay"
+    ovo, map_data, slam = scene()
+    for ins_id, frame in {10: 40, 20: 5, 30: 60, 40: 70}.items():
+        ovo.objects[ins_id].created_at_frame = frame
+    checkpoint.Checkpointer("all", run_dir).save(100, slam, ovo, config())
+
+    replay_scene(layout.pre_fusion_checkpoint(run_dir, 100), out_dir, device="cpu")
+
+    _, replayed = _replayed(out_dir)
+    assert {int(i): o.created_at_frame for i, o in replayed.objects.items()} == {10: 5, 30: 60, 40: 70}
+
+
 def test_a_stricter_fusion_changes_the_result(tmp_path):
     run_dir, out_dir = tmp_path / "run", tmp_path / "replay"
     _, original_ids, _ = _original_run(run_dir)
